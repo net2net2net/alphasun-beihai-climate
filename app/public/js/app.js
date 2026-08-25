@@ -145,16 +145,21 @@ function renderRealtime() {
       </div>
       <div class="rt-feels"><span class="l">体感</span><b>${c.feels.toFixed(1)}℃</b></div>
     </div>
-    <div class="rt-metrics">
-      <div class="rt-metric"><span class="l">风</span><b>${c.wind.toFixed(1)}<i>m/s</i></b></div>
-      <div class="rt-metric"><span class="l">阵风</span><b>${c.gust.toFixed(1)}</b></div>
-      <div class="rt-metric"><span class="l">湿度</span><b>${c.rh}%</b></div>
-      <div class="rt-metric"><span class="l">降水</span><b>${c.precip.toFixed(1)}<i>mm</i></b></div>
-      <div class="rt-metric"><span class="l">气压</span><b>${c.pressure.toFixed(0)}<i>hPa</i></b></div>
-      <div class="rt-metric"><span class="l">云量</span><b>${c.cloud}%</b></div>
+    <div class="rt-band">
+      <div class="rt-grp rt-grp-weather">
+        <div class="rt-grp-h">实时天气</div>
+        <div class="rt-metrics">
+          <div class="rt-metric"><span class="l">风</span><b>${c.wind.toFixed(1)}<i>m/s</i></b></div>
+          <div class="rt-metric"><span class="l">阵风</span><b>${c.gust.toFixed(1)}</b></div>
+          <div class="rt-metric"><span class="l">湿度</span><b>${c.rh}%</b></div>
+          <div class="rt-metric"><span class="l">降水</span><b>${c.precip.toFixed(1)}<i>mm</i></b></div>
+          <div class="rt-metric"><span class="l">气压</span><b>${c.pressure.toFixed(0)}<i>hPa</i></b></div>
+          <div class="rt-metric"><span class="l">云量</span><b>${c.cloud}%</b></div>
+        </div>
+      </div>
+      ${regionBlock(s)}
     </div>
-    <div class="rt-trend">${trend}</div>
-    ${regionBlock(s)}`;
+    <div class="rt-trend">${trend}</div>`;
 }
 
 // 实时天气变化趋势：基于未来逐时数据给出降水/气温/风力预报（需求5）
@@ -361,22 +366,24 @@ function regionShapeSVG(poly) {
   </svg>`;
 }
 
-// 区域概况：覆盖面积 + 覆盖人口 + 区域形状（地理区域选择后于实时天气中展示）
+// 区域概况：覆盖面积 + 覆盖人口 + 区域形状（地理区域选择后于实时天气中与实时数据并列展示）
 function regionBlock(s) {
   const area = s.area, pop = s.pop, poly = s.poly;
   if (area == null && pop == null && !poly) return '';
   const areaTxt = area != null ? (area < 100 ? area.toFixed(1) : Math.round(area).toLocaleString('zh-CN')) + ' km²' : '—';
   const popTxt = pop != null ? (pop / 10000).toFixed(1) + ' 万' : '—';
-  return `<div class="rt-region">
-    <div class="rt-region-h">📐 区域概况</div>
-    <div class="rt-region-row">
+  return `
+    <div class="rt-grp rt-grp-region">
+      <div class="rt-grp-h">区域数据</div>
       <div class="rt-region-meta">
         <div>覆盖面积 <b>${areaTxt}</b></div>
         <div>覆盖人口 <b>${popTxt}</b></div>
       </div>
-      <div class="rt-region-shape">${regionShapeSVG(poly)}</div>
     </div>
-  </div>`;
+    <div class="rt-grp rt-grp-shape">
+      <div class="rt-grp-h">区域形状</div>
+      <div class="rt-region-shape">${regionShapeSVG(poly)}</div>
+    </div>`;
 }
 
 // 流星雨辐射点赤纬（用于按北海纬度计算峰值高度，判断可见性）
