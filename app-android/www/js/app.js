@@ -217,14 +217,23 @@ const DIMS = {
 
 function fmt(t){ return t ? t.slice(11,16) : '—'; }
 function $(id){ return document.getElementById(id); }
+// 渲染隔离：任一子模块渲染抛错都不影响其它模块（移动端单点数据/组件失败不再整体空白）
+function safe(fn, label){ try { (typeof fn === 'function') ? fn() : fn; } catch(e){ if (window.console) console.error('[render] ' + (label||'') + ' failed:', e); } }
 
 async function load() {
   try {
-    state.data = await window.AlphaData.buildOverview();
-    if (!state.sel) state.sel = state.data.stations[0].id;
+    const d = await window.AlphaData.buildOverview();
+    state.data = d;
+    if (state.data.stations && state.data.stations.length) {
+      if (!state.data.stations.find(s => s.id === state.sel)) state.sel = state.data.stations[0].id;
+    } else {
+      state.sel = null;
+    }
     render();
   } catch (e) {
-    $('updated').textContent = '加载失败：' + e.message;
+    const msg = (e && e.message) ? e.message : String(e);
+    try { $('updated').textContent = '加载失败：' + msg; } catch (_) {}
+    if (state.data) { try { render(); } catch (_) {} } // 即便聚合抛错，也尽量渲染已拿到的部分数据
   }
 }
 
@@ -251,15 +260,16 @@ function render() {
     });
   } else banner.classList.add('hidden');
 
-  renderStations(); renderRealtime(); renderAir(); renderMarine();
-  renderAstro(); renderGlow(); renderMorningGlow(); renderTides();
-  renderForecast7(); renderForecast15();
-  renderAlerts(); renderEvents(); renderChartDims();
-  renderClimate(); renderLinks();
-  renderTicker();
-  if (!tk.autostarted) { tk.autostarted = true; tkStartAuto(); }
-  AlphaMap.setData(d); AlphaMap.legend($('mapLegend'));
-  renderGlobalLevelAlert();
+  safe(renderStations, 'stations'); safe(renderRealtime, 'realtime'); safe(renderAir, 'air'); safe(renderMarine, 'marine');
+  safe(renderAstro, 'astro'); safe(renderGlow, 'glow'); safe(renderMorningGlow, 'morningGlow'); safe(renderTides, 'tides');
+  safe(renderForecast7, 'fc7'); safe(renderForecast15, 'fc15');
+  safe(renderAlerts, 'alerts'); safe(renderEvents, 'events'); safe(renderChartDims, 'chartDims');
+  safe(renderClimate, 'climate'); safe(renderLinks, 'links');
+  safe(renderTicker, 'ticker');
+  if (!tk.autostarted) { tk.autostarted = true; safe(tkStartAuto, 'tickerAuto'); }
+  safe(() => AlphaMap.setData(d), 'mapSetData'); safe(() => AlphaMap.legend($('mapLegend')), 'mapLegend');
+  safe(renderChart, 'chart'); // 初始也绘制 24h 曲线，修复面板长期空白
+  safe(renderGlobalLevelAlert, 'globalLevel');
 }
 
 function renderChartDims() {
@@ -791,6 +801,10 @@ function chartDatasets() {
   return { labels, datasets };
 }
 function renderChartOn(canvasId) {
+  if (typeof Chart === 'undefined') {
+    const el = $(canvasId); if (el) { const c = el.getContext('2d'); if (c) { c.clearRect(0, 0, el.width, el.height); c.fillStyle = '#8b949e'; c.font = '12px sans-serif'; c.fillText('图表组件未加载', 10, 20); } }
+    return;
+  }
   const cd = chartDatasets(); if (!cd) return;
   if (charts[canvasId]) charts[canvasId].destroy();
   const ctx = $(canvasId).getContext('2d');
