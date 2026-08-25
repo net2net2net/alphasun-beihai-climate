@@ -4,6 +4,12 @@
 
 一套以**北海为中心**的极端气候全景监测仪表盘：实时天气、周期预报、多灾种极端告警、全景地图、世界时钟与可叠加卫星 / 雷达图层。纯 Node.js、零第三方依赖、内置便携运行时，**开箱即运行**。
 
+## 适用设备及方式
+智能体（技能）、Windows（含exe方式）、Linux/macOS、安卓Android（APK）
+下载/安装：
+Windows exe： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/alphasun-exe-8.0.2/alphasun-beihai-climate8.0.2.exe
+安卓Android Apk： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/android-v8.0.3-debug/alphasun-beihai-climate-debug.apk
+   
 ## 建设目标
 构建覆盖北海全域（海城 / 银海 / 铁山港 / 合浦 / 涠洲岛）的极端气候全景系统，实现：
 1. **全方位权威实时天气**：陆地气象 + 空气质量（AQI/六项污染物）+ 海洋（潮汐/水位/海浪/风暴潮）+ 卫星（云图/红外）+ 天文（日出日落/月出月落/月相/晚霞概率/天文景观）。
