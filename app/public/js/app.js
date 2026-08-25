@@ -24,6 +24,37 @@ function chartColors(){
     ? { legend:'#243044', grid:'#e3e8ef', tick:'#57636e', yTitle:'#c2410c', y1Title:'#57636e' }
     : { legend:'#e6edf3', grid:'#1c2330', tick:'#8b949e', yTitle:'#fb8500', y1Title:'#8b949e' };
 }
+
+// ===== 声音警报（默认关闭，置于顶部"警报"旁；Web Audio 生成报警音，零外部文件）=====
+let audioCtx = null, soundOn = false, soundTimer = null;
+function ensureAudio(){
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audioCtx = null; } }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playAlarmBeep(){
+  const ctx = ensureAudio(); if (!ctx) return;
+  const now = ctx.currentTime;
+  [[880,0],[660,0.18],[880,0.36]].forEach(([f,t]) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square'; o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+    const s = now + t;
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.exponentialRampToValueAtTime(0.22, s + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, s + 0.16);
+    o.start(s); o.stop(s + 0.17);
+  });
+}
+function startSoundAlarm(){ if (soundTimer) return; playAlarmBeep(); soundTimer = setInterval(playAlarmBeep, 4000); }
+function stopSoundAlarm(){ if (soundTimer) { clearInterval(soundTimer); soundTimer = null; } }
+function updateSoundAlarm(hasAlert){ if (soundOn && hasAlert) startSoundAlarm(); else stopSoundAlarm(); }
+function setSound(on){
+  soundOn = on;
+  const b = $('soundBtn');
+  if (b) { b.textContent = on ? '🔊' : '🔇'; b.classList.toggle('on', on); b.title = on ? '声音警报：开（点击关闭）' : '声音警报：关（点击开启）'; }
+  if (on) ensureAudio();
+  updateSoundAlarm(state.data && state.data.globalAlerts && state.data.globalAlerts.length > 0);
+}
 const LNAME = ['正常','注意','预警','警报','紧急'];
 const LCOL = ['#3fb950','#d29922','#fb8500','#e5484d','#bc1a1a'];
 
@@ -58,16 +89,14 @@ async function load() {
 function render() {
   const d = state.data;
   $('updated').textContent = '更新于 ' + new Date(d.updated).toLocaleString('zh-CN');
-  // 全局等级
-  const gl = $('globalLevel');
-  gl.textContent = d.maxLevelName;
-  gl.style.background = LCOL[d.maxLevel]; gl.style.color = '#06121f';
-  // 顶部"警报 / 无警报"指示器（需求3）：有告警显示闪烁"警报"，无告警显示绿色"无警报"
+  // 顶部"警报 / 无警报"指示器（唯一"警报"显示）：有告警显示闪烁"警报"，无告警显示绿色"无警报"
+  const hasAlert = d.globalAlerts.length > 0;
   const asEl = $('alertStatus');
   if (asEl) {
-    if (d.globalAlerts.length) { asEl.textContent = '⚠ 警报'; asEl.className = 'alert-status alert'; }
+    if (hasAlert) { asEl.textContent = '⚠ 警报'; asEl.className = 'alert-status alert'; }
     else { asEl.textContent = '✅ 无警报'; asEl.className = 'alert-status ok'; }
   }
+  updateSoundAlarm(hasAlert);
   // 横幅（活跃告警，点击查看详情）
   const banner = $('alertBanner');
   const top = d.globalAlerts.filter(a => a.level >= 2).slice(0, 6);
@@ -366,24 +395,22 @@ function regionShapeSVG(poly) {
   </svg>`;
 }
 
-// 区域概况：覆盖面积 + 覆盖人口 + 区域形状（地理区域选择后于实时天气中与实时数据并列展示）
+// 区域概况：区域形状（左） + 覆盖面积/人口（右），地理区域选择后于实时天气中与实时数据并列展示
 function regionBlock(s) {
   const area = s.area, pop = s.pop, poly = s.poly;
   if (area == null && pop == null && !poly) return '';
   const areaTxt = area != null ? (area < 100 ? area.toFixed(1) : Math.round(area).toLocaleString('zh-CN')) + ' km²' : '—';
   const popTxt = pop != null ? (pop / 10000).toFixed(1) + ' 万' : '—';
-  return `
-    <div class="rt-grp rt-grp-region">
-      <div class="rt-grp-h">区域数据</div>
+  return `<div class="rt-grp rt-grp-region">
+    <div class="rt-grp-h">区域概况</div>
+    <div class="rt-region-inner">
+      <div class="rt-region-shape">${regionShapeSVG(poly)}</div>
       <div class="rt-region-meta">
         <div>覆盖面积 <b>${areaTxt}</b></div>
         <div>覆盖人口 <b>${popTxt}</b></div>
       </div>
     </div>
-    <div class="rt-grp rt-grp-shape">
-      <div class="rt-grp-h">区域形状</div>
-      <div class="rt-region-shape">${regionShapeSVG(poly)}</div>
-    </div>`;
+  </div>`;
 }
 
 // 流星雨辐射点赤纬（用于按北海纬度计算峰值高度，判断可见性）
@@ -779,15 +806,21 @@ function renderGlobalLevelAlert() {
   if (!badge) return;
   const all = (state.data && state.data.globalAlerts) || [];
   const bh = all.filter(a => a.beihaiRelation === 'direct' || a.beihaiRelation === 'possible');
+  const directN = bh.filter(a => a.beihaiRelation === 'direct').length;
+  const possibleN = bh.filter(a => a.beihaiRelation === 'possible').length;
   if (bh.length) {
+    badge.textContent = directN ? `涉北海 ${directN}` : `或涉北海 ${possibleN}`;
     badge.classList.add('alert-red');
     badge.style.background = '#e5484d';
     badge.style.color = '#fff';
     badge.style.cursor = 'pointer';
-    badge.title = `涉及/可能涉及北海的告警 ${bh.length} 条，点击查看`;
+    badge.title = `${directN ? '涉及' : '可能涉及'}北海的告警 ${bh.length} 条，点击查看`;
     badge.onclick = openBeihaiModal;
   } else {
+    badge.textContent = '无涉北海';
     badge.classList.remove('alert-red');
+    badge.style.background = 'var(--bg3)';
+    badge.style.color = 'var(--muted)';
     badge.style.cursor = 'default';
     badge.title = '当前无涉及北海的告警';
     badge.onclick = null;
@@ -883,6 +916,8 @@ document.querySelectorAll('.panel').forEach(p => {
 });
 
 $('themeBtn').onclick = toggleTheme;
+$('soundBtn').onclick = () => setSound(!soundOn);
+setSound(false);
 applyTheme(theme);
 AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
