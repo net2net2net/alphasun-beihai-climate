@@ -6,8 +6,11 @@
 
 ## 适用设备及方式
 智能体（技能）、Windows（含exe方式）、Linux/macOS、安卓Android（APK）
+
 下载/安装：
+
 Windows exe： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/alphasun-exe-8.0.2/alphasun-beihai-climate8.0.2.exe
+
 安卓Android Apk： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/android-v8.0.3-debug/alphasun-beihai-climate-debug.apk
    
 ## 建设目标
