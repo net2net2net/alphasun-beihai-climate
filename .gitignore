@@ -20,3 +20,13 @@ Thumbs.db
 # 编辑器 / 系统缓存
 .idea/
 .vscode/
+
+# 单文件可执行程序（Node SEA 构建产物，约 87MB，不入库；构建方式见 SKILL.md / 知识库）
+app/AlphaSun.exe
+*.exe
+*.exe1
+alphasun-beihai-climate
+alphasun-beihai-climate.exe1
+
+# SEA 构建中间产物（由 build-assets.js + esbuild 生成）
+app/dist/

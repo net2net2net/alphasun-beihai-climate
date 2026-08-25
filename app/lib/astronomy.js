@@ -32,6 +32,35 @@ function sunsetGlow(station) {
   return { score, grade, bestTime: daily.sunset || '', factors };
 }
 
+// 早晨霞光概率：与黄昏同模型，最佳观赏时段为日出；冬春清晨北海多雾会拉低评分
+function sunriseGlow(station) {
+  const w = station.weather; if (!w || !w.ok) return null;
+  const c = w.current;
+  const daily = w.daily[0] || {};
+  let score = 0; const factors = [];
+  if (c.precip > 0.2) { return { score: 0, grade: '低', bestTime: daily.sunrise || '', factors: ['当前有降水，朝霞概率低'] }; }
+  const cl = c.cloud;
+  if (cl >= 30 && cl <= 60) { score += 50; factors.push('云量适中(30–60%)，朝霞层次佳'); }
+  else if (cl >= 15 && cl < 30) { score += 35; factors.push('云量偏少，朝霞较淡'); }
+  else if (cl > 60 && cl <= 80) { score += 22; factors.push('云量偏多，天际线或可见'); }
+  else if (cl > 80) { score += 8; factors.push('云量过厚，概率低'); }
+  else { score += 12; factors.push('晴空少云，朝霞较弱'); }
+  // 北海冬春清晨多雾（雾日较多），高湿且静风时易成雾，削弱朝霞
+  const rh = c.rh, wd = c.wind;
+  const month = new Date().getMonth() + 1;
+  const fogSeason = (month <= 4 || month >= 11);
+  if (fogSeason && rh >= 92 && wd < 3) { score -= 18; factors.push('冬春清晨高湿静风，易起雾削弱朝霞'); }
+  else if (rh >= 60 && rh <= 90) { score += 20; factors.push('湿度适宜，透光性好'); }
+  else if (rh > 90) { score += 8; factors.push('湿度偏高'); }
+  else { score += 10; factors.push('空气偏干'); }
+  if (wd < 4) { score += 18; factors.push('风力静稳'); }
+  else if (wd < 8) { score += 10; factors.push('微风'); }
+  else { score += 4; factors.push('风力较大，云层易散'); }
+  score = Math.max(0, Math.min(100, score));
+  const grade = score >= 70 ? '高' : score >= 40 ? '中' : '低';
+  return { score, grade, bestTime: daily.sunrise || '', factors };
+}
+
 // ===== 天文事件日历（2026 动态计算距今天数）=====
 function daysUntil(month, day) {
   const now = new Date();
@@ -76,4 +105,4 @@ function astronomicalEvents() {
   };
 }
 
-module.exports = { sunsetGlow, astronomicalEvents, moonPhaseDesc };
+module.exports = { sunsetGlow, sunriseGlow, astronomicalEvents, moonPhaseDesc };

@@ -1,17 +1,25 @@
 {
   "name": "alphasun-beihai-climate",
-  "version": "7.0.1",
+  "version": "7.0.2",
   "private": true,
   "description": "AlphaSun · 北海极端气候全景系统 — 纯 Node.js 聚合服务（零第三方依赖），以北海为中心的极端气候/海洋/卫星/天文/空气质量全景监测。",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "start:win": "start.bat",
-    "start:unix": "bash start.sh"
+    "start:unix": "bash start.sh",
+    "build:assets": "node build-assets.js",
+    "build:exe": "pkg . --config package.json"
   },
   "engines": {
     "node": ">=16"
   },
-  "author": "阳光（net2net2net）",
+  "bin": { "alphasun": "server.js" },
+  "pkg": {
+    "scripts": "server.js",
+    "targets": ["node22-win-x64"],
+    "outputPath": "dist"
+  },
+  "author": "阳光 net2net2net（ Vx: net2net ）",
   "license": "MIT"
 }

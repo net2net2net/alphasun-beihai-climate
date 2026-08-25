@@ -204,3 +204,50 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .al-region{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;margin-right:4px}
 .al-region.北海{background:rgba(63,185,80,.18);color:#3fb950}
 .al-region.广西{background:rgba(52,152,219,.18);color:#3498db}
+
+/* 地理区域选择：选中态图标（需求2） */
+.st-ico{font-size:14px;margin-right:3px;opacity:.85}
+.st-name{margin-right:3px}
+.st-check{display:none;margin-left:2px;font-weight:700;color:#06121f}
+.st-tab.active .st-check{display:inline}
+.st-tab.active .st-ico{transform:scale(1.15)}
+.st-tab.active{box-shadow:0 0 0 2px rgba(88,166,255,.35)}
+
+/* 15 日预报：横向可滚动条带 */
+#forecast15Body{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;grid-template-columns:none;padding:8px}
+#forecast15Body .fc-day{flex:0 0 56px;width:56px}
+#forecast15Body .fc-day .ic{font-size:18px}
+
+/* 北海气候解说：动态态势分析块（需求5） */
+.cl-dyn{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+.cl-dyn-h{font-weight:700;color:var(--accent);margin-bottom:6px;font-size:13px}
+.cl-ok{background:rgba(63,185,80,.10);border-left:3px solid var(--ok);padding:8px 10px;border-radius:0 6px 6px 0;font-size:12px;line-height:1.6}
+.cl-dyn-sum{font-size:12px;margin-bottom:4px}
+.cl-dyn-sum b{color:#ff7b7b}
+.cl-cat{margin:4px 0 8px;padding-left:18px;font-size:12px;display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}
+.cl-cat li{list-style:square}
+.cl-al-list{display:flex;flex-direction:column;gap:6px}
+.cl-al{border-left:4px solid var(--line);padding:6px 10px;background:var(--bg3);border-radius:0 6px 6px 0}
+.cl-al-h{display:flex;align-items:center;gap:8px;font-size:12px}
+.cl-al-d{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
+.cl-al-ad{font-size:11px;color:#9fd3ff;margin-top:2px;line-height:1.5}
+.cl-dyn-tip{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6;background:var(--bg3);padding:6px 10px;border-radius:6px}
+
+/* 模态框：情报/告警列表（需求3 / 需求6） */
+.m-list{max-height:62vh;overflow:auto;display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.m-list-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 8px;background:var(--bg3);
+  border-radius:6px;cursor:pointer;transition:.15s;border-left:3px solid transparent}
+.m-list-row:hover{background:rgba(88,166,255,.12);border-left-color:var(--accent)}
+.m-lr-cat{color:var(--accent);font-weight:600;flex:0 0 auto}
+.m-lr-title{color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.m-lr-dist{flex:0 0 auto;font-size:11px}
+.modal-card{max-width:560px}
+
+/* 顶部"查看全部情报"入口 */
+.tk-all{color:var(--accent);cursor:pointer;text-decoration:underline;padding-left:4px}
+.tk-all:hover{color:#9fd3ff}
+
+/* 顶部右侧等级徽标：涉及北海时红色脉冲（需求6） */
+.badge.alert-red{color:#fff!important;animation:badgePulse 1.4s ease-in-out infinite}
+@keyframes badgePulse{0%{box-shadow:0 0 0 0 rgba(229,72,77,.6)}70%{box-shadow:0 0 0 8px rgba(229,72,77,0)}100%{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
+.ticker-tag{cursor:pointer}.ticker-tag:hover{background:rgba(88,166,255,.15)}

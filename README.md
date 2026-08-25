@@ -1,15 +1,17 @@
 # AlphaSun · 北海极端气候全景系统（技能安装包）
 
-**版本 v7.0.1 ｜ 作者：阳光（net2net2net）｜ 许可：MIT**
+**版本 v7.0.2 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
 
 一套以**北海为中心**的极端气候全景监测仪表盘：实时天气、周期预报、多灾种极端告警、全景地图与可叠加卫星 / 雷达图层。纯 Node.js、零第三方依赖、内置便携运行时，**开箱即运行**。
 
 ## 快速开始
-- **独立运行**：双击 `app/start.bat`（Windows）或 `bash app/start.sh`（Linux / macOS）→ 打开 http://localhost:8765
+- **单文件 exe（推荐，最简单）**：双击 `app/AlphaSun.exe` → 浏览器自动打开 http://localhost:8765。无需安装 Node.js、无需任何外部文件，单个 exe 即可运行。
+- **独立运行（完整目录）**：双击 `app/start.bat`（Windows）或 `bash app/start.sh`（Linux / macOS）→ 打开 http://localhost:8765
 - **由智能体运行**：见 `INSTALL.md`；技能加载后执行 `node app/server.js`
 
 ## 包内容
-- `app/`：完整可运行系统（server.js + lib + public + 内置 node）
+- `app/AlphaSun.exe`：**单文件可执行程序**（~83MB，内置 Node 运行时 + 全部前端资源），双击即运行，零依赖、零外部文件。
+- `app/`：完整可运行系统源码（server.js + lib + public + 内置 node），用于二次开发或 `node app/server.js` 直接运行。
 - `SKILL.md`：技能定义（触发 + 运行流程）
 - `INSTALL.md`：跨智能体 / 独立安装说明
 - 完整文档（设计 / 使用 / API / 分发）：知识库 `D:\SynologyDrive\KnowledgeBase\AlphaSun\beihai-climate-panorama\`

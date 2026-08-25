@@ -4,8 +4,8 @@ target_agent: any
 description: "AlphaSun · 北海极端气候全景系统 — 以北海为中心的极端气候/海洋/卫星/天文/空气质量全景监测仪表盘。当用户需要运行、部署、打包、分发或二次开发该气候全景系统，或需要北海实时天气/台风/预警/潮汐/卫星云图/地震等综合监测能力时触发。纯 Node.js 零依赖，已内置便携运行时，支持一键独立运行与跨智能体安装。"
 tags: [alphasun, beihai, climate, weather, dashboard, panorama, standalone]
 required_commands: ['node (或使用内置 node/node.exe)']
-version: 7.0.1
-author: 阳光（net2net2net）
+version: 7.0.2
+author: 阳光 net2net2net（ Vx: net2net ）
 license: MIT
 metadata: tags: [alphasun, beihai-climate, panorama]
   related_skills: [alphasun-knowledge-base, alphasun-external-info]
@@ -32,6 +32,7 @@ alphasun-beihai-climate/
 │   ├── server.js       # 聚合服务入口（纯 Node，零第三方依赖）
 │   ├── lib/            # config / sources / tides / alerts / intel / astronomy
 │   ├── public/         # 前端（index.html + css + js + data/beihai.geojson）
+│   ├── AlphaSun.exe     # 单文件可执行程序（内置 Node + 全部资源，双击即运行）
 │   ├── node/node.exe    # 内置便携式 Node 运行时（Windows，实现真正独立运行）
 │   ├── package.json
 │   ├── start.bat       # Windows 一键启动（自动打开浏览器）
@@ -42,9 +43,11 @@ alphasun-beihai-climate/
 ## 运行方式
 
 ### A. 作为软件独立运行（人类用户 / 无 Node 环境）
+- **单文件 exe（最简单）**：双击 `app/AlphaSun.exe` → 浏览器自动打开 http://localhost:8765，关闭黑色控制台窗口即停止。无需 Node.js、无需任何外部文件。
 - Windows：双击 `app/start.bat` → 自动启动服务并打开 http://localhost:8765
 - Linux / macOS：终端执行 `bash app/start.sh`
 - 内置 `node/node.exe`，**无需预装 Node**。
+- exe 可选环境变量：`PORT=9000` 改端口；`OPEN=0` 禁止自动开浏览器。
 
 ### B. 由智能体运行（已安装本技能）
 ```bash
@@ -86,6 +89,6 @@ NMDIS_APPID=xxxx NMDIS_APPSECRET=yyyy node server.js
 | 应急推送 | 预留企微 / 邮件 / 短信接口（见设计方案，待接入） |
 
 ## 版本与许可
-- 版本：v7.0.1（交互增强版）
-- 作者：阳光（net2net2net）
+- 版本：v7.0.2（六项改进版）
+- 作者：阳光 net2net2net（ Vx: net2net ）
 - 许可：MIT

@@ -12,6 +12,14 @@ alphasun-beihai-climate/
 ```
 
 ## 方式一：作为独立软件（人类用户）
+### 方式 A：单文件 exe（最简单）
+1. 取 `app/AlphaSun.exe`（单个文件，~83MB，内置 Node 运行时与全部前端资源）。
+2. **双击运行** → 浏览器自动打开 http://localhost:8765。
+3. 关闭弹出的黑色控制台窗口即停止服务。
+> 无需安装 Node.js、无需任何外部文件；可直接拷贝到任意 Windows 机器运行。
+> 可选环境变量：`PORT=9000` 修改端口；`OPEN=0` 禁止自动打开浏览器。
+
+### 方式 B：完整目录运行
 1. 拷贝整个 `alphasun-beihai-climate` 文件夹到任意位置（或解压 `alphasun-beihai-climate.zip`）。
 2. Windows：双击 `app/start.bat`。macOS / Linux：终端执行 `bash app/start.sh`。
 3. 浏览器自动打开 http://localhost:8765。

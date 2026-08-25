@@ -52,12 +52,14 @@ function render() {
   } else banner.classList.add('hidden');
 
   renderStations(); renderRealtime(); renderAir(); renderMarine();
-  renderAstro(); renderGlow(); renderTides(); renderForecast();
+  renderAstro(); renderGlow(); renderMorningGlow(); renderTides();
+  renderForecast7(); renderForecast15();
   renderAlerts(); renderEvents(); renderChartDims();
   renderClimate(); renderLinks();
   renderTicker();
   if (!tk.autostarted) { tk.autostarted = true; tkStartAuto(); }
   AlphaMap.setData(d); AlphaMap.legend($('mapLegend'));
+  renderGlobalLevelAlert();
 }
 
 function renderChartDims() {
@@ -80,12 +82,23 @@ function selStation(){ return state.data.stations.find(s => s.id === state.sel);
 
 function renderStations() {
   const el = $('stationPicker');
-  el.innerHTML = '<div class="st-tabs">' + state.data.stations.map(s => {
+  const ICONS = { beihai: '🏙️', yinhai: '🏖️', tieshan: '🏭', hepu: '🌾', weizhou: '🌋' };
+  const tabs = state.data.stations.map(s => {
     const lv = s.alert.level;
-    return `<div class="st-tab ${s.id===state.sel?'active':''}" data-id="${s.id}">
-      <span class="dot" style="background:${LCOL[lv]}"></span>${s.name}</div>`;
-  }).join('') + '</div>';
-  el.querySelectorAll('.st-tab').forEach(t => t.onclick = () => { state.sel = t.dataset.id; renderRealtime(); renderAir(); renderMarine(); renderAstro(); renderGlow(); renderForecast(); renderChart(); });
+    const sel = s.id === state.sel;
+    return `<div class="st-tab ${sel?'active':''}" data-id="${s.id}" title="${s.desc || s.name}">
+      <span class="st-ico">${ICONS[s.id] || '📍'}</span>
+      <span class="st-name">${s.name}</span>
+      <span class="st-check">✓</span></div>`;
+  }).join('');
+  // 仅替换 .st-tabs（保留 panel-h 标题）
+  let tabsEl = el.querySelector('.st-tabs');
+  if (!tabsEl) { el.insertAdjacentHTML('beforeend', '<div class="st-tabs"></div>'); tabsEl = el.querySelector('.st-tabs'); }
+  tabsEl.innerHTML = tabs;
+  tabsEl.querySelectorAll('.st-tab').forEach(t => t.onclick = () => {
+    state.sel = t.dataset.id;
+    renderRealtime(); renderAir(); renderMarine(); renderAstro(); renderGlow(); renderMorningGlow(); renderForecast7(); renderForecast15(); renderChart();
+  });
 }
 
 function renderRealtime() {
@@ -153,6 +166,19 @@ function renderGlow() {
     <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>`;
 }
 
+function renderMorningGlow() {
+  const g = selStation().morningGlow;
+  if (!g) { $('morningGlowBody').innerHTML = '<div class="muted">霞光概率暂不可用</div>'; return; }
+  const col = g.grade==='高'?'#ffd166':g.grade==='中'?'#fb8500':'#8b949e';
+  $('morningGlowBody').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:24px;font-weight:700;color:${col}">${g.score}<span style="font-size:13px">/100</span></div>
+      <div>等级 <b style="color:${col}">${g.grade}</b></div></div>
+    <div class="glow-meter"><div class="glow-fill" style="width:${g.score}%"></div></div>
+    <div class="muted" style="font-size:11px">最佳观赏：日出 ${fmt(g.bestTime)} 前后</div>
+    <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>`;
+}
+
 function renderTides() {
   $('tideBody').innerHTML = state.data.tides.map(t => `
     <div class="tide-st">
@@ -162,17 +188,21 @@ function renderTides() {
     </div>`).join('');
 }
 
-function renderForecast() {
+function renderForecast(days, targetId) {
   const w = selStation().weather;
-  if (!w || !w.ok) { $('forecastBody').innerHTML = '<div class="muted">预报暂不可用</div>'; return; }
+  const el = $(targetId);
+  if (!w || !w.ok) { el.innerHTML = '<div class="muted">预报暂不可用</div>'; return; }
   const wk = ['日','一','二','三','四','五','六'];
-  $('forecastBody').innerHTML = w.daily.map(d => {
+  const list = w.daily.slice(0, days);
+  el.innerHTML = list.map(d => {
     const dt = new Date(d.date); const ic = ICON[wmoIcon(d.code)] || '❓';
     return `<div class="fc-day"><div class="d">${dt.getMonth()+1}/${dt.getDate()} 周${wk[dt.getDay()]}</div>
       <div class="ic">${ic}</div><div class="t">${d.tmax.toFixed(0)}°/${d.tmin.toFixed(0)}°</div>
       <div class="p">💧${d.precipProb.toFixed(0)}%</div></div>`;
   }).join('');
 }
+function renderForecast7() { renderForecast(7, 'forecastBody'); }
+function renderForecast15() { renderForecast(15, 'forecast15Body'); }
 function wmoIcon(code){ const M={0:'sunny',1:'sunny',2:'partly',3:'cloudy',45:'fog',48:'fog',51:'drizzle',53:'drizzle',55:'drizzle',56:'drizzle',57:'drizzle',61:'rain',63:'rain',65:'rain',66:'rain',67:'rain',71:'snow',73:'snow',75:'snow',77:'snow',80:'rain',81:'rain',82:'rain',85:'snow',86:'snow',95:'storm',96:'storm',99:'storm'}; return M[code]||'unknown'; }
 
 function renderAlerts() {
@@ -216,10 +246,49 @@ function renderClimate() {
     ['下次满月', astro.moon ? (astro.moon.nextFull || '—') : '—'],
     ['下次新月', astro.moon ? (astro.moon.nextNew || '—') : '—'],
   ];
+  const dyn = buildClimateDynamic(d);
   $('climateBody').innerHTML = `
     <div class="cl-narr">${narrative}</div>
     <div class="cl-stats">${stats.map(([k, v]) => `<div class="cl-stat"><span class="cl-k">${k}</span><b class="cl-v">${v}</b></div>`).join('')}</div>
+    ${dyn}
     <div class="cl-note muted">注：气候特征为长期统计概况；下方数据为本次加载的实时/近期值，仅供参考。涉及北海的告警已在上方情报条与告警卡中标注。</div>`;
+}
+
+// 动态气候态势分析：基于当前极端气候告警，给出针对性结论与处置建议（需求5）
+function buildClimateDynamic(d) {
+  const all = d.globalAlerts || [];
+  const bh = all.filter(a => a.beihaiRelation === 'direct' || a.beihaiRelation === 'possible');
+  if (!bh.length) {
+    return `<div class="cl-dyn">
+      <div class="cl-dyn-h">实时气候态势与建议</div>
+      <div class="cl-ok">✅ 当前无涉及或可能涉及北海的极端气候告警，整体气象态势平稳。建议保持常规监测，关注本系统实时更新与顶部情报条。</div>
+    </div>`;
+  }
+  const byCat = {};
+  bh.forEach(a => { (byCat[a.type] = byCat[a.type] || []).push(a); });
+  const catSummary = Object.entries(byCat).map(([t, arr]) => {
+    const lv = Math.max(...arr.map(a => a.level));
+    return `<li><b style="color:${LCOL[lv]}">${t}</b> ×${arr.length}（最高等级 ${LNAME[lv]}）</li>`;
+  }).join('');
+  const items = bh.map(a => `
+    <div class="cl-al">
+      <div class="cl-al-h">
+        <span class="${a.beihaiRelation === 'direct' ? 'rel-badge direct' : 'rel-badge possible'}">${a.beihaiRelation === 'direct' ? '涉及北海' : '可能涉及北海'}</span>
+        <b>${a.type} · ${a.station || a.region}</b>
+        <span style="color:${LCOL[a.level]}">${a.levelName}</span>
+      </div>
+      <div class="cl-al-d">${a.detail || ''}</div>
+      ${a.advice ? `<div class="cl-al-ad">▶ ${a.advice}</div>` : ''}
+    </div>`).join('');
+  const directN = bh.filter(a => a.beihaiRelation === 'direct').length;
+  const possibleN = bh.filter(a => a.beihaiRelation === 'possible').length;
+  return `<div class="cl-dyn">
+    <div class="cl-dyn-h">实时气候态势与建议（针对当前极端气候告警）</div>
+    <div class="cl-dyn-sum">检测到 <b style="color:#ff7b7b">${bh.length}</b> 条涉及/可能涉及北海的告警（涉及 ${directN} · 可能涉及 ${possibleN}）：</div>
+    <ul class="cl-cat">${catSummary}</ul>
+    <div class="cl-al-list">${items}</div>
+    <div class="cl-dyn-tip">处置优先级：<b>涉及北海（direct）</b> ＞ <b>可能涉及北海（possible）</b>；建议按区域落实防台 / 防汛 / 防地灾 / 防雷措施，并以官方发布为准。</div>
+  </div>`;
 }
 
 const SITES = [
@@ -409,12 +478,79 @@ function openAlertModal(a) {
   `;
   $('intelModal').classList.remove('hidden');
 }
+// 顶部"极端气候告警情报"标签 → 全部情报弹窗（需求3）
+function intelRowHTML(it) {
+  return `<div class="m-list-row" data-id="${it.id}">
+    <span class="tk-region ${it.region}">${REGION_TAG[it.region] || it.region}</span>
+    ${relBadge(it)}
+    <span class="tk-lv" style="background:${it.color};color:#06121f">${it.levelName}</span>
+    <span class="m-lr-cat">${it.category}</span>
+    <span class="m-lr-title">${it.title}</span>
+    <span class="m-lr-dist muted">${it.minDistBH != null ? AlphaMap.fmtDist(it.minDistBH) : ''}</span>
+  </div>`;
+}
+function openAllIntelModal() {
+  const items = (state.data.alertIntel && state.data.alertIntel.items) || [];
+  const body = $('modalBody');
+  const rows = items.length ? items.map(intelRowHTML).join('')
+    : '<div class="muted">暂无极端气候告警情报</div>';
+  body.innerHTML = `<div class="m-head"><b>全部极端气候告警情报（${items.length} 条）</b></div>
+    <div class="m-list">${rows}</div>`;
+  body.querySelectorAll('.m-list-row').forEach(r => {
+    const it = items.find(x => x.id === r.dataset.id);
+    r.onclick = () => { if (it) openIntelModal(it); };
+  });
+  $('intelModal').classList.remove('hidden');
+}
+
+// 顶部右侧等级徽标 → 涉及/可能涉及北海的告警弹窗（需求6）
+function renderGlobalLevelAlert() {
+  const badge = $('globalLevel');
+  if (!badge) return;
+  const all = (state.data && state.data.globalAlerts) || [];
+  const bh = all.filter(a => a.beihaiRelation === 'direct' || a.beihaiRelation === 'possible');
+  if (bh.length) {
+    badge.classList.add('alert-red');
+    badge.style.background = '#e5484d';
+    badge.style.color = '#fff';
+    badge.style.cursor = 'pointer';
+    badge.title = `涉及/可能涉及北海的告警 ${bh.length} 条，点击查看`;
+    badge.onclick = openBeihaiModal;
+  } else {
+    badge.classList.remove('alert-red');
+    badge.style.cursor = 'default';
+    badge.title = '当前无涉及北海的告警';
+    badge.onclick = null;
+  }
+}
+function openBeihaiModal() {
+  const all = (state.data && state.data.globalAlerts) || [];
+  const bh = all.filter(a => a.beihaiRelation === 'direct' || a.beihaiRelation === 'possible');
+  const body = $('modalBody');
+  const rows = bh.length ? bh.map((a, i) => `
+    <div class="m-list-row" data-i="${i}">
+      <span class="${a.beihaiRelation === 'direct' ? 'rel-badge direct' : 'rel-badge possible'}">${a.beihaiRelation === 'direct' ? '涉及北海' : '可能涉及北海'}</span>
+      <span class="tk-lv" style="background:${a.color};color:#06121f">${a.levelName}</span>
+      <span class="m-lr-cat">${a.type}</span>
+      <span class="m-lr-title">${a.station || a.region}</span>
+    </div>`).join('') : '<div class="muted">当前无涉及北海的告警</div>';
+  body.innerHTML = `<div class="m-head"><b>涉及 / 可能涉及北海的告警（${bh.length} 条）</b></div>
+    <div class="m-list">${rows}</div>`;
+  body.querySelectorAll('.m-list-row').forEach(r => {
+    const a = bh[+r.dataset.i];
+    r.onclick = () => { if (a) openAlertModal(a); };
+  });
+  $('intelModal').classList.remove('hidden');
+}
+
 $('modalClose').onclick = () => $('intelModal').classList.add('hidden');
 $('intelModal').onclick = (e) => { if (e.target === $('intelModal')) $('intelModal').classList.add('hidden'); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('intelModal').classList.add('hidden'); });
 $('tkPrev').onclick = () => tkGo(-1);
 $('tkNext').onclick = () => tkGo(1);
 $('tkPlay').onclick = tkTogglePlay;
+const tTag = $('tickerTag'); if (tTag) tTag.onclick = openAllIntelModal;
+const tAll = $('tickerAll'); if (tAll) tAll.onclick = openAllIntelModal;
 
 // 图层开关
 ['Station', 'Quake', 'Fire', 'Tide', 'Boundary', 'Typhoon', 'Conv', 'Rain', 'Geo'].forEach(n => {

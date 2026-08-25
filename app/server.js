@@ -2,7 +2,11 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 const { STATIONS, TIDE_STATIONS } = require('./lib/config');
+// 内联静态资源（构建期由 build-assets.js 生成）——单文件 exe / 无 public 目录时从此读取
+let ASSETS = {};
+try { ASSETS = require('./embedded-assets'); } catch (e) {}
 const src = require('./lib/sources');
 const tides = require('./lib/tides');
 const alert = require('./lib/alerts');
@@ -18,14 +22,26 @@ function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
   res.end(JSON.stringify(obj));
 }
+const ASSET_CT = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.geojson': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 function serveStatic(res, urlPath) {
   let f = urlPath === '/' ? '/index.html' : urlPath;
-  const fp = path.join(PUBLIC, path.normalize(f).replace(/^(\.\.[/\\])+/, ''));
+  // 仅做 POSIX 风格清理（防目录穿越），不使用 Windows path.normalize（会把前导 / 变成 \，破坏资源 key 匹配）
+  f = f.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\.[/])+/, '');
+  const rel = f.startsWith('/') ? f : '/' + f;
+  // 优先从内联资源读取（单文件 exe / 无 public 目录场景）
+  if (ASSETS[rel]) {
+    const buf = Buffer.from(ASSETS[rel], 'base64');
+    const ct = ASSET_CT[path.extname(rel).toLowerCase()] || 'text/plain';
+    res.writeHead(200, { 'Content-Type': ct, 'Content-Length': buf.length });
+    return res.end(buf);
+  }
+  // 回退到文件系统（开发 / 普通 node 运行）
+  const fp = path.join(PUBLIC, rel.replace(/^\/+/, ''));
   if (!fp.startsWith(PUBLIC)) { res.writeHead(403); return res.end('forbidden'); }
   fs.readFile(fp, (e, data) => {
     if (e) { res.writeHead(404); return res.end('not found'); }
     const ext = path.extname(fp);
-    const ct = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.geojson': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' }[ext] || 'text/plain';
+    const ct = ASSET_CT[ext] || 'text/plain';
     res.writeHead(200, { 'Content-Type': ct, 'Content-Length': Buffer.byteLength(data) });
     res.end(data);
   });
@@ -103,7 +119,8 @@ async function buildOverview() {
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
     const glow = astro.sunsetGlow(st);
-    return { ...st, alert: ev, glow };
+    const morningGlow = astro.sunriseGlow(st);
+    return { ...st, alert: ev, glow, morningGlow };
   });
   const quakes = quakeRes.status === 'fulfilled' && quakeRes.value.ok ? quakeRes.value.events : [];
   const fires = fireRes.status === 'fulfilled' && fireRes.value.ok ? fireRes.value.fires : [];
@@ -185,4 +202,10 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`AlphaSun 北海极端气候全景系统 -> http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`AlphaSun 北海极端气候全景系统 -> http://localhost:${PORT}`);
+  // 双击 exe 运行时自动打开浏览器（设环境变量 OPEN=0 可关闭）
+  if (process.env.OPEN !== '0' && process.platform === 'win32') {
+    setTimeout(() => { try { exec('start http://localhost:' + PORT); } catch (e) {} }, 1200);
+  }
+});

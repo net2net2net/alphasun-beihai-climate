@@ -61,7 +61,7 @@ async function fetchForecast(s) {
     current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,cloud_cover,is_day',
     hourly: 'temperature_2m,apparent_temperature,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,weather_code,relative_humidity_2m,cloud_cover,pressure_msl',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,pressure_msl_max,sunrise,sunset,moonrise,moonset,moon_phase',
-    forecast_days: '7', timezone: 'Asia/Shanghai', wind_speed_unit: 'ms',
+    forecast_days: '16', timezone: 'Asia/Shanghai', wind_speed_unit: 'ms',
   });
   const d = await fetchJSON(url);
   const cur = d.current, daily = d.daily, hr = d.hourly;
