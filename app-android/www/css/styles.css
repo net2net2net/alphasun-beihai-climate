@@ -1,0 +1,396 @@
+:root{
+  --bg:#0d1117; --bg2:#161b22; --bg3:#1c2330; --line:#2a3340;
+  --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --info:#9fd3ff;
+  --ok:#3fb950; --warn:#d29922; --orange:#fb8500; --red:#e5484d; --deep:#bc1a1a;
+  --clock-bezel:#39414e; --clock-face:#f6f3ea; --clock-face2:#ffffff;
+  --clock-num:#1c2230; --clock-tick:#1c2230; --clock-sec:#e5484d;
+}
+[data-theme="light"]{
+  --bg:#eef1f5; --bg2:#ffffff; --bg3:#e6eaf0; --line:#d4dae2;
+  --txt:#1b2733; --muted:#5b6776; --accent:#1f6feb; --info:#0b66c3;
+  --ok:#1a7f37; --warn:#9a6700; --orange:#c2410c; --red:#cf222e; --deep:#a40e26;
+  --clock-bezel:#c4cad3; --clock-face:#fbfaf4; --clock-face2:#ffffff;
+  --clock-num:#222; --clock-tick:#222; --clock-sec:#d11;
+}
+/* 浅色主题（默认深色；顶部按钮切换，localStorage 持久化） */
+[data-theme="light"]{
+  --bg:#eef1f5; --bg2:#ffffff; --bg3:#e6eaf0; --line:#d4dae2;
+  --txt:#1b2733; --muted:#5b6776; --accent:#1f6feb; --info:#0b66c3;
+  --ok:#1a7f37; --warn:#9a6700; --orange:#c2410c; --red:#cf222e; --deep:#a40e26;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--bg);color:var(--txt);font-size:13px;line-height:1.5}
+.muted{color:var(--muted)}
+.hidden{display:none!important}
+.btn{background:var(--bg3);color:var(--txt);border:1px solid var(--line);border-radius:6px;
+  padding:4px 12px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:var(--accent)}
+.sound-btn{padding:4px 9px;font-size:14px;line-height:1}
+.sound-btn.on{border-color:var(--accent);color:var(--accent);background:rgba(88,166,255,.12)}
+
+/* 顶栏 */
+.topbar{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 18px;background:linear-gradient(90deg,#111827,#0d1117);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{font-size:26px;filter:drop-shadow(0 0 6px #f0a500)}
+.brand h1{font-size:17px;margin:0}
+.sub{font-size:11px;color:var(--muted)}
+.status{display:flex;align-items:center;gap:12px}
+.badge{padding:3px 12px;border-radius:20px;font-weight:600;font-size:12px;background:var(--bg3);border:1px solid var(--line)}
+
+/* 顶部"警报 / 无警报"指示器（需求3） */
+.alert-status{padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px;white-space:nowrap;
+  border:1px solid transparent;transition:.2s}
+.alert-status.ok{background:rgba(63,185,80,.16);color:#3fb950;border-color:#3fb950}
+.alert-status.alert{background:var(--red);color:#fff;border-color:var(--deep);
+  animation:alertBlink 1s steps(1,end) infinite}
+@keyframes alertBlink{
+  0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(229,72,77,0)}
+  50%{opacity:.32;box-shadow:0 0 14px 4px rgba(229,72,77,.75)}
+}
+
+/* 告警横幅 */
+.alert-banner{margin:0;padding:8px 18px;background:var(--red);color:#fff;font-weight:600;
+  display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.alert-banner .a-item{background:rgba(0,0,0,.25);padding:2px 10px;border-radius:14px;font-weight:500;cursor:pointer;transition:.15s}
+.alert-banner .a-item:hover{outline:1px solid rgba(255,255,255,.6)}
+
+/* 网格 */
+.grid{display:grid;grid-template-columns:340px 1fr 360px;gap:12px;padding:12px;align-items:start}
+.col{display:flex;flex-direction:column;gap:12px}
+@media(max-width:1200px){.grid{grid-template-columns:1fr}}
+
+.panel{background:var(--bg2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.panel-h{padding:8px 12px;font-weight:600;border-bottom:1px solid var(--line);
+  background:var(--bg3);display:flex;justify-content:space-between;align-items:center}
+.layers label{font-size:11px;color:var(--muted);margin-left:8px;font-weight:400;cursor:pointer}
+
+/* 24h 曲线维度切换 */
+.chart-dims{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px 2px}
+.dim-chip{background:var(--bg3);color:var(--muted);border:1px solid var(--line);
+  border-radius:14px;padding:2px 10px;font-size:11px;cursor:pointer;transition:.15s;
+  border-left:3px solid var(--c,#8b949e)}
+.dim-chip:hover{color:var(--txt)}
+.dim-chip.on{color:#06121f;background:var(--c,#8b949e);border-color:var(--c,#8b949e);font-weight:600}
+
+/* 实时卡 */
+.realtime-body{padding:12px;display:flex;flex-direction:column;gap:10px}
+.rt-head{display:flex;align-items:center;gap:12px}
+.rt-icon{font-size:40px;line-height:1}
+.rt-main{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.rt-temp{font-size:44px;font-weight:700;line-height:1;color:var(--txt)}
+.rt-temp .rt-deg{font-size:24px;font-weight:600;margin-left:1px}
+.rt-cond{font-size:14px;color:var(--muted);margin-top:3px}
+.rt-feels{margin-left:auto;text-align:right;display:flex;flex-direction:column;gap:1px}
+.rt-feels .l{font-size:11px;color:var(--muted)}
+.rt-feels b{font-size:17px;color:var(--txt);font-weight:600}
+.rt-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rt-metric{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:7px 9px;
+  display:flex;flex-direction:column;gap:2px}
+.rt-metric .l{font-size:11px;color:var(--muted)}
+.rt-metric b{font-size:15px;color:var(--accent);font-weight:600;line-height:1.1}
+.rt-metric b i{font-size:10px;font-style:normal;color:var(--muted);font-weight:400;margin-left:1px}
+
+/* 通用小卡 */
+.air-body,.marine-body,.astro-body,.glow-body,.tide-body{padding:10px 12px;display:grid;gap:6px}
+.air-body{grid-template-columns:auto 1fr}
+.aqi-num{font-size:32px;font-weight:700}
+.aqi-bar{height:8px;border-radius:4px;background:linear-gradient(90deg,#3fb950,#d29922,#fb8500,#e5484d,#bc1a1a);position:relative}
+.aqi-dot{position:absolute;top:-3px;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #333}
+.pollutants{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;color:var(--muted)}
+.pollutants b{color:var(--txt)}
+
+/* 地图 */
+.map-panel{display:flex;flex-direction:column}
+#map{height:560px;width:100%;background:#0b0f14}
+.map-legend{display:flex;gap:14px;padding:6px 12px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.map-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle}
+
+/* 预报 */
+.forecast-body{padding:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.fc-day{background:var(--bg3);border-radius:8px;padding:6px 4px;text-align:center;font-size:11px}
+.fc-day .d{color:var(--muted)}.fc-day .ic{font-size:22px}.fc-day .t{font-weight:600}
+.fc-day .p{color:var(--accent)}
+
+/* 告警 */
+.alert-body{padding:8px 12px;display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
+.al-item{border-left:4px solid var(--line);padding:6px 10px;background:var(--bg3);border-radius:0 6px 6px 0}
+.al-item .h{display:flex;justify-content:space-between;font-weight:600}
+.al-item .d{font-size:11px;color:var(--muted);margin-top:2px}
+.al-item .ad{font-size:11px;color:var(--info);margin-top:2px}
+
+/* 极端天气告警：左栏顶部、标题标红、可点击查看详情 */
+.alert-panel{border-color:rgba(229,72,77,.45)}
+.alert-panel .panel-h.danger-h{color:var(--red);font-weight:700}
+.alert-panel .panel-h.danger-h span:first-child{flex:1 1 auto}
+/* 告警数量：标题后直接分隔的徽标，不使用括号（需求2） */
+.alert-count{font-size:12px;font-weight:700;color:#fff;background:var(--red);
+  border-radius:12px;padding:1px 10px;min-width:22px;text-align:center;line-height:1.6}
+.alert-count.zero{color:var(--muted);background:transparent;border:1px solid var(--line)}
+.al-item{cursor:pointer;transition:.15s}
+.al-item:hover{background:rgba(88,166,255,.10)}
+
+/* 天文事件 */
+.event-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:12px}
+.ev-row{display:flex;justify-content:space-between;gap:8px}
+.ev-row .n{font-weight:600}.ev-row .c{color:var(--muted)}
+
+/* 站点选择 */
+#stationPicker{padding:0}
+.st-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px}
+.st-tab{padding:5px 11px;border-radius:18px;background:var(--bg3);border:1px solid var(--line);
+  cursor:pointer;font-size:12px}
+.st-tab.active{background:var(--accent);color:#06121f;border-color:var(--accent);font-weight:600}
+.st-tab .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+
+.foot{padding:10px 18px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);text-align:center}
+
+/* 潮汐 */
+.tide-st{border-left:3px solid var(--accent);padding:4px 8px;background:var(--bg3);border-radius:0 6px 6px 0}
+.tide-st .nm{font-weight:600}
+.tide-ext{font-size:11px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
+.glow-meter{height:10px;border-radius:5px;background:var(--bg3);overflow:hidden}
+.glow-fill{height:100%;background:linear-gradient(90deg,#fb8500,#f0a500,#ffd166)}
+
+/* ===== 顶部告警情报条（手动翻页 + 播放/暂停）===== */
+.ticker{display:flex;align-items:center;gap:12px;padding:6px 18px;
+  background:linear-gradient(90deg,#0d1117,#161b22);border-bottom:1px solid var(--line);overflow:hidden}
+.ticker-tag{flex:0 0 auto;font-weight:700;font-size:12px;color:var(--accent);
+  border:1px solid var(--accent);border-radius:14px;padding:3px 12px;white-space:nowrap}
+.ticker-pager{flex:1 1 auto;display:flex;align-items:center;gap:8px;min-width:0}
+.tk-btn{flex:0 0 auto;background:var(--bg3);color:var(--txt);border:1px solid var(--line);
+  border-radius:6px;width:26px;height:24px;cursor:pointer;font-size:12px;line-height:1}
+.tk-btn:hover{border-color:var(--accent)}
+.tk-btn.tk-play{color:var(--accent)}
+.ticker-card{flex:1 1 auto;display:flex;align-items:center;gap:10px;height:26px;font-size:12px;
+  cursor:pointer;overflow:hidden;white-space:nowrap;min-width:0}
+.ticker-card:hover{background:rgba(88,166,255,.10)}
+.tk-region{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;flex:0 0 auto}
+.tk-region.北海{background:rgba(63,185,80,.18);color:#3fb950}
+.tk-region.广西{background:rgba(52,152,219,.18);color:#3498db}
+.tk-region.其他{background:rgba(139,148,158,.18);color:#8b949e}
+.tk-lv{font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;flex:0 0 auto}
+.tk-cat{color:var(--accent);font-weight:600;flex:0 0 auto}
+.tk-title{color:var(--txt);overflow:hidden;text-overflow:ellipsis;flex:1 1 auto}
+.tk-dist{flex:0 0 auto}
+.tk-src{font-size:11px;flex:0 0 auto}
+.ticker-foot{flex:0 0 auto;font-size:11px;white-space:nowrap}
+.tk-status{font-size:11px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
+.tk-status.on{color:var(--ok)}
+@keyframes tkIn{from{opacity:.25;transform:translateX(10px)}to{opacity:1;transform:none}}
+.ticker-card.tk-anim{animation:tkIn .4s ease}
+.rel-badge{flex:0 0 auto;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px}
+.rel-badge.direct{background:rgba(188,26,26,.25);color:#ff7b7b;border:1px solid #bc1a1a}
+.rel-badge.possible{background:rgba(251,133,0,.18);color:#ffb86b;border:1px solid #fb8500}
+
+/* ===== 情报详情模态框 ===== */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal.hidden{display:none!important}
+.modal-card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;max-width:460px;width:90%;
+  padding:18px 20px;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.modal-close{position:absolute;top:6px;right:12px;background:transparent;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
+.m-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.m-cat{font-weight:600;color:var(--accent)}
+.m-title{font-size:15px;font-weight:700;margin-bottom:6px;line-height:1.4}
+.m-summary{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6}
+.m-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px;margin-bottom:10px}
+.m-grid .muted{display:block;font-size:11px}
+.m-advice{font-size:12px;background:var(--bg3);border-left:3px solid var(--accent);padding:6px 10px;border-radius:0 6px 6px 0;margin-bottom:10px;line-height:1.6}
+.m-link{color:var(--accent);font-size:12px}
+
+/* 地图：北海边界标签 */
+.bd-label{background:rgba(13,17,23,.7);border:1px solid #58a6ff;color:#9fd3ff;font-size:11px;
+  padding:1px 6px;border-radius:6px;box-shadow:none}
+
+/* 顶栏版本 + 作者 */
+.brand h1 .ver{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:10px;padding:1px 8px;vertical-align:middle;font-weight:600}
+.brand .sub{margin-top:2px}
+
+/* 地图底部：灾害距离概览 */
+.map-hazard-info{display:flex;flex-wrap:wrap;gap:6px 16px;padding:6px 12px;font-size:11px;color:var(--muted);border-top:1px solid var(--line);background:var(--bg3)}
+.map-hazard-info b{color:var(--txt)}
+
+/* 叠加图层控制 */
+.overlay-box{border-top:1px solid var(--line)}
+.overlay-box summary{cursor:pointer;padding:7px 12px;font-weight:600;font-size:12px;background:var(--bg3);user-select:none}
+.overlay-box summary:hover{color:var(--accent)}
+.overlay-panel{padding:8px 12px;display:grid;grid-template-columns:1fr 1fr;gap:4px 14px}
+.ov-group{grid-column:1 / -1;margin-bottom:2px}
+.ov-gt{font-size:11px;color:var(--accent);font-weight:600;margin:4px 0 2px}
+.ov-row{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer}
+.ov-row input{accent-color:var(--accent)}
+.ov-link{color:var(--accent);text-decoration:none;font-size:12px}
+.ov-link:hover{text-decoration:underline}
+.overlay-hint{padding:4px 12px 8px;font-size:11px;color:#ffb86b;min-height:14px}
+
+/* 北海气候解说 + 数据分析 */
+.climate-body{padding:12px}
+.cl-narr{font-size:12.5px;line-height:1.7;color:var(--txt)}
+.cl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 6px}
+.cl-stat{background:var(--bg3);border-radius:8px;padding:8px;text-align:center}
+.cl-stat .cl-k{display:block;font-size:11px;color:var(--muted)}
+.cl-stat .cl-v{display:block;font-size:15px;color:var(--accent);margin-top:2px}
+.cl-note{font-size:11px;line-height:1.6}
+
+/* 推荐网站 */
+.links-body{padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.ln-group{}
+.ln-gt{font-size:11px;color:var(--accent);font-weight:600;margin-bottom:4px}
+.ln-items{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ln-item{display:flex;flex-direction:column;gap:2px;background:var(--bg3);border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;text-decoration:none;color:var(--txt);transition:.15s}
+.ln-item:hover{border-color:var(--accent);background:rgba(88,166,255,.08)}
+.ln-n{font-weight:600;color:var(--accent);font-size:12.5px}
+.ln-note{font-size:11px;color:var(--muted);line-height:1.4}
+
+/* 告警卡：区域标签 */
+.al-region{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;margin-right:4px}
+.al-region.北海{background:rgba(63,185,80,.18);color:#3fb950}
+.al-region.广西{background:rgba(52,152,219,.18);color:#3498db}
+
+/* 地理区域选择：选中态图标（需求2） */
+.st-ico{font-size:14px;margin-right:3px;opacity:.85}
+.st-name{margin-right:3px}
+.st-check{display:none;margin-left:2px;font-weight:700;color:#06121f}
+.st-tab.active .st-check{display:inline}
+.st-tab.active .st-ico{transform:scale(1.15)}
+.st-tab.active{box-shadow:0 0 0 2px rgba(88,166,255,.35)}
+
+/* 15 日预报：横向可滚动条带 */
+#forecast15Body{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;grid-template-columns:none;padding:8px}
+#forecast15Body .fc-day{flex:0 0 56px;width:56px}
+#forecast15Body .fc-day .ic{font-size:18px}
+
+/* 北海气候解说：动态态势分析块（需求5） */
+.cl-dyn{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+.cl-dyn-h{font-weight:700;color:var(--accent);margin-bottom:6px;font-size:13px}
+.cl-ok{background:rgba(63,185,80,.10);border-left:3px solid var(--ok);padding:8px 10px;border-radius:0 6px 6px 0;font-size:12px;line-height:1.6}
+.cl-dyn-sum{font-size:12px;margin-bottom:4px}
+.cl-dyn-sum b{color:#ff7b7b}
+.cl-cat{margin:4px 0 8px;padding-left:18px;font-size:12px;display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}
+.cl-cat li{list-style:square}
+.cl-al-list{display:flex;flex-direction:column;gap:6px}
+.cl-al{border-left:4px solid var(--line);padding:6px 10px;background:var(--bg3);border-radius:0 6px 6px 0}
+.cl-al-h{display:flex;align-items:center;gap:8px;font-size:12px}
+.cl-al-d{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
+.cl-al-ad{font-size:11px;color:var(--info);margin-top:2px;line-height:1.5}
+.cl-dyn-tip{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6;background:var(--bg3);padding:6px 10px;border-radius:6px}
+
+/* 模态框：情报/告警列表（需求3 / 需求6） */
+.m-list{max-height:62vh;overflow:auto;display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.m-list-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 8px;background:var(--bg3);
+  border-radius:6px;cursor:pointer;transition:.15s;border-left:3px solid transparent}
+.m-list-row:hover{background:rgba(88,166,255,.12);border-left-color:var(--accent)}
+.m-lr-cat{color:var(--accent);font-weight:600;flex:0 0 auto}
+.m-lr-title{color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.m-lr-dist{flex:0 0 auto;font-size:11px}
+.modal-card{max-width:560px}
+
+/* 顶部"查看全部情报"入口 */
+.tk-all{color:var(--accent);cursor:pointer;text-decoration:underline;padding-left:4px}
+.tk-all:hover{color:#9fd3ff}
+
+/* 顶部右侧等级徽标：涉及北海时红色脉冲（需求6） */
+.badge.alert-red{color:#fff!important;animation:badgePulse 1.4s ease-in-out infinite}
+@keyframes badgePulse{0%{box-shadow:0 0 0 0 rgba(229,72,77,.6)}70%{box-shadow:0 0 0 8px rgba(229,72,77,0)}100%{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
+.ticker-tag{cursor:pointer}.ticker-tag:hover{background:rgba(88,166,255,.15)}
+
+/* 实时天气：变化趋势（需求5） */
+.rt-trend{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:11px;line-height:1.5}
+.rt-chip{font-weight:600;white-space:nowrap}
+
+/* 天文：太阳位置图 + 月相图（需求7） */
+.astro-sun{flex:1 1 150px;min-width:150px}
+.astro-moon{flex:0 0 72px;text-align:center}
+.astro-sun svg{width:100%}
+
+/* 海洋：浪高条 + 波向（需求6） */
+.marine-row{display:flex;gap:8px;align-items:center}
+.marine-ico{font-size:22px}
+.marine-main{flex:1 1 auto;min-width:0}
+.marine-h{font-size:13px;display:flex;align-items:center;gap:6px}
+.wave-dir{display:inline-block;color:var(--accent);font-weight:700;font-size:15px;transition:transform .3s}
+.wave-bar{height:7px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-top:4px}
+.wave-bar.sm{height:5px;margin-top:2px}
+.wave-fill{height:100%;background:linear-gradient(90deg,#3fb950,#58a6ff,#fb8500);border-radius:4px}
+.marine-sub{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;margin-top:6px}
+.marine-sub b{color:var(--accent)}
+
+/* 潮汐：当前潮位告警 + 曲线（需求6） */
+.tide-warn{color:var(--red);font-weight:700}
+.tide-svg{margin-top:2px}
+
+/* 霞光：位置标注（需求8） */
+.glow-loc{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* 天文景观日历：北海可观测性（需求8） */
+.ev-head{font-size:11px;color:#9fd3ff;background:rgba(88,166,255,.08);border-left:3px solid var(--accent);
+  padding:4px 8px;border-radius:0 6px 6px 0;margin-bottom:4px}
+.ev-note{font-size:11px;color:var(--muted);margin:-4px 0 6px;padding-left:2px}
+.ev-vis{font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px}
+.ev-vis.ok{background:rgba(63,185,80,.16);color:#3fb950}
+.ev-vis.no{background:rgba(251,133,0,.14);color:#ffb86b}
+
+/* 实时天气：实时数据 ∥ 区域概况（形状在左、数据在右，v8.0.2） */
+.rt-band{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin-top:2px}
+.rt-grp{flex:1 1 160px;min-width:0;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.rt-grp-weather{flex:1.5 1 200px}
+.rt-grp-region{flex:1.3 1 220px}
+.rt-grp-h{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.4px;margin-bottom:7px}
+.rt-region-inner{display:flex;gap:12px;align-items:center}
+.rt-region-shape{flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.rt-region-shape svg{max-width:120px;width:120px;height:auto}
+.rt-region-meta{flex:1 1 auto;display:flex;flex-direction:column;gap:6px;font-size:12px;line-height:1.35}
+.rt-region-meta b{color:var(--accent);font-weight:600}
+
+/* 模块放大（点击标题 → 中央放大，v7.0.3） */
+.focus-modal .modal-card{width:min(1000px,95vw);max-height:92vh;display:flex;flex-direction:column}
+.focus-title{padding:10px 16px 6px;font-weight:700;color:var(--accent);font-size:15px;border-bottom:1px solid var(--line)}
+#focusBody{padding:16px 18px;overflow:auto;font-size:15px;line-height:1.6}
+#focusBody svg{max-width:100%!important}
+#focusBody .astro-sun,#focusBody .astro-moon{transform:scale(1.05)}
+#focusBody .rt-region-shape svg{max-width:240px!important;margin-left:0}
+#focusMap{background:#0b1622}
+
+/* ===== 世界时钟（位于「推荐天气/数据源网站」面板底部，v8.0.3）===== */
+.world-clock{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.wc-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.wc-title{font-size:14px;font-weight:700;color:var(--accent)}
+.wc-sub{font-size:11px;color:var(--muted)}
+.wc-main{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.wc-analog{flex:0 0 auto;width:200px;max-width:46%}
+.wc-svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 16px rgba(0,0,0,.45))}
+.wc-bezel{fill:var(--clock-bezel);stroke:rgba(0,0,0,.25);stroke-width:1.5}
+.wc-g0{stop-color:var(--clock-face2)}
+.wc-g1{stop-color:var(--clock-face)}
+.wc-tick-major{stroke:var(--clock-tick);stroke-width:2.4;stroke-linecap:round}
+.wc-tick-minor{stroke:var(--clock-tick);stroke-width:1;opacity:.55}
+.wc-num{fill:var(--clock-num);font-size:13px;font-weight:700;text-anchor:middle;font-family:"Segoe UI",system-ui,sans-serif}
+.wc-hour-hand line{stroke:var(--clock-num);stroke-width:5;stroke-linecap:round}
+.wc-min-hand line{stroke:var(--clock-num);stroke-width:3.2;stroke-linecap:round}
+.wc-sec-hand line{stroke:var(--clock-sec);stroke-width:1.4;stroke-linecap:round}
+.wc-cap{fill:var(--clock-sec);stroke:var(--clock-face);stroke-width:1.5}
+.wc-readout{flex:1 1 200px;min-width:0}
+.wc-big{font-family:"SFMono-Regular",Consolas,"Roboto Mono",monospace;font-size:34px;font-weight:700;line-height:1.05;
+  letter-spacing:.5px;color:var(--txt);display:flex;align-items:baseline;gap:1px}
+.wc-big-ms{font-size:18px;color:var(--accent);font-weight:700}
+.wc-big-label{font-size:12px;color:var(--muted);margin-top:4px}
+.wc-big-label2{font-size:11px;color:var(--muted);opacity:.8}
+.wc-zones{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:14px}
+.wc-z{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:7px 10px}
+.wc-z-accent{border-color:rgba(88,166,255,.4);background:linear-gradient(180deg,rgba(88,166,255,.10),var(--bg2))}
+.wc-z-name{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc-z-accent .wc-z-name{color:var(--accent);font-weight:600}
+.wc-z-time{font-family:"SFMono-Regular",Consolas,"Roboto Mono",monospace;font-size:15px;font-weight:600;color:var(--txt);margin-top:2px;letter-spacing:.3px}
+.wc-z-date{font-size:10px;margin-top:1px}
+.wc-sync{display:flex;align-items:center;gap:12px;margin-top:14px}
+.wc-sync-status{font-size:11px;color:var(--muted)}
+#syncBtn.on{border-color:var(--ok);color:var(--ok);background:rgba(63,185,80,.12)}
+/* 放大模态内世界时钟放大展示 */
+#focusBody .world-clock{margin-top:6px;border-top:none;padding-top:0}
+#focusBody .wc-analog{width:280px}
+#focusBody .wc-big{font-size:46px}
+#focusBody .wc-big-ms{font-size:24px}
+#focusBody .wc-zones{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+
