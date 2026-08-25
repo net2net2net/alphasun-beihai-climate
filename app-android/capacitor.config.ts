@@ -14,6 +14,10 @@ const config: CapacitorConfig = {
     // 允许混合内容（部分底图/接口为 http 时仍可加载）
     allowMixedContent: true,
   },
+  ios: {
+    // iOS 同样复用 www/ 前端；如需访问 http 接口可开启下面一项
+    // allowMixedContent: true,
+  },
 };
 
 export default config;
