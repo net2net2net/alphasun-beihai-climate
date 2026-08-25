@@ -12,7 +12,7 @@
 ## 包内容
 - **单文件 exe（Release 发布）**：Windows 64 位单文件 `alphasun-beihai-climate8.0.2.exe`（约 83 MB，内置 Node 运行时 + 全部前端资源），见下方「单文件 exe 下载」段落与 Release `alphasun-exe-8.0.2`。
 - `app/`：完整可运行系统源码（server.js + lib + public + 内置 node），用于二次开发或 `node app/server.js` 直接运行。
-- `app-android/`：安卓 APP 版（Capacitor 纯前端封装，`www/` 直连数据源，可在手机独立运行）
+- `app-android/`：移动端 APP 版（Capacitor 纯前端封装，一套 `www/` 同时生成 **iOS + Android**，直连数据源，可在手机独立运行；APK 可由 GitHub Actions 云端自动构建）
 - `SKILL.md`：技能定义（触发 + 运行流程）
 - `INSTALL.md`：跨智能体 / 独立安装说明
 - `CHANGELOG.md`：版本变更总览
@@ -60,14 +60,16 @@ npm run build:exe             # 输出 app/dist/AlphaSun.exe
 
 > 运行：双击 exe → 浏览器自动打开 http://localhost:8765。需联网获取实时数据；如被杀软误报，校验 MD5 一致后可加入白名单。详细见使用说明文档。
 
-## 安卓 APP（手机端运行）
+## 移动端 APP（iOS + Android）
 
-把系统打包为可在安卓手机独立运行的 APP（Capacitor 纯前端封装，APK 约 10 MB）：
+把系统打包为可在手机独立运行的 APP（Capacitor 纯前端封装，一套 `www/` 同时生成 iOS 与 Android）：
 
-- **项目目录**：[`app-android/`](app-android/)（含完整 `www/` 前端 + Capacitor 配置 + 构建文档 [README](app-android/README.md)）
+- **项目目录**：[`app-android/`](app-android/)（含完整 `www/` 前端 + Capacitor 配置 + 双端构建文档 [README](app-android/README.md)）
 - **数据源**：由 `www/js/data.js` 直连 Open-Meteo / USGS / 中央气象台，无需 Node 后端
 - **降级项**：中央气象台卫星/雷达产品图在手机端无法跨域抓取，地图叠加层提示「点 ↗ 看官方原图」；野火 / 潮汐缺省降级（可在 `www/index.html` 填 key 增强）
-- **构建**：本机装 Android Studio + Node 18+ 后，`cd app-android && npm install && npx cap add android && npx cap build android` 即可生成 APK（详见 [app-android/README.md](app-android/README.md)）
+- **获取安卓 APK（无需本机装 Android Studio）**：仓库内置 GitHub Actions 工作流，推送到 `main` 后自动在云端编译出 APK 并作为构建产物提供下载。步骤：进入 [Actions](https://github.com/net2net2net/alphasun-beihai-climate/actions) → 找 **Build Android APK** 运行 → 下载 Artifact `alphasun-beihai-apk` → 解压 `app-debug.apk` 安装。未自动触发时可手动 **Run workflow**。
+- **本机构建（安卓）**：装 Android Studio + Node 18+ 后，`cd app-android && npm install && npx cap add android && npx cap build android` 生成 APK（详见 [app-android/README.md](app-android/README.md)）。
+- **本机构建（iOS，需 Mac + Xcode）**：`cd app-android && npm install && npx cap add ios && npx cap open ios`，Xcode 中 Run / Archive。
 
 ## 说明
 - 部分中央气象台产品页为 JS 动态渲染，叠加失败时保留官方原图链接（不伪造坏图）。
