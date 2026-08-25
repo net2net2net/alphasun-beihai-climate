@@ -150,7 +150,6 @@ function renderWorldClock() {
       <div class="wc-z-date muted"></div>
     </div>`).join('');
   mount.innerHTML = `
-    <div class="wc-head"><span class="wc-title">🌐 世界时钟</span><span class="wc-sub">北京时间基准 · 毫秒精度</span></div>
     <div class="wc-main">
       <div class="wc-analog">${buildClockSVG()}</div>
       <div class="wc-readout">

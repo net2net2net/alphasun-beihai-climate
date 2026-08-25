@@ -4,7 +4,7 @@ target_agent: any
 description: "AlphaSun · 北海极端气候全景系统 — 以北海为中心的极端气候/海洋/卫星/天文/空气质量全景监测仪表盘。当用户需要运行、部署、打包、分发或二次开发该气候全景系统，或需要北海实时天气/台风/预警/潮汐/卫星云图/地震等综合监测能力时触发。纯 Node.js 零依赖，已内置便携运行时，支持一键独立运行与跨智能体安装。"
 tags: [alphasun, beihai, climate, weather, dashboard, panorama, standalone]
 required_commands: ['node (或使用内置 node/node.exe)']
-version: 7.0.2
+version: 8.0.3
 author: 阳光 net2net2net（ Vx: net2net ）
 license: MIT
 metadata: tags: [alphasun, beihai-climate, panorama]
@@ -25,25 +25,34 @@ metadata: tags: [alphasun, beihai-climate, panorama]
 ## 目录结构（本技能包）
 ```
 alphasun-beihai-climate/
-├── SKILL.md            # 本文件（触发 + 运行流程）
-├── INSTALL.md          # 跨智能体 / 独立安装说明
-├── README.md           # 软件总览
-├── app/                # 可独立运行的完整系统
-│   ├── server.js       # 聚合服务入口（纯 Node，零第三方依赖）
-│   ├── lib/            # config / sources / tides / alerts / intel / astronomy
-│   ├── public/         # 前端（index.html + css + js + data/beihai.geojson）
-│   ├── AlphaSun.exe     # 单文件可执行程序（内置 Node + 全部资源，双击即运行）
-│   ├── node/node.exe    # 内置便携式 Node 运行时（Windows，实现真正独立运行）
-│   ├── package.json
-│   ├── start.bat       # Windows 一键启动（自动打开浏览器）
-│   └── start.sh        # Linux / macOS 启动
-└── （完整文档见知识库 D:\SynologyDrive\KnowledgeBase\AlphaSun\beihai-climate-panorama\）
+├── SKILL.md              # 本文件（触发 + 运行流程）
+├── README.md             # 软件总览
+├── INSTALL.md            # 跨智能体 / 独立安装说明
+├── CHANGELOG.md          # 版本变更总览（v7.0.0 → v8.0.3）
+├── LICENSE               # MIT 许可
+├── app/                  # 可独立运行的完整系统
+│   ├── server.js         # 聚合服务入口（纯 Node，零第三方依赖）
+│   ├── lib/              # config / sources / tides / alerts / intel / astronomy
+│   ├── public/           # 前端（index.html + css + js + data/beihai.geojson）
+│   ├── package.json      # 含 build:assets / build:exe 脚本
+│   ├── build-assets.js   # 将 public/ 内联为 embedded-assets.js（用于单文件 exe）
+│   ├── sea-config.json   # Node SEA 构建配置
+│   ├── dist/             # 构建产物：AlphaSun.exe（单文件，约 87MB，git 忽略）
+│   ├── node/node.exe     # 内置便携式 Node 运行时（Windows，git 忽略）
+│   ├── start.bat         # Windows 一键启动（自动打开浏览器）
+│   └── start.sh          # Linux / macOS 启动
+└── knowledge-base/       # 完整文档（设计 / 使用 / API / 分发）
+    ├── README.md
+    ├── 设计文档.md
+    ├── 使用手册.md
+    ├── API接口文档.md
+    └── 技能安装与分发指南.md
 ```
 
 ## 运行方式
 
 ### A. 作为软件独立运行（人类用户 / 无 Node 环境）
-- **单文件 exe（最简单）**：双击 `app/AlphaSun.exe` → 浏览器自动打开 http://localhost:8765，关闭黑色控制台窗口即停止。无需 Node.js、无需任何外部文件。
+- **单文件 exe（最简单）**：双击 `app/dist/AlphaSun.exe` → 浏览器自动打开 http://localhost:8765，关闭黑色控制台窗口即停止。无需 Node.js、无需任何外部文件。
 - Windows：双击 `app/start.bat` → 自动启动服务并打开 http://localhost:8765
 - Linux / macOS：终端执行 `bash app/start.sh`
 - 内置 `node/node.exe`，**无需预装 Node**。
@@ -67,6 +76,12 @@ FIRMS_MAP_KEY=xxxx node server.js
 
 # 激活权威潮汐（国家海洋信息中心，需 appid/appsecret）
 NMDIS_APPID=xxxx NMDIS_APPSECRET=yyyy node server.js
+
+# 重新生成内联资源（改了 public/ 后重建 exe 前执行）
+npm run build:assets
+
+# 重建单文件 exe（需先 npm i -g pkg，输出 app/dist/AlphaSun.exe）
+npm run build:exe
 ```
 
 ## 关键能力
@@ -74,21 +89,26 @@ NMDIS_APPID=xxxx NMDIS_APPSECRET=yyyy node server.js
 - **告警引擎**：5 级（正常 / 注意 / 预警 / 警报 / 紧急）规则引擎，覆盖高温 / 大风 / 暴雨 / 低温 / 空气污染 / 地震 / 野火 / 风暴潮 / 台风 / 地质灾害 / 龙卷 / 汛情，每条绑定处置建议。
 - **北海关联研判**：每条情报 / 告警标注 `region`（北海 / 广西 / 其他）与 `beihaiRelation`（涉及北海 / 可能涉及北海），并带「距北海」距离；地图台风 / 地震 / 火点 / 预警均显示距北海公里数。
 - **全景地图**：真实北海行政边界 GeoJSON（DataV 450500，含涠洲岛）+ 风险着色 + 卫星云图 / 雷达拼图（中央气象台代理，绕开防盗链）+ RainViewer / NASA GIBS 叠加层。
+- **实时天气卡**：大温标 + 天气文字 + 体感头部；风/阵风/湿度/降水/气压/云量指标卡片；地理区域选择后展示「区域概况」（覆盖面积 km² / 覆盖人口 万 / 真实行政区轮廓缩略图）。
+- **模块点击放大**：点击任意面板标题 → 页面中央放大展示该板块与数据（地图移动 Leaflet 容器、曲线重绘、其余面板克隆同步）。
+- **顶部警报指示 + 声音警报**：有活跃告警显示红色闪烁「⚠ 警报」，无告警显示绿色「✅ 无警报」；右侧 🔇 按钮可开启声音报警（Web Audio 双音，默认关闭）。
+- **深 / 浅色主题**：顶栏「🌙 浅色 / 🌙 深色」切换，默认深色，localStorage 持久化；图表 / 地图 / SVG 随主题联动。
+- **世界时钟模块**：精美圆形传统机械钟（时分秒针 + 毫秒平滑扫秒）+ 大字号数字钟（HH:MM:SS.mmm）+ 设备时间 / 北京时间 / 常用国际时区列表（自动夏令时）+「🕒 对时」功能（SNTP-lite 调用 `/api/time` 估算服务器时刻并校准显示），精度达毫秒；可独立放大查看。
 - **情报播报**：顶部极端气候告警情报默认 6s 自动滚动播报，▶⏸ 暂停 / ▲▼ 翻页，点击查看详情；左栏「极端天气告警」标题标红、可点击详情。
 
 ## 输出
 - 浏览器仪表盘：http://localhost:8765
-- 聚合接口：`GET /api/overview`（全量）、`/api/alerts`、`/api/climate/:id`、`/api/nmc-img?p=satellite|radar|...`
-- 完整设计 / 使用 / API 文档：知识库 `D:\SynologyDrive\KnowledgeBase\AlphaSun\beihai-climate-panorama\`
+- 聚合接口：`GET /api/overview`（全量）、`/api/alerts`、`/api/climate/:id`、`/api/nmc-img?p=satellite|radar|...`、`/api/time`（对时：返回毫秒级 `{now, iso}`）
+- 完整设计 / 使用 / API 文档：技能包内 `knowledge-base/`
 
 ## 与其它系统联动
 | 系统 | 联动方式 |
 |------|---------|
-| 知识库 | 完整文档存放于 `D:\SynologyDrive\KnowledgeBase\AlphaSun\beihai-climate-panorama\` |
+| 知识库 | 完整文档存放于技能包内 `knowledge-base/` |
 | 共享技能 | 安装包存放于 `D:\SynologyDrive\Skills\alphasun-beihai-climate\`（支持 `cp -r` 跨智能体安装） |
 | 应急推送 | 预留企微 / 邮件 / 短信接口（见设计方案，待接入） |
 
 ## 版本与许可
-- 版本：v7.0.2（六项改进版）
+- 版本：v8.0.3
 - 作者：阳光 net2net2net（ Vx: net2net ）
 - 许可：MIT

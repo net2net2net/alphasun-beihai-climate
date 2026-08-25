@@ -1,6 +1,6 @@
 # AlphaSun · 北海极端气候全景系统 — API 接口文档
 
-> 版本 v7.0.1 ｜ 基础地址：`http://localhost:8765`
+> 版本 v8.0.3 ｜ 基础地址：`http://localhost:8765`
 
 所有 JSON 接口均含 `Access-Control-Allow-Origin: *`，便于前端与第三方调用。
 
@@ -33,6 +33,17 @@
 - 参数 `meta=1`：返回 JSON `{ ok, link, img }`（link 为官方原图地址，img 为代理地址）
 - 不带 `meta`：直接流式返回图片（`image/jpeg` / `image/png`，`Cache-Control: public, max-age=300`）
 - 失败（JS 动态渲染页取不到图）：`meta=1` 返回 `{ ok:false }`，前端提示并保留官方原图 `↗` 链接
+
+## 4.1 GET /api/time
+对时服务（SNTP-lite 客户端用）。返回服务端高精度时刻，供前端估算设备偏差并校准显示。
+```jsonc
+{
+  "now": 1756100000123.456,   // 服务端当前 UTC 毫秒（Date.now()，亚毫秒截断到 ms）
+  "iso": "2026-08-25T04:13:20.123Z"
+}
+```
+- `now`：服务端 `Date.now()`（毫秒整数，亚毫秒部分由 `performance.timeOrigin` 估算附加，用于更平滑的往返估算）。
+- 前端用法：记录请求发出 `t0` 与接收 `t1`（`performance.now()`），`RTT = t1 - t0`；客户端接收本地时刻 `clientReceive = Date.now()`；估算服务器时刻 `serverEst = data.now + RTT/2`；偏差 `calibOffset = serverEst - clientReceive`。据此把设备时间映射到真实 UTC 时刻（北京时间 = UTC+8h）。
 
 ## 5. globalAlerts 条目结构
 ```jsonc
