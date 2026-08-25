@@ -251,3 +251,39 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .badge.alert-red{color:#fff!important;animation:badgePulse 1.4s ease-in-out infinite}
 @keyframes badgePulse{0%{box-shadow:0 0 0 0 rgba(229,72,77,.6)}70%{box-shadow:0 0 0 8px rgba(229,72,77,0)}100%{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
 .ticker-tag{cursor:pointer}.ticker-tag:hover{background:rgba(88,166,255,.15)}
+
+/* 实时天气：变化趋势（需求5） */
+.rt-trend{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:11px;line-height:1.5}
+.rt-chip{font-weight:600;white-space:nowrap}
+
+/* 天文：太阳位置图 + 月相图（需求7） */
+.astro-sun{flex:1 1 150px;min-width:150px}
+.astro-moon{flex:0 0 72px;text-align:center}
+.astro-sun svg{width:100%}
+
+/* 海洋：浪高条 + 波向（需求6） */
+.marine-row{display:flex;gap:8px;align-items:center}
+.marine-ico{font-size:22px}
+.marine-main{flex:1 1 auto;min-width:0}
+.marine-h{font-size:13px;display:flex;align-items:center;gap:6px}
+.wave-dir{display:inline-block;color:var(--accent);font-weight:700;font-size:15px;transition:transform .3s}
+.wave-bar{height:7px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-top:4px}
+.wave-bar.sm{height:5px;margin-top:2px}
+.wave-fill{height:100%;background:linear-gradient(90deg,#3fb950,#58a6ff,#fb8500);border-radius:4px}
+.marine-sub{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;margin-top:6px}
+.marine-sub b{color:var(--accent)}
+
+/* 潮汐：当前潮位告警 + 曲线（需求6） */
+.tide-warn{color:var(--red);font-weight:700}
+.tide-svg{margin-top:2px}
+
+/* 霞光：位置标注（需求8） */
+.glow-loc{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* 天文景观日历：北海可观测性（需求8） */
+.ev-head{font-size:11px;color:#9fd3ff;background:rgba(88,166,255,.08);border-left:3px solid var(--accent);
+  padding:4px 8px;border-radius:0 6px 6px 0;margin-bottom:4px}
+.ev-note{font-size:11px;color:var(--muted);margin:-4px 0 6px;padding-left:2px}
+.ev-vis{font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px}
+.ev-vis.ok{background:rgba(63,185,80,.16);color:#3fb950}
+.ev-vis.no{background:rgba(251,133,0,.14);color:#ffb86b}

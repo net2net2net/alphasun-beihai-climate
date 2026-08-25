@@ -28,23 +28,24 @@ function serveStatic(res, urlPath) {
   // 仅做 POSIX 风格清理（防目录穿越），不使用 Windows path.normalize（会把前导 / 变成 \，破坏资源 key 匹配）
   f = f.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\.[/])+/, '');
   const rel = f.startsWith('/') ? f : '/' + f;
-  // 优先从内联资源读取（单文件 exe / 无 public 目录场景）
+  // 磁盘优先：node server.js 本地运行有 public/ 目录，改完即时生效（无需重启/重建）
+  const fp = path.join(PUBLIC, rel.replace(/^\/+/, ''));
+  if (fp.startsWith(PUBLIC)) {
+    try {
+      const data = fs.readFileSync(fp);
+      const ct = ASSET_CT[path.extname(fp).toLowerCase()] || 'text/plain';
+      res.writeHead(200, { 'Content-Type': ct, 'Content-Length': Buffer.byteLength(data) });
+      return res.end(data);
+    } catch (e) { /* 磁盘无此文件，回退内联资源 */ }
+  }
+  // 兜底：内联资源（单文件 exe / 无 public 目录场景，由 build-assets.js 生成）
   if (ASSETS[rel]) {
     const buf = Buffer.from(ASSETS[rel], 'base64');
     const ct = ASSET_CT[path.extname(rel).toLowerCase()] || 'text/plain';
     res.writeHead(200, { 'Content-Type': ct, 'Content-Length': buf.length });
     return res.end(buf);
   }
-  // 回退到文件系统（开发 / 普通 node 运行）
-  const fp = path.join(PUBLIC, rel.replace(/^\/+/, ''));
-  if (!fp.startsWith(PUBLIC)) { res.writeHead(403); return res.end('forbidden'); }
-  fs.readFile(fp, (e, data) => {
-    if (e) { res.writeHead(404); return res.end('not found'); }
-    const ext = path.extname(fp);
-    const ct = ASSET_CT[ext] || 'text/plain';
-    res.writeHead(200, { 'Content-Type': ct, 'Content-Length': Buffer.byteLength(data) });
-    res.end(data);
-  });
+  res.writeHead(404); return res.end('not found');
 }
 
 // ===== 中央气象台(nmc) 产品图代理：抓取官方页面→提取产品图→服务端重发（绕开防盗链/CORS）=====

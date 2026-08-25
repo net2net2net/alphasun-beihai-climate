@@ -106,6 +106,7 @@ function renderRealtime() {
   const w = s.weather;
   if (!w || !w.ok) { $('realtimeBody').innerHTML = '<div class="muted">气象数据暂不可用</div>'; return; }
   const c = w.current;
+  const trend = buildWeatherTrend(w);
   $('realtimeBody').innerHTML = `
     <div class="rt-icon">${ICON[c.icon]||'❓'}</div>
     <div class="rt-temp">${c.temp.toFixed(1)}°</div>
@@ -114,7 +115,29 @@ function renderRealtime() {
       <div>风 <b>${c.wind.toFixed(1)}</b> m/s</div><div>阵风 <b>${c.gust.toFixed(1)}</b></div>
       <div>湿度 <b>${c.rh}%</b></div><div>降水 <b>${c.precip.toFixed(1)}</b> mm</div>
       <div>气压 <b>${c.pressure.toFixed(0)}</b> hPa</div><div>云量 <b>${c.cloud}%</b></div>
-    </div>`;
+    </div>
+    <div class="rt-trend">${trend}</div>`;
+}
+
+// 实时天气变化趋势：基于未来逐时数据给出降水/气温/风力预报（需求5）
+function buildWeatherTrend(w) {
+  const h = w.hourly24; if (!h || !h.length) return '';
+  const now = h[0], h1 = h[1] || now, h3 = h[Math.min(3, h.length - 1)];
+  const items = [];
+  const rp1 = h1.precipProb, rp3 = h3.precipProb, rn1 = h1.precip, rn3 = h3.precip;
+  if (rn1 > 0.1 || rn3 > 0.1) items.push({ t: 'rain', s: '⚠ 未来3小时内有降雨' });
+  else if (rp1 >= 60) items.push({ t: 'rain', s: `1小时内大概率降雨（概率 ${rp1}%）` });
+  else if (rp1 >= 30) items.push({ t: 'cloud', s: `1小时内可能有小雨（概率 ${rp1}%）` });
+  else if (rp3 >= 30) items.push({ t: 'cloud', s: `3小时内转小雨可能（概率 ${rp3}%）` });
+  else items.push({ t: 'ok', s: '1–3小时内无降水' });
+  const dt = h3.temp - now.temp;
+  if (dt > 0.5) items.push({ t: 'temp', s: `未来3小时升温约 ${dt.toFixed(1)}℃` });
+  else if (dt < -0.5) items.push({ t: 'temp', s: `未来3小时降温约 ${Math.abs(dt).toFixed(1)}℃` });
+  else items.push({ t: 'temp', s: '未来3小时气温平稳' });
+  if (h3.wind >= 10 && h3.wind - now.wind >= 2) items.push({ t: 'wind', s: '风力将增强，注意防风' });
+  else if (h3.wind < 4 && now.wind >= 6) items.push({ t: 'wind', s: '风力将转小' });
+  const col = { rain: '#58a6ff', cloud: '#8b949e', ok: '#3fb950', temp: '#fb8500', wind: '#80ed99' };
+  return items.map(i => `<span class="rt-chip" style="color:${col[i.t]}">● ${i.s}</span>`).join('');
 }
 
 function renderAir() {
@@ -135,26 +158,166 @@ function aqiColor(v){ return v>=300?'#bc1a1a':v>=200?'#e5484d':v>=150?'#fb8500':
 function renderMarine() {
   const m = selStation().marine;
   if (!m || !m.ok) { $('marineBody').innerHTML = '<div class="muted">海洋数据暂不可用</div>'; return; }
+  const wh = m.waveHeight || 0, ww = m.windWaveHeight || 0, per = m.wavePeriod || 0, st = m.seaTemp || 0;
+  const dir = m.waveDir != null ? m.waveDir : null;
+  const dirArrow = dir != null ? `<span class="wave-dir" style="transform:rotate(${dir}deg)" title="波向 ${dir.toFixed(0)}°">↑</span>` : '';
+  const whPct = Math.min(100, wh / 4 * 100);     // 以 4m 为满刻度
+  const wwPct = Math.min(100, ww / 4 * 100);
   $('marineBody').innerHTML = `
-    <div>浪高 <b style="color:var(--accent);font-size:18px">${m.waveHeight?.toFixed(2)} m</b></div>
-    <div>风浪高 <b>${m.windWaveHeight?.toFixed(2)} m</b> · 周期 ${m.wavePeriod?.toFixed(1)} s</div>
-    <div>海表温度 <b>${m.seaTemp?.toFixed(1)} ℃</b></div>
+    <div class="marine-row">
+      <span class="marine-ico">🌊</span>
+      <div class="marine-main">
+        <div class="marine-h">浪高 <b style="color:var(--accent);font-size:18px">${wh.toFixed(2)} m</b> ${dirArrow}<span class="muted" style="font-size:11px">波向 ${dir != null ? dir.toFixed(0) + '°' : '—'}</span></div>
+        <div class="wave-bar"><div class="wave-fill" style="width:${whPct}%"></div></div>
+      </div>
+    </div>
+    <div class="marine-sub">
+      <div>风浪高 <b>${ww.toFixed(2)} m</b><div class="wave-bar sm"><div class="wave-fill" style="width:${wwPct}%"></div></div></div>
+      <div>周期 <b>${per.toFixed(1)} s</b> ｜ 海温 <b style="color:#4cc9f0">${st.toFixed(1)} ℃</b></div>
+    </div>
     <div class="muted" style="font-size:11px">风力等级参考（蒲福）：浪高 0.5m≈3级，1.0m≈4级，2.0m≈5级</div>`;
 }
 
 function renderAstro() {
-  const w = selStation().weather;
+  const s = selStation();
+  const w = s.weather;
   if (!w || !w.ok) { $('astroBody').innerHTML = '<div class="muted">天文数据暂不可用</div>'; return; }
   const d0 = w.daily[0];
+  const sun = sunAltAz(s.lat, s.lon, new Date());
+  const dayNight = sun.alt >= 0 ? '☀ 白昼（地平线上）' : '🌙 夜间（地平线下）';
   $('astroBody').innerHTML = `
     <div>🌅 日出 <b>${fmt(d0.sunrise)}</b> · 🌇 日落 <b>${fmt(d0.sunset)}</b></div>
     <div>🌒 月出 <b>${fmt(d0.moonrise)}</b> · 🌕 月落 <b>${fmt(d0.moonset)}</b></div>
-    <div>月相 <b>${moonPhase(d0.moonPhase)}</b>（值 ${d0.moonPhase?.toFixed(2)}）</div>`;
+    <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+      <div class="astro-sun">${sunDiagramSVG(s.lat, s.lon)}</div>
+      <div class="astro-moon">
+        ${moonPhaseSVG(d0.moonPhase)}
+        <div class="muted" style="font-size:11px;text-align:center;margin-top:2px">${moonPhase(d0.moonPhase)}<br>相值 ${d0.moonPhase?.toFixed(2)}</div>
+      </div>
+    </div>
+    <div class="muted" style="font-size:11px;margin-top:4px">☀ 当前太阳：高度 <b style="color:#f0a500">${sun.alt.toFixed(1)}°</b> ｜ 方位 <b>${sun.az.toFixed(0)}°</b> ｜ ${dayNight}</div>`;
 }
 function moonPhase(p){ const D=['新月','蛾眉月','上弦月','盈凸月','满月','亏凸月','下弦月','残月']; if(p==null)return'—'; if(p<0.06||p>0.94)return'新月'; if(p<0.19)return'蛾眉月'; if(p<0.31)return'上弦月'; if(p<0.44)return'盈凸月'; if(p<0.56)return'满月'; if(p<0.69)return'亏凸月'; if(p<0.81)return'下弦月'; return'残月'; }
 
+// ===== 太阳高度/方位算法（标准近似，用于太阳位置图）=====
+function sunAltAz(latDeg, lonDeg, when) {
+  const rad = Math.PI / 180;
+  const jd = when.getTime() / 86400000 + 2440587.5;       // 儒略日
+  const n = jd - 2451545.0;                                // 自 J2000 天数
+  const L = (280.460 + 0.9856474 * n) % 360;               // 平黄经
+  const g = (357.528 + 0.9856003 * n) % 360;               // 平近点角
+  const lambda = L + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad); // 黄经
+  const eps = 23.439 - 0.0000004 * n;                      // 黄赤交角
+  const ra = Math.atan2(Math.cos(eps * rad) * Math.sin(lambda * rad), Math.cos(lambda * rad)) / rad;
+  const dec = Math.asin(Math.sin(eps * rad) * Math.sin(lambda * rad)) / rad;
+  const gmst = (280.46061837 + 360.98564736629 * n) % 360; // 格林尼治恒星时
+  const lst = (gmst + lonDeg) % 360;                       // 本地恒星时
+  let ha = lst - ra;
+  const sinAlt = Math.sin(latDeg * rad) * Math.sin(dec * rad)
+    + Math.cos(latDeg * rad) * Math.cos(dec * rad) * Math.cos(ha * rad);
+  const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt))) / rad;
+  let cosAz = (Math.sin(dec * rad) - Math.sin(alt * rad) * Math.sin(latDeg * rad))
+    / (Math.cos(alt * rad) * Math.cos(latDeg * rad));
+  let az = Math.acos(Math.max(-1, Math.min(1, cosAz))) / rad;
+  if (Math.sin(ha * rad) > 0) az = 360 - az;
+  return { alt, az };
+}
+
+// 太阳周日弧线图：展示当前太阳在天空中的位置与白昼轨迹（基于北海经纬度与当下时刻）
+function sunDiagramSVG(lat, lon) {
+  const W = 210, H = 122, cx = 105, horizonY = 102, domeH = 84, leftX = 18, rightX = 192;
+  const now = new Date();
+  const sun = sunAltAz(lat, lon, now);
+  const day = sun.alt >= 0;
+  const pts = [];
+  for (let h = 0; h < 24; h++) {
+    const t = new Date(now); t.setHours(h, 0, 0, 0);
+    const s = sunAltAz(lat, lon, t);
+    if (s.alt >= -0.3) {
+      const x = leftX + (s.az - 90) / 180 * (rightX - leftX);
+      const y = horizonY - (Math.max(0, s.alt) / 90) * domeH;
+      pts.push([Math.max(leftX, Math.min(rightX, x)), Math.max(16, y)]);
+    }
+  }
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const sx = Math.max(leftX, Math.min(rightX, leftX + (sun.az - 90) / 180 * (rightX - leftX)));
+  const sy = day ? Math.max(16, horizonY - (sun.alt / 90) * domeH) : horizonY + 10;
+  const dot = day
+    ? `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="6" fill="#ffd166" stroke="#f0a500" stroke-width="1.5"/>
+       <text x="${sx.toFixed(1)}" y="${(sy - 9).toFixed(1)}" font-size="9" fill="#ffd166" text-anchor="middle">☀</text>`
+    : `<text x="${cx}" y="44" font-size="22" text-anchor="middle">🌙</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:210px;display:block;background:#0b1622;border-radius:8px">
+    <rect x="0" y="${horizonY}" width="${W}" height="${H - horizonY}" fill="#0a1119"/>
+    ${path ? `<path d="${path}" fill="none" stroke="${day ? '#f0a500' : '#3a4658'}" stroke-width="1.6" stroke-dasharray="${day ? '' : '4 3'}"/>` : ''}
+    <line x1="${leftX}" y1="${horizonY}" x2="${rightX}" y2="${horizonY}" stroke="#33414f" stroke-width="1"/>
+    <text x="${leftX}" y="${H - 4}" font-size="9" fill="#5b6776">东</text>
+    <text x="${cx - 7}" y="${H - 4}" font-size="9" fill="#5b6776">南</text>
+    <text x="${rightX - 14}" y="${H - 4}" font-size="9" fill="#5b6776">西</text>
+    ${dot}
+  </svg>`;
+}
+
+// 月相外观图：根据 moonPhase 值(0–1)绘制当前月相形状
+function moonPhaseSVG(p) {
+  if (p == null) return '';
+  const R = 26, cx = 30, cy = 30;
+  const k = (1 - Math.cos(2 * Math.PI * p)) / 2;          // 亮面比例 0–1
+  const waxing = p < 0.5;
+  const rx = R * Math.abs(1 - 2 * k);                      // 明暗界线水平半径
+  const limb = `M ${cx} ${cy - R} A ${R} ${R} 0 0 ${waxing ? 1 : 0} ${cx} ${cy + R}`;
+  const termSweep = waxing ? (k < 0.5 ? 1 : 0) : (k < 0.5 ? 0 : 1);
+  const term = `A ${rx.toFixed(2)} ${R} 0 0 ${termSweep} ${cx} ${cy - R}`;
+  const craters = k > 0.05
+    ? `<circle cx="${cx + 7}" cy="${cy - 8}" r="2.2" fill="rgba(0,0,0,.16)"/>
+       <circle cx="${cx - 4}" cy="${cy + 6}" r="3" fill="rgba(0,0,0,.13)"/>
+       <circle cx="${cx + 2}" cy="${cy + 13}" r="1.7" fill="rgba(0,0,0,.13)"/>` : '';
+  return `<svg viewBox="0 0 60 60" width="58" height="58" style="display:block;margin:0 auto">
+    <circle cx="${cx}" cy="${cy}" r="${R}" fill="#1b2230" stroke="#2a3340" stroke-width="1"/>
+    <path d="${limb} ${term} Z" fill="#e8edf3"/>
+    ${craters}
+  </svg>`;
+}
+
+// 潮汐曲线：基于高低潮极值连线，标出当前潮位
+function tideSVG(t) {
+  const W = 240, H = 70, padX = 14, base = 56, top = 10;
+  const ex = (t.extremes || []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  if (ex.length < 2) return '';
+  const hs = ex.map(e => e.h);
+  const minH = Math.min(...hs), maxH = Math.max(...hs);
+  const span = (maxH - minH) || 1;
+  const yOf = h => base - (h - minH) / span * (base - top);
+  const xOf = (i) => padX + i * (W - 2 * padX) / (ex.length - 1);
+  const dpath = ex.map((e, i) => (i ? 'L' : 'M') + xOf(i).toFixed(1) + ' ' + yOf(e.h).toFixed(1)).join(' ');
+  const dots = ex.map((e, i) => {
+    const isHigh = e.type === 'high';
+    return `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(e.h).toFixed(1)}" r="3" fill="${isHigh ? '#58a6ff' : '#3fb950'}"/>`;
+  }).join('');
+  const curY = yOf(Math.max(minH, Math.min(maxH, t.current)));
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:4px">
+    <line x1="${padX}" y1="${base}" x2="${W - padX}" y2="${base}" stroke="#33414f" stroke-width="1"/>
+    <path d="${dpath}" fill="none" stroke="#58a6ff" stroke-width="1.6"/>
+    ${dots}
+    <line x1="${padX}" y1="${curY.toFixed(1)}" x2="${W - padX}" y2="${curY.toFixed(1)}" stroke="#fb8500" stroke-width="1" stroke-dasharray="3 3"/>
+    <circle cx="${W - padX}" cy="${curY.toFixed(1)}" r="3.5" fill="#fb8500"/>
+    <text x="${W - padX}" y="${(curY - 6).toFixed(1)}" font-size="9" fill="#fb8500" text-anchor="end">现 ${t.current}m</text>
+  </svg>`;
+}
+
+// 流星雨辐射点赤纬（用于按北海纬度计算峰值高度，判断可见性）
+const RADIANT_DEC = {
+  '象限仪座流星雨': 49, '英仙座流星雨': 58, '双子座流星雨': 32,
+  '天龙座流星雨': 53, '猎户座流星雨': 15, '宝瓶座流星雨': -1,
+};
+function meteorPeakAlt(name, lat) {
+  const dec = RADIANT_DEC[name];
+  if (dec == null) return null;
+  return Math.max(0, Math.min(90, 90 - lat + dec));   // 上中天高度近似
+}
+
 function renderGlow() {
-  const g = selStation().glow;
+  const s = selStation();
+  const g = s.glow;
   if (!g) { $('glowBody').innerHTML = '<div class="muted">霞光概率暂不可用</div>'; return; }
   const col = g.grade==='高'?'#ffd166':g.grade==='中'?'#fb8500':'#8b949e';
   $('glowBody').innerHTML = `
@@ -163,11 +326,13 @@ function renderGlow() {
       <div>等级 <b style="color:${col}">${g.grade}</b></div></div>
     <div class="glow-meter"><div class="glow-fill" style="width:${g.score}%"></div></div>
     <div class="muted" style="font-size:11px">最佳观赏：日落 ${fmt(g.bestTime)} 前后</div>
-    <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>`;
+    <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>
+    <div class="glow-loc">📍 基于 ${s.name} 实时观测</div>`;
 }
 
 function renderMorningGlow() {
-  const g = selStation().morningGlow;
+  const s = selStation();
+  const g = s.morningGlow;
   if (!g) { $('morningGlowBody').innerHTML = '<div class="muted">霞光概率暂不可用</div>'; return; }
   const col = g.grade==='高'?'#ffd166':g.grade==='中'?'#fb8500':'#8b949e';
   $('morningGlowBody').innerHTML = `
@@ -176,15 +341,17 @@ function renderMorningGlow() {
       <div>等级 <b style="color:${col}">${g.grade}</b></div></div>
     <div class="glow-meter"><div class="glow-fill" style="width:${g.score}%"></div></div>
     <div class="muted" style="font-size:11px">最佳观赏：日出 ${fmt(g.bestTime)} 前后</div>
-    <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>`;
+    <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>
+    <div class="glow-loc">📍 基于 ${s.name} 实时观测</div>`;
 }
 
 function renderTides() {
   $('tideBody').innerHTML = state.data.tides.map(t => `
     <div class="tide-st">
       <div class="nm">${t.name} <span class="muted" style="font-size:11px">（${t.source}）</span></div>
-      <div>当前潮位 <b>${t.current} m</b> · 警戒 ${t.warnLevel} m</div>
+      <div>当前潮位 <b>${''}</b><b class="${t.current >= t.warnLevel ? 'tide-warn' : ''}">${t.current} m</b> · 警戒 ${t.warnLevel} m</div>
       <div class="tide-ext">${t.extremes.map(e=>`<span>${e.type==='high'?'▲高':'▼低'} ${fmt(e.time)} ${e.h}m</span>`).join('')}</div>
+      ${tideSVG(t)}
     </div>`).join('');
 }
 
@@ -324,9 +491,21 @@ function renderLinks() {
 
 function renderEvents() {
   const e = state.data.astronomy;
-  const meteors = e.meteors.map(m => `<div class="ev-row"><span class="n">${m.name}</span><span class="c">${m.peak[0]}/${m.peak[1]} · ${m.inDays}天后 · ${m.note}</span></div>`).join('');
+  const lat = (selStation().lat != null) ? selStation().lat : 21.48;
+  const meteors = e.meteors
+    .map(m => {
+      const alt = meteorPeakAlt(m.name, lat);
+      const vis = (alt == null) ? '' : (alt >= 15
+        ? `<span class="ev-vis ok">北海可见·峰值高度≈${alt.toFixed(0)}°</span>`
+        : `<span class="ev-vis no">北海偏低·峰值高度≈${alt.toFixed(0)}°</span>`);
+      return `<div class="ev-row"><span class="n">${m.name}</span><span class="c">${m.peak[0]}/${m.peak[1]} · ${m.inDays}天后</span></div>
+        <div class="ev-note">${m.note} ｜ ${vis}</div>`;
+    })
+    .filter(Boolean)
+    .join('');
   const supers = e.supermoons.map(s => `<div class="ev-row"><span class="n">${s.name}</span><span class="c">${s.date}</span></div>`).join('');
   $('eventBody').innerHTML = `
+    <div class="ev-head">📍 以下天象均按北海（21.48°N, 109.11°E）可观测性筛选</div>
     <div class="ev-row"><span class="n">🌑 下次新月</span><span class="c">${e.moon.nextNew}</span></div>
     <div class="ev-row"><span class="n">🌕 下次满月</span><span class="c">${e.moon.nextFull}</span></div>
     <div style="border-top:1px solid var(--line);margin:4px 0"></div>

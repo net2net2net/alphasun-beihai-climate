@@ -46,16 +46,21 @@
 </div>
 
 <main class="grid">
-  <!-- 左列：实时 + 海洋 + 预报趋势 -->
+  <!-- 左列：地理区域 + 实时 + 海洋 + 潮汐 -->
   <section class="col col-left">
-    <div class="panel alert-panel" id="alertCard">
-      <div class="panel-h danger-h">极端天气告警（<span id="alertCount">0</span>）</div>
-      <div id="alertBody" class="alert-body">…</div>
+    <div class="panel" id="stationPicker">
+      <div class="panel-h">地理区域 <span class="muted" style="font-size:11px">（点击切换监测区域）</span></div>
     </div>
 
     <div class="panel card-realtime" id="realtimeCard">
       <div class="panel-h">实时天气 <span id="rtStation" class="muted"></span></div>
       <div id="realtimeBody" class="realtime-body">…</div>
+    </div>
+
+    <div class="panel" id="chartCard">
+      <div class="panel-h">24h 逐时曲线 <span class="muted" style="font-size:11px">（点击标签增删维度）</span></div>
+      <div class="chart-dims" id="chartDims"></div>
+      <canvas id="hourlyChart" height="170"></canvas>
     </div>
 
     <div class="panel" id="airCard">
@@ -71,22 +76,6 @@
     <div class="panel" id="tideCard">
       <div class="panel-h">潮汐 / 水位（验潮站）</div>
       <div id="tideBody" class="tide-body">…</div>
-    </div>
-
-    <div class="panel" id="chartCard">
-      <div class="panel-h">24h 逐时曲线 <span class="muted" style="font-size:11px">（点击标签增删维度）</span></div>
-      <div class="chart-dims" id="chartDims"></div>
-      <canvas id="hourlyChart" height="170"></canvas>
-    </div>
-
-    <div class="panel" id="forecastCard">
-      <div class="panel-h">7 日周期预报</div>
-      <div id="forecastBody" class="forecast-body">…</div>
-    </div>
-
-    <div class="panel" id="forecast15Card">
-      <div class="panel-h">15 日周期预报</div>
-      <div id="forecast15Body" class="forecast-body">…</div>
     </div>
   </section>
 
@@ -129,10 +118,21 @@
     </div>
   </section>
 
-  <!-- 右列：地理区域 + 天文 + 霞光 + 天文事件 -->
+  <!-- 右列：极端天气告警 + 预报 + 天文 + 霞光 + 天象 -->
   <section class="col col-right">
-    <div class="panel" id="stationPicker">
-      <div class="panel-h">地理区域 <span class="muted" style="font-size:11px">（点击切换监测区域）</span></div>
+    <div class="panel alert-panel" id="alertCard">
+      <div class="panel-h danger-h">极端天气告警（<span id="alertCount">0</span>）</div>
+      <div id="alertBody" class="alert-body">…</div>
+    </div>
+
+    <div class="panel" id="forecastCard">
+      <div class="panel-h">7 日周期预报</div>
+      <div id="forecastBody" class="forecast-body">…</div>
+    </div>
+
+    <div class="panel" id="forecast15Card">
+      <div class="panel-h">15 日周期预报</div>
+      <div id="forecast15Body" class="forecast-body">…</div>
     </div>
 
     <div class="panel" id="astroCard">
