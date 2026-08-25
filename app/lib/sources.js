@@ -293,6 +293,7 @@ async function aggregateStation(s, cache) {
   }
   return {
     id: s.id, name: s.name, kind: s.kind, desc: s.desc, lat: s.lat, lon: s.lon,
+    area: s.area, pop: s.pop, poly: s.poly,
     weather: wea,
     air: airObj,
     marine: get(marine, { ok: false, error: marine.reason }),

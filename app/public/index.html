@@ -12,7 +12,7 @@
   <div class="brand">
     <span class="logo">☀</span>
     <div>
-      <h1>AlphaSun · 北海极端气候全景系统 <span class="ver">v7.0.2</span></h1>
+      <h1>AlphaSun · 北海极端气候全景系统 <span class="ver">v7.0.3</span></h1>
       <div class="sub">陆 · 海 · 空 · 天 · 文 五位一体实时全景 ｜ 作者：阳光 net2net2net（ Vx: net2net ）</div>
     </div>
   </div>
@@ -42,6 +42,15 @@
   <div class="modal-card">
     <button id="modalClose" class="modal-close" aria-label="关闭">×</button>
     <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- 模块放大模态框（点击模块标题 → 页面中央放大展示）-->
+<div id="focusModal" class="modal focus-modal hidden">
+  <div class="modal-card">
+    <button id="focusClose" class="modal-close" aria-label="关闭">×</button>
+    <div id="focusTitle" class="focus-title"></div>
+    <div id="focusBody"></div>
   </div>
 </div>
 
@@ -81,7 +90,7 @@
 
   <!-- 中列：地图 -->
   <section class="col col-map">
-    <div class="panel map-panel">
+    <div class="panel map-panel" id="mapPanel">
       <div class="panel-h">全景地图
         <span class="layers">
           <label><input type="checkbox" id="lyrStation" checked> 站点</label>
@@ -106,13 +115,13 @@
     </div>
 
     <!-- 地图下方：北海气候解说与数据分析 -->
-    <div class="panel climate-panel">
+    <div class="panel climate-panel" id="climatePanel">
       <div class="panel-h">北海气候解说与数据分析</div>
       <div id="climateBody" class="climate-body">加载中…</div>
     </div>
 
     <!-- 再下方：推荐天气 / 数据源网站 -->
-    <div class="panel links-panel">
+    <div class="panel links-panel" id="linksPanel">
       <div class="panel-h">推荐天气 / 数据源网站（已验证可访问）</div>
       <div id="linksBody" class="links-body">加载中…</div>
     </div>

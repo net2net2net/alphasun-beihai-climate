@@ -116,7 +116,8 @@ function renderRealtime() {
       <div>湿度 <b>${c.rh}%</b></div><div>降水 <b>${c.precip.toFixed(1)}</b> mm</div>
       <div>气压 <b>${c.pressure.toFixed(0)}</b> hPa</div><div>云量 <b>${c.cloud}%</b></div>
     </div>
-    <div class="rt-trend">${trend}</div>`;
+    <div class="rt-trend">${trend}</div>
+    ${regionBlock(s)}`;
 }
 
 // 实时天气变化趋势：基于未来逐时数据给出降水/气温/风力预报（需求5）
@@ -302,6 +303,43 @@ function tideSVG(t) {
     <circle cx="${W - padX}" cy="${curY.toFixed(1)}" r="3.5" fill="#fb8500"/>
     <text x="${W - padX}" y="${(curY - 6).toFixed(1)}" font-size="9" fill="#fb8500" text-anchor="end">现 ${t.current}m</text>
   </svg>`;
+}
+
+// 区域轮廓缩略图：将 [lat,lon] 多边形归一化到 viewBox，填充展示（用于"区域形状"）
+function regionShapeSVG(poly) {
+  if (!poly || poly.length < 3) return '';
+  const lats = poly.map(p => p[0]), lons = poly.map(p => p[1]);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  const W = 132, H = 96, pad = 10;
+  const s = Math.min((W - 2 * pad) / ((maxLon - minLon) || 1), (H - 2 * pad) / ((maxLat - minLat) || 1));
+  const cx = (minLon + maxLon) / 2, cy = (minLat + maxLat) / 2;
+  const pts = poly.map(([la, lo]) => {
+    const x = (W / 2 + (lo - cx) * s).toFixed(1);
+    const y = (H / 2 - (la - cy) * s).toFixed(1);
+    return x + ',' + y;
+  }).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:132px;display:block;background:#0b1622;border-radius:8px" title="区域轮廓（示意）">
+    <polygon points="${pts}" fill="rgba(88,166,255,.20)" stroke="#58a6ff" stroke-width="1.3"/>
+  </svg>`;
+}
+
+// 区域概况：覆盖面积 + 覆盖人口 + 区域形状（地理区域选择后于实时天气中展示）
+function regionBlock(s) {
+  const area = s.area, pop = s.pop, poly = s.poly;
+  if (area == null && pop == null && !poly) return '';
+  const areaTxt = area != null ? (area < 100 ? area.toFixed(1) : Math.round(area).toLocaleString('zh-CN')) + ' km²' : '—';
+  const popTxt = pop != null ? (pop / 10000).toFixed(1) + ' 万' : '—';
+  return `<div class="rt-region">
+    <div class="rt-region-h">📐 区域概况</div>
+    <div class="rt-region-row">
+      <div class="rt-region-meta">
+        <div>覆盖面积 <b>${areaTxt}</b></div>
+        <div>覆盖人口 <b>${popTxt}</b></div>
+      </div>
+      <div class="rt-region-shape">${regionShapeSVG(poly)}</div>
+    </div>
+  </div>`;
 }
 
 // 流星雨辐射点赤纬（用于按北海纬度计算峰值高度，判断可见性）
@@ -517,9 +555,10 @@ function renderEvents() {
     <div class="muted" style="font-size:11px">${e.tips}</div>`;
 }
 
-function renderChart() {
+const charts = {};
+function chartDatasets() {
   const w = selStation().weather;
-  if (!w || !w.ok) return;
+  if (!w || !w.ok) return null;
   const h = w.hourly24; const labels = h.map(x => x.time.slice(11,16));
   const selected = [...state.dims];
   const datasets = selected
@@ -534,16 +573,20 @@ function renderChart() {
       };
     })
     .filter(ds => ds.data.some(v => v != null));
-  if (state.chart) state.chart.destroy();
-  const ctx = $('hourlyChart').getContext('2d');
-  state.chart = new Chart(ctx, {
-    type: 'line', data: { labels, datasets },
+  return { labels, datasets };
+}
+function renderChartOn(canvasId) {
+  const cd = chartDatasets(); if (!cd) return;
+  if (charts[canvasId]) charts[canvasId].destroy();
+  const ctx = $(canvasId).getContext('2d');
+  charts[canvasId] = new Chart(ctx, {
+    type: 'line', data: cd,
     options: {
       responsive: true, interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: '#e6edf3', boxWidth: 12, font: { size: 11 } } },
         tooltip: { callbacks: { label: (c) => {
-          const d = DIMS[selected[c.datasetIndex]];
+          const d = DIMS[[...state.dims][c.datasetIndex]];
           return `${d.label}: ${c.parsed.y == null ? '—' : c.parsed.y.toFixed(d.dec)}${d.unit}`;
         } } },
       },
@@ -555,6 +598,7 @@ function renderChart() {
     },
   });
 }
+function renderChart() { renderChartOn('hourlyChart'); }
 
 // ===== 顶部告警情报：手动翻页 + 播放/暂停 + 点击详情 =====
 const REGION_TAG = { '北海': '🟢北海', '广西': '🔵广西', '其他': '⚪其他' };
@@ -724,7 +768,7 @@ function openBeihaiModal() {
 
 $('modalClose').onclick = () => $('intelModal').classList.add('hidden');
 $('intelModal').onclick = (e) => { if (e.target === $('intelModal')) $('intelModal').classList.add('hidden'); };
-document.addEventListener('keydown', e => { if (e.key === 'Escape') $('intelModal').classList.add('hidden'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { $('intelModal').classList.add('hidden'); closeFocus(); } });
 $('tkPrev').onclick = () => tkGo(-1);
 $('tkNext').onclick = () => tkGo(1);
 $('tkPlay').onclick = tkTogglePlay;
@@ -738,8 +782,59 @@ const tAll = $('tickerAll'); if (tAll) tAll.onclick = openAllIntelModal;
 });
 
 $('refreshBtn').onclick = () => load();
-setInterval(() => { load(); setTimeout(renderChart, 300); }, 10 * 60 * 1000);
+setInterval(() => { load(); setTimeout(() => renderChartOn('hourlyChart'), 300); }, 10 * 60 * 1000);
+
+// ===== 模块放大（点击模块标题 → 在页面中央放大展示该板块与数据）=====
+let focusState = null;
+function closeFocus() {
+  if (focusState && focusState.type === 'map' && focusState.parent) {
+    try { focusState.parent.insertBefore($('map'), focusState.next); }
+    catch (e) { const mp = document.getElementById('mapPanel'); if (mp) mp.appendChild($('map')); }
+    setTimeout(() => { try { AlphaMap.invalidate(); } catch (e) {} }, 80);
+  }
+  if (charts.focusChart) { try { charts.focusChart.destroy(); } catch (e) {} delete charts.focusChart; }
+  $('focusModal').classList.add('hidden');
+  $('focusBody').innerHTML = '';
+  focusState = null;
+}
+function openFocus(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  closeFocus();
+  const h = panel.querySelector('.panel-h');
+  $('focusTitle').textContent = (h ? h.textContent : panelId).replace(/\s+/g, ' ').trim();
+  const body = $('focusBody');
+  if (panelId === 'chartCard') {
+    body.innerHTML = '<canvas id="focusChart" height="360"></canvas>';
+    $('focusModal').classList.remove('hidden');
+    renderChartOn('focusChart');
+    focusState = { type: 'chart' };
+  } else if (panelId === 'mapPanel') {
+    body.innerHTML = '<div id="focusMap" style="height:72vh;width:100%;border-radius:8px;overflow:hidden"></div>';
+    const mapEl = $('map');
+    focusState = { type: 'map', parent: mapEl.parentNode, next: mapEl.nextSibling };
+    $('focusMap').appendChild(mapEl);
+    $('focusModal').classList.remove('hidden');
+    setTimeout(() => { try { AlphaMap.invalidate(); } catch (e) {} }, 80);
+  } else {
+    body.innerHTML = panel.innerHTML;
+    $('focusModal').classList.remove('hidden');
+    focusState = { type: 'html' };
+  }
+}
+$('focusClose').onclick = closeFocus;
+$('focusModal').onclick = (e) => { if (e.target === $('focusModal')) closeFocus(); };
+document.querySelectorAll('.panel').forEach(p => {
+  const h = p.querySelector('.panel-h');
+  if (!h || !p.id) return;
+  h.style.cursor = 'zoom-in';
+  h.title = (h.title ? h.title + ' ｜ ' : '') + '点击放大该模块';
+  h.addEventListener('click', (e) => {
+    if (e.target.closest('input,button,label,select,a,.chart-dims,.layers,.dim-chip')) return;
+    openFocus(p.id);
+  });
+});
 
 AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
-load().then(renderChart);
+load().then(() => renderChartOn('hourlyChart'));

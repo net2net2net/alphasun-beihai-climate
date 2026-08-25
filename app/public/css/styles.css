@@ -287,3 +287,20 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .ev-vis{font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px}
 .ev-vis.ok{background:rgba(63,185,80,.16);color:#3fb950}
 .ev-vis.no{background:rgba(251,133,0,.14);color:#ffb86b}
+
+/* 实时天气：区域概况（覆盖面积/人口/形状，v7.0.3） */
+.rt-region{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.rt-region-h{font-size:12px;color:var(--muted);margin-bottom:6px}
+.rt-region-row{display:flex;gap:14px;align-items:center}
+.rt-region-meta{display:flex;flex-direction:column;gap:5px;font-size:13px}
+.rt-region-meta b{color:var(--accent);font-weight:600}
+.rt-region-shape{flex:0 0 auto;margin-left:auto}
+
+/* 模块放大（点击标题 → 中央放大，v7.0.3） */
+.focus-modal .modal-card{width:min(1000px,95vw);max-height:92vh;display:flex;flex-direction:column}
+.focus-title{padding:10px 16px 6px;font-weight:700;color:var(--accent);font-size:15px;border-bottom:1px solid var(--line)}
+#focusBody{padding:16px 18px;overflow:auto;font-size:15px;line-height:1.6}
+#focusBody svg{max-width:100%!important}
+#focusBody .astro-sun,#focusBody .astro-moon{transform:scale(1.05)}
+#focusBody .rt-region-shape svg{max-width:240px!important;margin-left:0}
+#focusMap{background:#0b1622}
