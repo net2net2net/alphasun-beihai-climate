@@ -1,4 +1,4 @@
-# AlphaSun · 北海极端气候全景系统（技能安装包）
+# AlphaSun · 北海极端气候全景系统
 
 **版本 v8.0.3 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
 
