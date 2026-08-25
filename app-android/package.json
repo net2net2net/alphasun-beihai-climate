@@ -1,0 +1,20 @@
+{
+  "name": "alphasun-beihai-android",
+  "version": "8.0.3",
+  "private": true,
+  "description": "AlphaSun 北海极端气候全景系统 — 安卓 APP（Capacitor 纯前端封装，直连权威数据源）",
+  "scripts": {
+    "build": "echo '静态前端无需构建，www/ 已就绪'",
+    "sync": "cap sync",
+    "android:init": "cap add android",
+    "open:android": "cap open android",
+    "build:android": "cap sync && cap build android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/android": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}
