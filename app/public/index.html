@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlphaSun · 北海极端气候全景系统</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">☀</span>
+    <div>
+      <h1>AlphaSun · 北海极端气候全景系统 <span class="ver">v7.0.0</span></h1>
+      <div class="sub">陆 · 海 · 空 · 天 · 文 五位一体实时全景 ｜ 作者：阳光（net2net2net）</div>
+    </div>
+  </div>
+  <div class="status">
+    <span id="updated" class="muted">加载中…</span>
+    <span id="globalLevel" class="badge">—</span>
+    <button id="refreshBtn" class="btn">刷新</button>
+  </div>
+</header>
+
+<div id="alertBanner" class="alert-banner hidden"></div>
+
+<!-- 顶部：极端气候告警情报（手动翻页 + 播放/暂停，点击查看详情；优先 北海>广西>其他）-->
+<div id="ticker" class="ticker">
+  <div class="ticker-tag">极端气候告警情报</div>
+  <div class="ticker-pager">
+    <button id="tkPrev" class="tk-btn" title="上一条">▲</button>
+    <div id="tickerCard" class="ticker-card"></div>
+    <button id="tkNext" class="tk-btn" title="下一条">▼</button>
+    <button id="tkPlay" class="tk-btn tk-play" title="自动播放">▶</button>
+  </div>
+  <div class="ticker-foot muted">优先 北海 ▸ 广西 ▸ 其他 ｜ 来源：中央气象台 · 地方气象台 · USGS ｜ <span id="tkCount" class="muted"></span> ｜ <span id="tkStatus" class="tk-status"></span></div>
+</div>
+
+<!-- 情报详情模态框 -->
+<div id="intelModal" class="modal hidden">
+  <div class="modal-card">
+    <button id="modalClose" class="modal-close" aria-label="关闭">×</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<main class="grid">
+  <!-- 左列：实时 + 海洋 + 天文 -->
+  <section class="col col-left">
+    <div class="panel alert-panel" id="alertCard">
+      <div class="panel-h danger-h">极端天气告警（<span id="alertCount">0</span>）</div>
+      <div id="alertBody" class="alert-body">…</div>
+    </div>
+
+    <div class="panel" id="stationPicker"></div>
+
+    <div class="panel card-realtime" id="realtimeCard">
+      <div class="panel-h">实时天气 <span id="rtStation" class="muted"></span></div>
+      <div id="realtimeBody" class="realtime-body">…</div>
+    </div>
+
+    <div class="panel" id="airCard">
+      <div class="panel-h">空气质量 AQI</div>
+      <div id="airBody" class="air-body">…</div>
+    </div>
+
+    <div class="panel" id="marineCard">
+      <div class="panel-h">海洋 · 浪高 / 海温</div>
+      <div id="marineBody" class="marine-body">…</div>
+    </div>
+
+    <div class="panel" id="astroCard">
+      <div class="panel-h">天文 · 日出月落 / 月相</div>
+      <div id="astroBody" class="astro-body">…</div>
+    </div>
+
+    <div class="panel" id="glowCard">
+      <div class="panel-h">黄昏霞光概率</div>
+      <div id="glowBody" class="glow-body">…</div>
+    </div>
+
+    <div class="panel" id="tideCard">
+      <div class="panel-h">潮汐 / 水位（验潮站）</div>
+      <div id="tideBody" class="tide-body">…</div>
+    </div>
+  </section>
+
+  <!-- 中列：地图 -->
+  <section class="col col-map">
+    <div class="panel map-panel">
+      <div class="panel-h">全景地图
+        <span class="layers">
+          <label><input type="checkbox" id="lyrStation" checked> 站点</label>
+          <label><input type="checkbox" id="lyrQuake" checked> 地震</label>
+          <label><input type="checkbox" id="lyrFire" checked> 火点</label>
+          <label><input type="checkbox" id="lyrTide" checked> 潮汐</label>
+          <label><input type="checkbox" id="lyrBoundary" checked> 边界</label>
+          <label><input type="checkbox" id="lyrTyphoon" checked> 台风</label>
+          <label><input type="checkbox" id="lyrConv" checked> 龙卷</label>
+          <label><input type="checkbox" id="lyrRain" checked> 汛情</label>
+          <label><input type="checkbox" id="lyrGeo" checked> 地灾</label>
+        </span>
+      </div>
+      <div id="map"></div>
+      <div class="map-legend" id="mapLegend"></div>
+      <div id="mapHazardInfo" class="map-hazard-info"></div>
+      <details class="overlay-box">
+        <summary>叠加图层（卫星 · 雷达 · 降水 · 风力 · 温度 · 扰动 · 风场 · 海浪 · 副高）</summary>
+        <div id="overlayPanel" class="overlay-panel"></div>
+        <div id="overlayHint" class="overlay-hint muted"></div>
+      </details>
+    </div>
+
+    <!-- 地图下方：北海气候解说与数据分析 -->
+    <div class="panel climate-panel">
+      <div class="panel-h">北海气候解说与数据分析</div>
+      <div id="climateBody" class="climate-body">加载中…</div>
+    </div>
+
+    <!-- 再下方：推荐天气 / 数据源网站 -->
+    <div class="panel links-panel">
+      <div class="panel-h">推荐天气 / 数据源网站（已验证可访问）</div>
+      <div id="linksBody" class="links-body">加载中…</div>
+    </div>
+  </section>
+
+  <!-- 右列：预报 + 告警 + 天文事件 -->
+  <section class="col col-right">
+    <div class="panel" id="forecastCard">
+      <div class="panel-h">7 日周期预报</div>
+      <div id="forecastBody" class="forecast-body">…</div>
+    </div>
+
+    <div class="panel" id="chartCard">
+      <div class="panel-h">24h 逐时曲线 <span class="muted" style="font-size:11px">（点击标签增删维度）</span></div>
+      <div class="chart-dims" id="chartDims"></div>
+      <canvas id="hourlyChart" height="170"></canvas>
+    </div>
+
+    <div class="panel" id="eventCard">
+      <div class="panel-h">天文景观日历</div>
+      <div id="eventBody" class="event-body">…</div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  数据源：Open-Meteo（气象/空气/海洋/洪水/气候）· USGS（地震）· NASA FIRMS（火点，需KEY）· 国家海洋信息中心（潮汐，需凭证）｜ 演示底图 高德(Amap, GCJ-02 纠偏)｜ 作者：阳光（net2net2net）
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>window.L||document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>window.Chart||document.write('<script src="https://unpkg.com/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>');</script>
+<script src="js/map.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# ===== AlphaSun 北海极端气候全景系统 · Git 忽略规则 =====
+
+# 便携 Node 运行时（约 87MB，不入库）
+# 其他智能体安装后自备 Node，或从 alphasun-beihai-climate.zip 获取运行时
+app/node/
+
+# 日志
+*.log
+
+# 临时探针 / 开发残留
+_*.js
+_*.html
+*.tmp
+
+# 依赖与系统
+node_modules/
+.DS_Store
+Thumbs.db
+
+# 编辑器 / 系统缓存
+.idea/
+.vscode/
