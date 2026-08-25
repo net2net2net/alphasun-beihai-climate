@@ -1,0 +1,6 @@
+node_modules/
+android/
+.capacitor/
+*.apk
+app-debug.apk
+.DS_Store
