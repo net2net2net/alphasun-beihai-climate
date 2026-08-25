@@ -92,7 +92,8 @@ window.ALPHASUN_CONFIG = {
 
 ## 常见问题
 
-- **白屏**：最多见是 Leaflet/Chart.js 的 CDN（unpkg/jsdelivr）被网络限制。解决：把这两个库下载到 `www/vendor/` 并改 `index.html` 的引用为本地路径。
+- **白屏/模块空白**：**已修复** —— Leaflet / Chart.js 及其图标已随包内置到 `www/vendor/`（不再依赖 unpkg/jsdelivr 等 CDN），消除中国移动网络屏蔽 CDN 导致整页阻塞的风险。渲染层亦已加固：任一子模块（天气/空气/海洋/图表/地图等）渲染失败都会被隔离，不再连累其它模块变空白；24h 曲线面板改为初始即绘制。
+- **某模块显示「暂不可用」**：表示该数据源本次拉取失败（网络波动或接口超时），属正常降级；刷新即可重试。中央气象台（台风/预警）接口实测支持 CORS，手机端可直连；NASA FIRMS 野火需填 `FIRMS_MAP_KEY`，否则降级。
 - **地图空白**：高德底图需联网；确认手机有网。
 - **数据不刷新**：`npx cap sync` 后重装 APP（或 Android Studio 里 Clean Project）。
 - **打包体积**：纯前端约 10 MB；若改为内嵌 Node 后端（nodejs-mobile）会到 100 MB+，本仓库未采用。
