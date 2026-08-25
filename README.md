@@ -1,16 +1,16 @@
-# AlphaSun · 北海极端气候全景系统
+# AlphaSun · 北海极端气候全景系统（技能安装包）
 
 **版本 v8.0.3 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
 
 一套以**北海为中心**的极端气候全景监测仪表盘：实时天气、周期预报、多灾种极端告警、全景地图、世界时钟与可叠加卫星 / 雷达图层。纯 Node.js、零第三方依赖、内置便携运行时，**开箱即运行**。
 
 ## 快速开始
-- **单文件 exe（推荐，最简单）**：双击 `app/dist/AlphaSun.exe` → 浏览器自动打开 http://localhost:8765。无需安装 Node.js、无需任何外部文件，单个 exe 即可运行（约 87MB，内置 Node 运行时 + 全部前端资源）。
+- **单文件 exe（推荐，最简单）**：从 [Release `alphasun-exe-8.0.2`](https://github.com/net2net2net/alphasun-beihai-climate/releases/tag/alphasun-exe-8.0.2) 下载 `alphasun-beihai-climate8.0.2.exe` → 双击运行 → 浏览器自动打开 http://localhost:8765。无需安装 Node.js、零外部文件。
 - **独立运行（完整目录）**：双击 `app/start.bat`（Windows）或 `bash app/start.sh`（Linux / macOS）→ 打开 http://localhost:8765
 - **由智能体运行**：见 `INSTALL.md`；技能加载后执行 `node app/server.js`
 
 ## 包内容
-- `app/dist/AlphaSun.exe`：**单文件可执行程序**（约 87MB，内置 Node 运行时 + 全部前端资源），双击即运行，零依赖、零外部文件。（git 仓库中因体积被 `.gitignore` 排除，构建方式见下文）
+- **单文件 exe（Release 发布）**：Windows 64 位单文件 `alphasun-beihai-climate8.0.2.exe`（约 83 MB，内置 Node 运行时 + 全部前端资源），见下方「单文件 exe 下载」段落与 Release `alphasun-exe-8.0.2`。
 - `app/`：完整可运行系统源码（server.js + lib + public + 内置 node），用于二次开发或 `node app/server.js` 直接运行。
 - `SKILL.md`：技能定义（触发 + 运行流程）
 - `INSTALL.md`：跨智能体 / 独立安装说明
@@ -44,6 +44,20 @@ npm i -g pkg                  # 安装打包器（首次）
 npm run build:exe             # 输出 app/dist/AlphaSun.exe
 ```
 > 说明：`app/node/`（便携 Node 运行时，约 87MB）与 `app/dist/`（构建产物）均被 `.gitignore` 排除，故 git 仓库为**源码 + 文档**形态；本地运行也可直接 `node app/server.js`（无需 exe）。
+
+## 单文件 exe 下载（Release 发布）
+
+为方便直接使用，已发布 Windows 64 位**单文件 exe**（内置 Node 运行时 + 全部前端资源，双击即运行，零依赖）：
+
+- **下载**：[alphasun-beihai-climate8.0.2.exe（Release `alphasun-exe-8.0.2`）](https://github.com/net2net2net/alphasun-beihai-climate/releases/download/alphasun-exe-8.0.2/alphasun-beihai-climate8.0.2.exe)
+- **大小**：87,420,928 字节（约 83.4 MB）
+- **MD5**：`c7f3433bb7d5675c59fc52dde34e8afe`（下载后请校验）
+- **使用说明 / MD5 校验方法**：[docs/EXE使用说明.md](docs/EXE使用说明.md)
+- **系统运行效果图**：
+
+![AlphaSun 北海极端气候全景系统](docs/screenshot.jpg)
+
+> 运行：双击 exe → 浏览器自动打开 http://localhost:8765。需联网获取实时数据；如被杀软误报，校验 MD5 一致后可加入白名单。详细见使用说明文档。
 
 ## 说明
 - 部分中央气象台产品页为 JS 动态渲染，叠加失败时保留官方原图链接（不伪造坏图）。
