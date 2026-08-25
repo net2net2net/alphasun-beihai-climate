@@ -2,6 +2,15 @@
   --bg:#0d1117; --bg2:#161b22; --bg3:#1c2330; --line:#2a3340;
   --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --info:#9fd3ff;
   --ok:#3fb950; --warn:#d29922; --orange:#fb8500; --red:#e5484d; --deep:#bc1a1a;
+  --clock-bezel:#39414e; --clock-face:#f6f3ea; --clock-face2:#ffffff;
+  --clock-num:#1c2230; --clock-tick:#1c2230; --clock-sec:#e5484d;
+}
+[data-theme="light"]{
+  --bg:#eef1f5; --bg2:#ffffff; --bg3:#e6eaf0; --line:#d4dae2;
+  --txt:#1b2733; --muted:#5b6776; --accent:#1f6feb; --info:#0b66c3;
+  --ok:#1a7f37; --warn:#9a6700; --orange:#c2410c; --red:#cf222e; --deep:#a40e26;
+  --clock-bezel:#c4cad3; --clock-face:#fbfaf4; --clock-face2:#ffffff;
+  --clock-num:#222; --clock-tick:#222; --clock-sec:#d11;
 }
 /* 浅色主题（默认深色；顶部按钮切换，localStorage 持久化） */
 [data-theme="light"]{
@@ -343,3 +352,45 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 #focusBody .astro-sun,#focusBody .astro-moon{transform:scale(1.05)}
 #focusBody .rt-region-shape svg{max-width:240px!important;margin-left:0}
 #focusMap{background:#0b1622}
+
+/* ===== 世界时钟（位于「推荐天气/数据源网站」面板底部，v8.0.3）===== */
+.world-clock{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.wc-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.wc-title{font-size:14px;font-weight:700;color:var(--accent)}
+.wc-sub{font-size:11px;color:var(--muted)}
+.wc-main{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.wc-analog{flex:0 0 auto;width:200px;max-width:46%}
+.wc-svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 16px rgba(0,0,0,.45))}
+.wc-bezel{fill:var(--clock-bezel);stroke:rgba(0,0,0,.25);stroke-width:1.5}
+.wc-g0{stop-color:var(--clock-face2)}
+.wc-g1{stop-color:var(--clock-face)}
+.wc-tick-major{stroke:var(--clock-tick);stroke-width:2.4;stroke-linecap:round}
+.wc-tick-minor{stroke:var(--clock-tick);stroke-width:1;opacity:.55}
+.wc-num{fill:var(--clock-num);font-size:13px;font-weight:700;text-anchor:middle;font-family:"Segoe UI",system-ui,sans-serif}
+.wc-hour-hand line{stroke:var(--clock-num);stroke-width:5;stroke-linecap:round}
+.wc-min-hand line{stroke:var(--clock-num);stroke-width:3.2;stroke-linecap:round}
+.wc-sec-hand line{stroke:var(--clock-sec);stroke-width:1.4;stroke-linecap:round}
+.wc-cap{fill:var(--clock-sec);stroke:var(--clock-face);stroke-width:1.5}
+.wc-readout{flex:1 1 200px;min-width:0}
+.wc-big{font-family:"SFMono-Regular",Consolas,"Roboto Mono",monospace;font-size:34px;font-weight:700;line-height:1.05;
+  letter-spacing:.5px;color:var(--txt);display:flex;align-items:baseline;gap:1px}
+.wc-big-ms{font-size:18px;color:var(--accent);font-weight:700}
+.wc-big-label{font-size:12px;color:var(--muted);margin-top:4px}
+.wc-big-label2{font-size:11px;color:var(--muted);opacity:.8}
+.wc-zones{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:14px}
+.wc-z{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:7px 10px}
+.wc-z-accent{border-color:rgba(88,166,255,.4);background:linear-gradient(180deg,rgba(88,166,255,.10),var(--bg2))}
+.wc-z-name{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc-z-accent .wc-z-name{color:var(--accent);font-weight:600}
+.wc-z-time{font-family:"SFMono-Regular",Consolas,"Roboto Mono",monospace;font-size:15px;font-weight:600;color:var(--txt);margin-top:2px;letter-spacing:.3px}
+.wc-z-date{font-size:10px;margin-top:1px}
+.wc-sync{display:flex;align-items:center;gap:12px;margin-top:14px}
+.wc-sync-status{font-size:11px;color:var(--muted)}
+#syncBtn.on{border-color:var(--ok);color:var(--ok);background:rgba(63,185,80,.12)}
+/* 放大模态内世界时钟放大展示 */
+#focusBody .world-clock{margin-top:6px;border-top:none;padding-top:0}
+#focusBody .wc-analog{width:280px}
+#focusBody .wc-big{font-size:46px}
+#focusBody .wc-big-ms{font-size:24px}
+#focusBody .wc-zones{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+

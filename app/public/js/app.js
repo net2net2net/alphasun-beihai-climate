@@ -55,6 +55,150 @@ function setSound(on){
   if (on) ensureAudio();
   updateSoundAlarm(state.data && state.data.globalAlerts && state.data.globalAlerts.length > 0);
 }
+// ===== 世界时钟（位于「推荐天气/数据源网站」面板底部）：设备时间 / 北京时间 / 常用国际时区，机械钟+数字钟，毫秒精度，对时功能 =====
+// 常用时区（tz 为 IANA 名；local 表示设备本地时钟，不参与校准）
+const ZONES = [
+  { name: '设备时间', tz: 'local', accent: true },
+  { name: '北京时间', tz: 'Asia/Shanghai', accent: true },
+  { name: '协调世界时 UTC', tz: 'UTC' },
+  { name: '纽约 New York', tz: 'America/New_York' },
+  { name: '伦敦 London', tz: 'Europe/London' },
+  { name: '东京 Tokyo', tz: 'Asia/Tokyo' },
+  { name: '巴黎 Paris', tz: 'Europe/Paris' },
+  { name: '洛杉矶 Los Angeles', tz: 'America/Los_Angeles' },
+  { name: '悉尼 Sydney', tz: 'Australia/Sydney' },
+  { name: '莫斯科 Moscow', tz: 'Europe/Moscow' },
+  { name: '迪拜 Dubai', tz: 'Asia/Dubai' },
+  { name: '新加坡 Singapore', tz: 'Asia/Singapore' },
+];
+let calibOffset = 0;      // 校准偏差（设备时刻 + 偏差 = 真实 UTC ms）
+let devBase = 0, perfBase = 0, rafWorld = 0;
+function fmtZone(epochMs, tz) {
+  const d = new Date(epochMs);
+  let h, m, s, dateStr;
+  if (tz === 'local') {
+    h = d.getHours(); m = d.getMinutes(); s = d.getSeconds();
+    dateStr = d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', weekday: 'short' });
+  } else {
+    const parts = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, hour12: false,
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(d);
+    const get = (t) => { const x = parts.find(p => p.type === t); return x ? x.value : '0'; };
+    h = +get('hour'); m = +get('minute'); s = +get('second');
+    dateStr = `${get('year')}-${get('month')}-${get('day')} ${get('weekday')}`;
+  }
+  const ms = d.getMilliseconds();
+  const hms = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return { h, m, s, ms, hms, dateStr };
+}
+function setRot(root, sel, deg) { const el = root.querySelector(sel); if (el) el.setAttribute('transform', `rotate(${deg.toFixed(3)} 100 100)`); }
+function paintClock(root, bjEpoch, devEpoch) {
+  const bj = fmtZone(bjEpoch, 'Asia/Shanghai');
+  const secA = (bj.s + bj.ms / 1000) * 6;
+  const minA = (bj.m + bj.s / 60) * 6;
+  const hourA = ((bj.h % 12) + bj.m / 60) * 30;
+  setRot(root, '.wc-hour-hand', hourA);
+  setRot(root, '.wc-min-hand', minA);
+  setRot(root, '.wc-sec-hand', secA);
+  const big = root.querySelector('.wc-big-time'); if (big) big.textContent = bj.hms;
+  const bigms = root.querySelector('.wc-big-ms'); if (bigms) bigms.textContent = '.' + String(bj.ms).padStart(3, '0');
+  root.querySelectorAll('.wc-z').forEach(z => {
+    const tz = z.getAttribute('data-tz');
+    const f = fmtZone(tz === 'local' ? devEpoch : bjEpoch, tz);
+    const t = z.querySelector('.wc-z-time'); if (t) t.textContent = f.hms + '.' + String(f.ms).padStart(3, '0');
+    const dd = z.querySelector('.wc-z-date'); if (dd) dd.textContent = f.dateStr;
+  });
+}
+function buildClockSVG() {
+  let ticks = '';
+  for (let i = 0; i < 60; i++) {
+    const big = i % 5 === 0;
+    const a = i * 6 * Math.PI / 180;
+    const r1 = big ? 76 : 81, r2 = 88;
+    const x1 = (100 + r1 * Math.sin(a)).toFixed(1), y1 = (100 - r1 * Math.cos(a)).toFixed(1);
+    const x2 = (100 + r2 * Math.sin(a)).toFixed(1), y2 = (100 - r2 * Math.cos(a)).toFixed(1);
+    ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${big ? 'wc-tick-major' : 'wc-tick-minor'}"/>`;
+  }
+  let nums = '';
+  for (let n = 1; n <= 12; n++) {
+    const a = n * 30 * Math.PI / 180;
+    const r = 66;
+    const x = (100 + r * Math.sin(a)).toFixed(1), y = (100 - r * Math.cos(a) + 4).toFixed(1);
+    nums += `<text x="${x}" y="${y}" class="wc-num">${n}</text>`;
+  }
+  return `<svg viewBox="0 0 200 200" class="wc-svg" aria-label="机械时钟">
+    <defs>
+      <radialGradient id="wcFace" cx="42%" cy="38%" r="65%">
+        <stop offset="0%" class="wc-g0"/><stop offset="100%" class="wc-g1"/>
+      </radialGradient>
+    </defs>
+    <circle cx="100" cy="100" r="96" class="wc-bezel"/>
+    <circle cx="100" cy="100" r="89" fill="url(#wcFace)" class="wc-face"/>
+    ${ticks}${nums}
+    <g class="wc-hour-hand"><line x1="100" y1="100" x2="100" y2="56"/></g>
+    <g class="wc-min-hand"><line x1="100" y1="100" x2="100" y2="34"/></g>
+    <g class="wc-sec-hand"><line x1="100" y1="114" x2="100" y2="28"/></g>
+    <circle cx="100" cy="100" r="5.5" class="wc-cap"/>
+  </svg>`;
+}
+function renderWorldClock() {
+  const mount = document.getElementById('worldClockMount');
+  if (!mount) return;
+  const zonesHtml = ZONES.map(z => `<div class="wc-z ${z.accent ? 'wc-z-accent' : ''}" data-tz="${z.tz}">
+      <div class="wc-z-name">${z.name}</div>
+      <div class="wc-z-time">--:--:--.000</div>
+      <div class="wc-z-date muted"></div>
+    </div>`).join('');
+  mount.innerHTML = `
+    <div class="wc-head"><span class="wc-title">🌐 世界时钟</span><span class="wc-sub">北京时间基准 · 毫秒精度</span></div>
+    <div class="wc-main">
+      <div class="wc-analog">${buildClockSVG()}</div>
+      <div class="wc-readout">
+        <div class="wc-big"><span class="wc-big-time">--:--:--</span><span class="wc-big-ms">.000</span></div>
+        <div class="wc-big-label">北京时间 · 数字钟</div>
+        <div class="wc-big-label2">与左侧机械钟同步</div>
+      </div>
+    </div>
+    <div class="wc-zones">${zonesHtml}</div>
+    <div class="wc-sync">
+      <button id="syncBtn" class="btn">🕒 对时</button>
+      <span id="syncStatus" class="wc-sync-status">未对时（使用设备时间）</span>
+    </div>`;
+}
+function tickWorld() {
+  const dev = devBase + (performance.now() - perfBase);   // 亚毫秒平滑的设备时刻
+  const bj = dev + calibOffset;                           // 校准后的真实 UTC ms（北京时间据此 +8h）
+  const main = document.getElementById('worldClockMount'); if (main) paintClock(main, bj, dev);
+  const fc = document.querySelector('#focusBody #worldClockMount'); if (fc) paintClock(fc, bj, dev); // 放大模态内的克隆也同步走时
+  rafWorld = requestAnimationFrame(tickWorld);
+}
+async function syncTime() {
+  const st = document.getElementById('syncStatus');
+  const btn = document.getElementById('syncBtn');
+  if (st) st.textContent = '对时中…';
+  try {
+    const t0 = performance.now();
+    const r = await fetch('/api/time');
+    const t1 = performance.now();
+    const data = await r.json();
+    const rtt = t1 - t0;
+    const clientReceive = Date.now();
+    const serverEst = data.now + rtt / 2;       // 估算服务器在客户端接收时刻的真实时间
+    calibOffset = serverEst - clientReceive;      // 设备时刻 → 真实 UTC ms 的偏差
+    const sign = calibOffset >= 0 ? '+' : '−';
+    if (st) st.textContent = `已对时 · 偏差 ${sign}${Math.abs(calibOffset).toFixed(0)} ms（往返 ${rtt.toFixed(0)} ms）`;
+    if (btn) btn.classList.add('on');
+  } catch (e) {
+    if (st) st.textContent = '对时失败（网络错误）';
+  }
+}
+function startWorldClock() {
+  renderWorldClock();
+  devBase = Date.now(); perfBase = performance.now();
+  const btn = document.getElementById('syncBtn'); if (btn) btn.onclick = syncTime;
+  if (!rafWorld) tickWorld();
+}
+
 const LNAME = ['正常','注意','预警','警报','紧急'];
 const LCOL = ['#3fb950','#d29922','#fb8500','#e5484d','#bc1a1a'];
 
@@ -921,4 +1065,5 @@ setSound(false);
 applyTheme(theme);
 AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
+startWorldClock();
 load().then(() => renderChartOn('hourlyChart'));
