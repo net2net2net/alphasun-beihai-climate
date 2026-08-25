@@ -1,6 +1,29 @@
 // AlphaSun · 前端仪表盘逻辑
 const ICON = { sunny:'☀️', partly:'⛅', cloudy:'☁️', fog:'🌫️', drizzle:'🌦️', rain:'🌧️', snow:'❄️', storm:'⛈️', unknown:'❓' };
 const state = { data: null, sel: null, chart: null, dims: new Set(['temp','precip','wind','rh','aqi']) };
+
+// ===== 主题（深色/浅色，默认深色，localStorage 持久化）=====
+let theme = (() => { try { return localStorage.getItem('alphasun-theme') || 'dark'; } catch (e) { return 'dark'; } })();
+function updateThemeBtn(){
+  const b = $('themeBtn'); if (!b) return;
+  b.textContent = theme === 'light' ? '🌙 深色' : '☀ 浅色';
+}
+function applyTheme(t){
+  theme = t;
+  try { localStorage.setItem('alphasun-theme', t); } catch (e) {}
+  document.documentElement.setAttribute('data-theme', t);
+  updateThemeBtn();
+}
+function toggleTheme(){
+  applyTheme(theme === 'light' ? 'dark' : 'light');
+  renderChartOn('hourlyChart');
+  if (charts.focusChart) { try { charts.focusChart.destroy(); } catch (e) {} delete charts.focusChart; renderChartOn('focusChart'); }
+}
+function chartColors(){
+  return theme === 'light'
+    ? { legend:'#243044', grid:'#e3e8ef', tick:'#57636e', yTitle:'#c2410c', y1Title:'#57636e' }
+    : { legend:'#e6edf3', grid:'#1c2330', tick:'#8b949e', yTitle:'#fb8500', y1Title:'#8b949e' };
+}
 const LNAME = ['正常','注意','预警','警报','紧急'];
 const LCOL = ['#3fb950','#d29922','#fb8500','#e5484d','#bc1a1a'];
 
@@ -39,6 +62,12 @@ function render() {
   const gl = $('globalLevel');
   gl.textContent = d.maxLevelName;
   gl.style.background = LCOL[d.maxLevel]; gl.style.color = '#06121f';
+  // 顶部"警报 / 无警报"指示器（需求3）：有告警显示闪烁"警报"，无告警显示绿色"无警报"
+  const asEl = $('alertStatus');
+  if (asEl) {
+    if (d.globalAlerts.length) { asEl.textContent = '⚠ 警报'; asEl.className = 'alert-status alert'; }
+    else { asEl.textContent = '✅ 无警报'; asEl.className = 'alert-status ok'; }
+  }
   // 横幅（活跃告警，点击查看详情）
   const banner = $('alertBanner');
   const top = d.globalAlerts.filter(a => a.level >= 2).slice(0, 6);
@@ -108,13 +137,21 @@ function renderRealtime() {
   const c = w.current;
   const trend = buildWeatherTrend(w);
   $('realtimeBody').innerHTML = `
-    <div class="rt-icon">${ICON[c.icon]||'❓'}</div>
-    <div class="rt-temp">${c.temp.toFixed(1)}°</div>
-    <div class="rt-grid">
-      <div>体感 <b>${c.feels.toFixed(1)}℃</b></div><div>${c.text}</div>
-      <div>风 <b>${c.wind.toFixed(1)}</b> m/s</div><div>阵风 <b>${c.gust.toFixed(1)}</b></div>
-      <div>湿度 <b>${c.rh}%</b></div><div>降水 <b>${c.precip.toFixed(1)}</b> mm</div>
-      <div>气压 <b>${c.pressure.toFixed(0)}</b> hPa</div><div>云量 <b>${c.cloud}%</b></div>
+    <div class="rt-head">
+      <div class="rt-icon">${ICON[c.icon]||'❓'}</div>
+      <div class="rt-main">
+        <div class="rt-temp">${c.temp.toFixed(1)}<span class="rt-deg">°</span></div>
+        <div class="rt-cond">${c.text}</div>
+      </div>
+      <div class="rt-feels"><span class="l">体感</span><b>${c.feels.toFixed(1)}℃</b></div>
+    </div>
+    <div class="rt-metrics">
+      <div class="rt-metric"><span class="l">风</span><b>${c.wind.toFixed(1)}<i>m/s</i></b></div>
+      <div class="rt-metric"><span class="l">阵风</span><b>${c.gust.toFixed(1)}</b></div>
+      <div class="rt-metric"><span class="l">湿度</span><b>${c.rh}%</b></div>
+      <div class="rt-metric"><span class="l">降水</span><b>${c.precip.toFixed(1)}<i>mm</i></b></div>
+      <div class="rt-metric"><span class="l">气压</span><b>${c.pressure.toFixed(0)}<i>hPa</i></b></div>
+      <div class="rt-metric"><span class="l">云量</span><b>${c.cloud}%</b></div>
     </div>
     <div class="rt-trend">${trend}</div>
     ${regionBlock(s)}`;
@@ -247,13 +284,13 @@ function sunDiagramSVG(lat, lon) {
     ? `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="6" fill="#ffd166" stroke="#f0a500" stroke-width="1.5"/>
        <text x="${sx.toFixed(1)}" y="${(sy - 9).toFixed(1)}" font-size="9" fill="#ffd166" text-anchor="middle">☀</text>`
     : `<text x="${cx}" y="44" font-size="22" text-anchor="middle">🌙</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:210px;display:block;background:#0b1622;border-radius:8px">
-    <rect x="0" y="${horizonY}" width="${W}" height="${H - horizonY}" fill="#0a1119"/>
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:210px;display:block;background:var(--bg3);border-radius:8px">
+    <rect x="0" y="${horizonY}" width="${W}" height="${H - horizonY}" fill="var(--bg3)"/>
     ${path ? `<path d="${path}" fill="none" stroke="${day ? '#f0a500' : '#3a4658'}" stroke-width="1.6" stroke-dasharray="${day ? '' : '4 3'}"/>` : ''}
-    <line x1="${leftX}" y1="${horizonY}" x2="${rightX}" y2="${horizonY}" stroke="#33414f" stroke-width="1"/>
-    <text x="${leftX}" y="${H - 4}" font-size="9" fill="#5b6776">东</text>
-    <text x="${cx - 7}" y="${H - 4}" font-size="9" fill="#5b6776">南</text>
-    <text x="${rightX - 14}" y="${H - 4}" font-size="9" fill="#5b6776">西</text>
+    <line x1="${leftX}" y1="${horizonY}" x2="${rightX}" y2="${horizonY}" stroke="var(--line)" stroke-width="1"/>
+    <text x="${leftX}" y="${H - 4}" font-size="9" fill="var(--muted)">东</text>
+    <text x="${cx - 7}" y="${H - 4}" font-size="9" fill="var(--muted)">南</text>
+    <text x="${rightX - 14}" y="${H - 4}" font-size="9" fill="var(--muted)">西</text>
     ${dot}
   </svg>`;
 }
@@ -319,7 +356,7 @@ function regionShapeSVG(poly) {
     const y = (H / 2 - (la - cy) * s).toFixed(1);
     return x + ',' + y;
   }).join(' ');
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:132px;display:block;background:#0b1622;border-radius:8px" title="区域轮廓（示意）">
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:132px;display:block;background:var(--bg3);border-radius:8px" title="区域轮廓（示意）">
     <polygon points="${pts}" fill="rgba(88,166,255,.20)" stroke="#58a6ff" stroke-width="1.3"/>
   </svg>`;
 }
@@ -364,7 +401,7 @@ function renderGlow() {
       <div>等级 <b style="color:${col}">${g.grade}</b></div></div>
     <div class="glow-meter"><div class="glow-fill" style="width:${g.score}%"></div></div>
     <div class="muted" style="font-size:11px">最佳观赏：日落 ${fmt(g.bestTime)} 前后</div>
-    <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>
+    <div style="font-size:11px;color:var(--info)">${g.factors.join('；')}</div>
     <div class="glow-loc">📍 基于 ${s.name} 实时观测</div>`;
 }
 
@@ -379,7 +416,7 @@ function renderMorningGlow() {
       <div>等级 <b style="color:${col}">${g.grade}</b></div></div>
     <div class="glow-meter"><div class="glow-fill" style="width:${g.score}%"></div></div>
     <div class="muted" style="font-size:11px">最佳观赏：日出 ${fmt(g.bestTime)} 前后</div>
-    <div style="font-size:11px;color:#9fd3ff">${g.factors.join('；')}</div>
+    <div style="font-size:11px;color:var(--info)">${g.factors.join('；')}</div>
     <div class="glow-loc">📍 基于 ${s.name} 实时观测</div>`;
 }
 
@@ -412,7 +449,9 @@ function wmoIcon(code){ const M={0:'sunny',1:'sunny',2:'partly',3:'cloudy',45:'f
 
 function renderAlerts() {
   const list = state.data.globalAlerts;
-  $('alertCount').textContent = list.length;
+  const cnt = $('alertCount');
+  cnt.textContent = list.length;
+  cnt.classList.toggle('zero', list.length === 0);
   if (!list.length) { $('alertBody').innerHTML = '<div class="muted">当前无活跃告警 ✅</div>'; return; }
   $('alertBody').innerHTML = list.map((a, i) => {
     const rel = a.beihaiRelation === 'direct' ? '<span class="rel-badge direct">涉及北海</span>'
@@ -579,21 +618,22 @@ function renderChartOn(canvasId) {
   const cd = chartDatasets(); if (!cd) return;
   if (charts[canvasId]) charts[canvasId].destroy();
   const ctx = $(canvasId).getContext('2d');
+  const cc = chartColors();
   charts[canvasId] = new Chart(ctx, {
     type: 'line', data: cd,
     options: {
       responsive: true, interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: '#e6edf3', boxWidth: 12, font: { size: 11 } } },
+        legend: { labels: { color: cc.legend, boxWidth: 12, font: { size: 11 } } },
         tooltip: { callbacks: { label: (c) => {
           const d = DIMS[[...state.dims][c.datasetIndex]];
           return `${d.label}: ${c.parsed.y == null ? '—' : c.parsed.y.toFixed(d.dec)}${d.unit}`;
         } } },
       },
       scales: {
-        x: { ticks: { color: '#8b949e', maxTicksLimit: 8 }, grid: { color: '#1c2330' } },
-        y: { ticks: { color: '#fb8500' }, grid: { color: '#1c2330' }, title: { display: true, text: '气温/体感 ℃', color: '#fb8500', font: { size: 10 } } },
-        y1: { position: 'right', ticks: { color: '#8b949e' }, grid: { drawOnChartArea: false }, title: { display: true, text: '强度/百分比/指数', color: '#8b949e', font: { size: 10 } } },
+        x: { ticks: { color: cc.tick, maxTicksLimit: 8 }, grid: { color: cc.grid } },
+        y: { ticks: { color: cc.yTitle }, grid: { color: cc.grid }, title: { display: true, text: '气温/体感 ℃', color: cc.yTitle, font: { size: 10 } } },
+        y1: { position: 'right', ticks: { color: cc.y1Title }, grid: { drawOnChartArea: false }, title: { display: true, text: '强度/百分比/指数', color: cc.y1Title, font: { size: 10 } } },
       },
     },
   });
@@ -835,6 +875,8 @@ document.querySelectorAll('.panel').forEach(p => {
   });
 });
 
+$('themeBtn').onclick = toggleTheme;
+applyTheme(theme);
 AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
 load().then(() => renderChartOn('hourlyChart'));

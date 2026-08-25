@@ -1,7 +1,13 @@
 :root{
   --bg:#0d1117; --bg2:#161b22; --bg3:#1c2330; --line:#2a3340;
-  --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff;
+  --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --info:#9fd3ff;
   --ok:#3fb950; --warn:#d29922; --orange:#fb8500; --red:#e5484d; --deep:#bc1a1a;
+}
+/* 浅色主题（默认深色；顶部按钮切换，localStorage 持久化） */
+[data-theme="light"]{
+  --bg:#eef1f5; --bg2:#ffffff; --bg3:#e6eaf0; --line:#d4dae2;
+  --txt:#1b2733; --muted:#5b6776; --accent:#1f6feb; --info:#0b66c3;
+  --ok:#1a7f37; --warn:#9a6700; --orange:#c2410c; --red:#cf222e; --deep:#a40e26;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
@@ -21,6 +27,17 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .sub{font-size:11px;color:var(--muted)}
 .status{display:flex;align-items:center;gap:12px}
 .badge{padding:3px 12px;border-radius:20px;font-weight:600;font-size:12px;background:var(--bg3);border:1px solid var(--line)}
+
+/* 顶部"警报 / 无警报"指示器（需求3） */
+.alert-status{padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px;white-space:nowrap;
+  border:1px solid transparent;transition:.2s}
+.alert-status.ok{background:rgba(63,185,80,.16);color:#3fb950;border-color:#3fb950}
+.alert-status.alert{background:var(--red);color:#fff;border-color:var(--deep);
+  animation:alertBlink 1s steps(1,end) infinite}
+@keyframes alertBlink{
+  0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(229,72,77,0)}
+  50%{opacity:.32;box-shadow:0 0 14px 4px rgba(229,72,77,.75)}
+}
 
 /* 告警横幅 */
 .alert-banner{margin:0;padding:8px 18px;background:var(--red);color:#fff;font-weight:600;
@@ -47,11 +64,22 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .dim-chip.on{color:#06121f;background:var(--c,#8b949e);border-color:var(--c,#8b949e);font-weight:600}
 
 /* 实时卡 */
-.realtime-body{padding:12px;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
-.rt-temp{font-size:40px;font-weight:700;line-height:1}
-.rt-icon{font-size:34px}
-.rt-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px}
-.rt-grid b{color:var(--accent);font-weight:600}
+.realtime-body{padding:12px;display:flex;flex-direction:column;gap:10px}
+.rt-head{display:flex;align-items:center;gap:12px}
+.rt-icon{font-size:40px;line-height:1}
+.rt-main{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.rt-temp{font-size:44px;font-weight:700;line-height:1;color:var(--txt)}
+.rt-temp .rt-deg{font-size:24px;font-weight:600;margin-left:1px}
+.rt-cond{font-size:14px;color:var(--muted);margin-top:3px}
+.rt-feels{margin-left:auto;text-align:right;display:flex;flex-direction:column;gap:1px}
+.rt-feels .l{font-size:11px;color:var(--muted)}
+.rt-feels b{font-size:17px;color:var(--txt);font-weight:600}
+.rt-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rt-metric{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:7px 9px;
+  display:flex;flex-direction:column;gap:2px}
+.rt-metric .l{font-size:11px;color:var(--muted)}
+.rt-metric b{font-size:15px;color:var(--accent);font-weight:600;line-height:1.1}
+.rt-metric b i{font-size:10px;font-style:normal;color:var(--muted);font-weight:400;margin-left:1px}
 
 /* 通用小卡 */
 .air-body,.marine-body,.astro-body,.glow-body,.tide-body{padding:10px 12px;display:grid;gap:6px}
@@ -79,11 +107,16 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .al-item{border-left:4px solid var(--line);padding:6px 10px;background:var(--bg3);border-radius:0 6px 6px 0}
 .al-item .h{display:flex;justify-content:space-between;font-weight:600}
 .al-item .d{font-size:11px;color:var(--muted);margin-top:2px}
-.al-item .ad{font-size:11px;color:#9fd3ff;margin-top:2px}
+.al-item .ad{font-size:11px;color:var(--info);margin-top:2px}
 
 /* 极端天气告警：左栏顶部、标题标红、可点击查看详情 */
 .alert-panel{border-color:rgba(229,72,77,.45)}
 .alert-panel .panel-h.danger-h{color:var(--red);font-weight:700}
+.alert-panel .panel-h.danger-h span:first-child{flex:1 1 auto}
+/* 告警数量：标题后直接分隔的徽标，不使用括号（需求2） */
+.alert-count{font-size:12px;font-weight:700;color:#fff;background:var(--red);
+  border-radius:12px;padding:1px 10px;min-width:22px;text-align:center;line-height:1.6}
+.alert-count.zero{color:var(--muted);background:transparent;border:1px solid var(--line)}
 .al-item{cursor:pointer;transition:.15s}
 .al-item:hover{background:rgba(88,166,255,.10)}
 
@@ -230,7 +263,7 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .cl-al{border-left:4px solid var(--line);padding:6px 10px;background:var(--bg3);border-radius:0 6px 6px 0}
 .cl-al-h{display:flex;align-items:center;gap:8px;font-size:12px}
 .cl-al-d{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
-.cl-al-ad{font-size:11px;color:#9fd3ff;margin-top:2px;line-height:1.5}
+.cl-al-ad{font-size:11px;color:var(--info);margin-top:2px;line-height:1.5}
 .cl-dyn-tip{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6;background:var(--bg3);padding:6px 10px;border-radius:6px}
 
 /* 模态框：情报/告警列表（需求3 / 需求6） */
