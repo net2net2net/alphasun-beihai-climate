@@ -104,6 +104,8 @@ jobs:
           xcodebuild -exportArchive -archivePath build/App.xcarchive -exportPath build/ipa -exportOptionsPlist ExportOptions.plist
 
       # ===== 打包未签名 IPA：供用户在 Windows 用 AltServer / Sideloadly + 免费 Apple ID 自签装机（无需 Mac / 付费）=====
+      # 关键：彻底清除所有既有签名（含嵌套 Frameworks），交给 Sideloadly 从干净状态重签，
+      # 避免「部分签名」导致 Sideloadly 报 Guru Meditation Invalid file。
       - name: Package unsigned IPA
         if: always()
         working-directory: app-android/ios/App
@@ -112,7 +114,17 @@ jobs:
           echo "App bundle: $APP"
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
-          (cd Payload/*.app && rm -f CodeResources _CodeSignature -r 2>/dev/null || true)
+          APP2="Payload/App.app"
+          # 1) 移除主程序及所有嵌套框架/动态库的签名
+          codesign --remove-signature "$APP2" 2>/dev/null || true
+          find "$APP2" -type d -name "*.framework" -exec codesign --remove-signature {} \; 2>/dev/null || true
+          find "$APP2" -type f -name "*.dylib" -exec codesign --remove-signature {} \; 2>/dev/null || true
+          # 2) 删除所有残留签名目录与描述文件
+          find "$APP2" -type d -name "_CodeSignature" -exec rm -rf {} + 2>/dev/null || true
+          find "$APP2" -type f -name "CodeResources" -delete 2>/dev/null || true
+          find "$APP2" -type f -name "embedded.mobileprovision" -delete 2>/dev/null || true
+          # 3) 打包
+          rm -f build/App.ipa
           zip -r build/App.ipa Payload
           echo "IPA size: $(du -h build/App.ipa | cut -f1)"
 
