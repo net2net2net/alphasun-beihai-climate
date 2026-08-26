@@ -12,6 +12,8 @@
 Windows exe： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/alphasun-exe-8.0.2/alphasun-beihai-climate8.0.2.exe
 
 安卓Android Apk（测试版本）： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/android-v8.0.3-debug/alphasun-beihai-climate-debug.apk
+
+IOS ipa（未签名测试版）： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/ios-v1.0.0/alphasun-ios-good.ipa
    
 ## 建设目标
 构建覆盖北海全域（海城 / 银海 / 铁山港 / 合浦 / 涠洲岛）的极端气候全景系统，实现：
