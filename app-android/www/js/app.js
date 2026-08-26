@@ -754,6 +754,7 @@ function renderLinks() {
 
 function renderEvents() {
   const e = state.data.astronomy;
+  if (!e || !e.meteors) { $('eventBody').innerHTML = '<div class="muted">天文数据暂不可用</div>'; return; }
   const lat = (selStation().lat != null) ? selStation().lat : 21.48;
   const meteors = e.meteors
     .map(m => {

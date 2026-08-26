@@ -49,8 +49,10 @@
     usgs: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson',
     firms: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv',
     nmdis: 'https://service-tide.nmdis.org.cn',
-    typhoonList: 'http://typhoon.nmc.cn/weatherservice/typhoon/jsons/list_default',
-    typhoonView: 'http://typhoon.nmc.cn/weatherservice/typhoon/jsons/view_',
+    // 必须用 HTTPS（nmc 已支持且返回 Access-Control-Allow-Origin:*）。
+    // 之前误用 http:// 明文，Android WebView 默认拦截明文流量，导致台风/区域告警在手机端取不到。
+    typhoonList: 'https://typhoon.nmc.cn/weatherservice/typhoon/jsons/list_default',
+    typhoonView: 'https://typhoon.nmc.cn/weatherservice/typhoon/jsons/view_',
     alarm: 'https://www.nmc.cn/rest/findAlarm',
   };
   const GEO = {
@@ -722,6 +724,13 @@
       }
       return { ...a, region, beihaiRelation: rel, relLabel: REL_TXT[rel] || '' };
     }).sort((a, b) => b.level - a.level);
+    // 区域告警情报（台风 + 气象预警 + 地震），供顶部"极端气候告警情报"滚动条与"北海气候解说"使用。
+    // 原 Node 后端 server.js 通过 intel.buildAlertIntel 产出，浏览器版移植时漏接，导致情报条永远空白，此处补回。
+    const alertIntel = buildAlertIntel({
+      typhoons,
+      warnings: (warnRes.status === 'fulfilled' && warnRes.value.ok) ? warnRes.value : { all: [] },
+      quakes,
+    });
     return {
       updated: new Date().toISOString(),
       center: { name: '北海', lat: 21.48, lon: 109.11 },
@@ -734,6 +743,7 @@
       typhoon: { ok: tyRes.status === 'fulfilled' && tyRes.value.ok, count: typhoons.length, typhoons },
       warnings: { ok: warnRes.status === 'fulfilled' && warnRes.value.ok, count: warningsAll.length, all: warningsAll, typhoon: [], rainstorm: [], geological: [], convective: [] },
       astronomy: astronomicalEvents(),
+      alertIntel,
       globalAlerts,
     };
   }
