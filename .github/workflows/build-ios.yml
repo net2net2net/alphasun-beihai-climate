@@ -103,6 +103,19 @@ jobs:
           EOF
           xcodebuild -exportArchive -archivePath build/App.xcarchive -exportPath build/ipa -exportOptionsPlist ExportOptions.plist
 
+      # ===== 打包未签名 IPA：供用户在 Windows 用 AltServer / Sideloadly + 免费 Apple ID 自签装机（无需 Mac / 付费）=====
+      - name: Package unsigned IPA
+        if: always()
+        working-directory: app-android/ios/App
+        run: |
+          APP=$(find build/App.xcarchive/Products/Applications -name '*.app' -maxdepth 1 | head -1)
+          echo "App bundle: $APP"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          (cd Payload/*.app && rm -f CodeResources _CodeSignature -r 2>/dev/null || true)
+          zip -r build/App.ipa Payload
+          echo "IPA size: $(du -h build/App.ipa | cut -f1)"
+
       # ===== 产物：完整 Xcode 工程（用户用自己 Apple 账号在 Xcode 签名即可装 iPhone）=====
       - name: Upload Xcode project
         if: always()
@@ -110,6 +123,15 @@ jobs:
         with:
           name: alphasun-ios-xcode-project
           path: app-android/ios
+          retention-days: 30
+
+      # ===== 产物：未签名 IPA（Windows + AltServer/Sideloadly + 免费 Apple ID 自签装机）=====
+      - name: Upload unsigned IPA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alphasun-ios-unsigned-ipa
+          path: app-android/ios/App/build/App.ipa
           retention-days: 30
 
       # ===== 产物：签名 IPA（仅当提供密钥时才有）=====
