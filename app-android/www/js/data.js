@@ -564,7 +564,7 @@
     const now = new Date();
     for (let i = 0; i < 24 * 4; i++) {
       const t = new Date(now.getTime() + i * 15 * 60000);
-      out.push({ time: t, h: tideAt(t) });
+      out.push({ time: t.toISOString(), h: tideAt(t) });
     }
     const ext = [];
     for (let i = 1; i < out.length - 1; i++) {

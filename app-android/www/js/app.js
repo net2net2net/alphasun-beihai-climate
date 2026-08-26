@@ -215,7 +215,7 @@ const DIMS = {
   aqi:       { label:'AQI',      unit:'',   color:'#e0aaff', axis:'y1', dec:0, key:'aqi' },
 };
 
-function fmt(t){ return t ? t.slice(11,16) : '—'; }
+function fmt(t){ if (t instanceof Date) t = t.toISOString(); return t ? t.slice(11,16) : '—'; }
 function $(id){ return document.getElementById(id); }
 // 渲染隔离：任一子模块渲染抛错都不影响其它模块（移动端单点数据/组件失败不再整体空白）
 function safe(fn, label){ try { (typeof fn === 'function') ? fn() : fn; } catch(e){ if (window.console) console.error('[render] ' + (label||'') + ' failed:', e); } }
