@@ -1032,6 +1032,9 @@ function closeFocus() {
   if (charts.focusChart) { try { charts.focusChart.destroy(); } catch (e) {} delete charts.focusChart; }
   $('focusModal').classList.add('hidden');
   $('focusBody').innerHTML = '';
+  // 复位放大模态的缩放变换（移动端双指/双击缩放）
+  try { const fb = $('focusBody'); if (fb) { fb.style.transform = ''; fb.style.transformOrigin = ''; } } catch (e) {}
+  try { document.dispatchEvent(new Event('focusclosed')); } catch (e) {}
   focusState = null;
 }
 function openFocus(panelId) {
@@ -1058,6 +1061,8 @@ function openFocus(panelId) {
     $('focusModal').classList.remove('hidden');
     focusState = { type: 'html' };
   }
+  // 放大模态：地图走 Leaflet 自带手势(touch-action:none)；其它内容允许纵向滚动+双指捏合(pan-y)
+  try { $('focusBody').style.touchAction = (focusState && focusState.type === 'map') ? 'none' : 'pan-y'; } catch (e) {}
 }
 $('focusClose').onclick = closeFocus;
 $('focusModal').onclick = (e) => { if (e.target === $('focusModal')) closeFocus(); };
@@ -1080,3 +1085,117 @@ AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
 startWorldClock();
 load().then(() => renderChartOn('hourlyChart'));
+
+/* ======================================================================
+   移动端增强（v8.1.0）：旋转重排 / 情报条滑动 / 下拉刷新 / 放大捏合缩放 / 底栏 / 返回键
+   全部以渐进增强方式实现：缺失插件或 API 时静默降级，绝不影响桌面与既有功能。
+   ====================================================================== */
+(function mobileEnhance(){
+  function scrollEl(){ return document.scrollingElement || document.documentElement; }
+
+  // —— 1) 旋转 / 尺寸变化：地图重算 + 图表重绘 + 情报卡重排 ——
+  let rzT = null;
+  function onViewportChange(){
+    try { AlphaMap.invalidate(); } catch (e) {}
+    try { Object.keys(charts).forEach(k => { const c = charts[k]; if (c && c.resize) c.resize(); }); } catch (e) {}
+    try { if (tk && tk.items.length) renderTicker(); } catch (e) {}
+  }
+  window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(onViewportChange, 200); });
+  window.addEventListener('orientationchange', () => { setTimeout(onViewportChange, 350); });
+
+  // —— 2) 顶部情报条：左右滑动切换 ——
+  const tkCard = document.getElementById('tickerCard');
+  if (tkCard) {
+    let sx = 0, sy = 0, sw = false;
+    tkCard.addEventListener('touchstart', e => { const t = e.changedTouches[0]; sx = t.clientX; sy = t.clientY; sw = true; }, { passive: true });
+    tkCard.addEventListener('touchend', e => {
+      if (!sw) return; sw = false;
+      const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { try { tkGo(dx < 0 ? 1 : -1); } catch (e) {} }
+    }, { passive: true });
+  }
+
+  // —— 3) 下拉刷新（仅页面置顶且非地图/弹窗内）——
+  const ptr = document.getElementById('ptr');
+  const ptrText = ptr ? ptr.querySelector('.ptr-text') : null;
+  const TH = 64;
+  let pActive = false, pStartY = 0, pPull = 0, pMoved = false;
+  function canPTR(t){
+    if (!t) return false;
+    if (scrollEl().scrollTop > 1) return false;
+    if (t.closest('#map, .modal, .alert-body, .m-list, .overlay-panel, #focusBody, .forecast-body, .ln-items, .ticker-pager')) return false;
+    return true;
+  }
+  window.addEventListener('touchstart', e => {
+    if (!canPTR(e.target)) { pActive = false; return; }
+    pActive = true; pMoved = false; pPull = 0; pStartY = e.touches[0].clientY;
+  }, { passive: true });
+  window.addEventListener('touchmove', e => {
+    if (!pActive) return;
+    const d = e.touches[0].clientY - pStartY;
+    if (d > 8 && scrollEl().scrollTop <= 0) {
+      pMoved = true; pPull = Math.min(d * 0.6, TH + 40);
+      if (ptr) { ptr.classList.add('show'); ptr.classList.toggle('armed', pPull >= TH); if (ptrText) ptrText.textContent = pPull >= TH ? '释放刷新' : '下拉刷新'; }
+      if (e.cancelable) e.preventDefault();
+    } else if (ptr) { ptr.classList.remove('show', 'armed'); }
+  }, { passive: false });
+  window.addEventListener('touchend', () => {
+    if (!pActive) return; pActive = false;
+    if (ptr) ptr.classList.remove('show', 'armed');
+    if (pMoved && pPull >= TH) {
+      if (ptr) { ptr.classList.add('loading'); if (ptrText) ptrText.textContent = '刷新中…'; }
+      load().then(() => { try { renderChartOn('hourlyChart'); } catch (e) {}; if (ptr) ptr.classList.remove('loading'); }).catch(() => { if (ptr) ptr.classList.remove('loading'); });
+    }
+  }, { passive: true });
+
+  // —— 4) 放大模态：双指捏合缩放 + 双击还原（内容放大/缩小）——
+  const fb = document.getElementById('focusBody');
+  if (fb) {
+    let pts = new Map(), s0 = 1, d0 = 0, ox = 0, oy = 0, cur = 1;
+    function apply(){ if (focusState && focusState.type === 'map') return; fb.style.transformOrigin = ox + 'px ' + oy + 'px'; fb.style.transform = 'scale(' + cur + ')'; }
+    function reset(){ cur = 1; d0 = 0; pts.clear(); fb.style.transform = ''; fb.style.transformOrigin = ''; }
+    fb.addEventListener('pointerdown', e => { pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
+    fb.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) {
+        const a = [...pts.values()][0], b = [...pts.values()][1];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (!d0) { d0 = d; s0 = cur; const r = fb.getBoundingClientRect(); ox = (a.x + b.x) / 2 - r.left; oy = (a.y + b.y) / 2 - r.top; }
+        else { cur = Math.max(1, Math.min(4, s0 * d / d0)); apply(); if (e.cancelable) e.preventDefault(); }
+      }
+    });
+    function up(e){ pts.delete(e.pointerId); if (pts.size < 2) d0 = 0; }
+    fb.addEventListener('pointerup', up);
+    fb.addEventListener('pointercancel', up);
+    fb.addEventListener('dblclick', () => { cur = cur > 1 ? 1 : 2; const r = fb.getBoundingClientRect(); ox = r.width / 2; oy = r.height / 2; apply(); });
+    document.addEventListener('focusclosed', reset);
+  }
+
+  // —— 5) 移动端底栏按钮（拇指操作区）——
+  document.querySelectorAll('#mbar [data-mbar]').forEach(b => {
+    b.addEventListener('click', () => {
+      const act = b.getAttribute('data-mbar');
+      try {
+        if (act === 'refresh') { load().then(() => renderChartOn('hourlyChart')); }
+        else if (act === 'theme') { toggleTheme(); const mi = b.querySelector('.mi'); if (mi) mi.textContent = theme === 'light' ? '🌙' : '☀'; }
+        else if (act === 'sound') { setSound(!soundOn); const mi = b.querySelector('.mi'); if (mi) mi.textContent = soundOn ? '🔊' : '🔇'; }
+        else if (act === 'top') { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      } catch (e) {}
+    });
+  });
+
+  // —— 6) 硬件返回键：优先关闭弹窗（依赖 @capacitor/app；缺失则忽略，交还系统）——
+  try {
+    const Cap = window.Capacitor;
+    const App = Cap && Cap.Plugins && Cap.Plugins.App;
+    if (App && App.addListener) {
+      App.addListener('backButton', () => {
+        const im = document.getElementById('intelModal'), fm = document.getElementById('focusModal');
+        if (im && !im.classList.contains('hidden')) { im.classList.add('hidden'); return; }
+        if (fm && !fm.classList.contains('hidden')) { closeFocus(); return; }
+      });
+    }
+  } catch (e) {}
+})();
+
