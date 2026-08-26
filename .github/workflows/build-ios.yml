@@ -1,21 +1,29 @@
 name: Build iOS
 
 on:
-  # 仅在 GitHub Actions 页面手动触发（workflow_dispatch），
-  # 避免每次 push 都消耗 macOS 构建额度；正式上架前你点一下即可运行。
+  # 手动触发：在仓库 Actions → Build iOS → Run workflow 点击即可。
+  # （不挂到 push，避免每次提交都消耗 macOS 构建额度）
   workflow_dispatch:
+  # 如需 push main 自动构建，取消下面注释：
+  # push:
+  #   branches: [ main ]
+
+permissions:
+  contents: read
 
 jobs:
   build-ios:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # iOS 原生工程依赖 CocoaPods
+      # iOS 原生工程依赖 CocoaPods（macOS 跑卡机自带，缺失则装）
       - name: Ensure CocoaPods
         run: which pod || sudo gem install cocoapods
 
@@ -23,30 +31,84 @@ jobs:
         working-directory: app-android
         run: npm install
 
+      # 生成 iOS 原生工程（首次会执行 pod install）
       - name: Add iOS platform
         working-directory: app-android
-        run: npx cap add ios
+        run: npx cap add ios || true
 
+      # 把最新前端资源同步进 iOS 工程
       - name: Sync web assets into iOS project
         working-directory: app-android
         run: npx cap sync ios
 
-      # 免签构建（仅产出未签名 App，用于验证工程可编译）。
-      # 如需签出可安装/上架的 IPA，请在仓库 Secrets 配置：
-      #   APPLE_CERT_P12, APPLE_CERT_PASSWORD, APPLE_PROVISIONING_PROFILE, APPLE_TEAM_ID
-      # 并改用：
-      #   xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
-      #     -archivePath build/App.xcarchive archive \
-      #     CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="iPhone Distribution" \
-      #     PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
-      - name: Build (unsigned)
-        working-directory: app-android/ios/App
-        run: xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO
-        continue-on-error: true
+      # ===== 若提供签名密钥（仓库 Secrets），则导入并手动签名 =====
+      - name: Decode & install signing cert + profile
+        if: ${{ secrets.APPLE_CERT_P12 != '' }}
+        env:
+          P12: ${{ secrets.APPLE_CERT_P12 }}
+          P12_PWD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          echo "$P12"    | base64 --decode > cert.p12
+          echo "$PROFILE" | base64 --decode > profile.mobileprovision
+          security create-keychain -p "temp" build.keychain
+          security import cert.p12 -k build.keychain -P "$P12_PWD" -T /usr/bin/codesign
+          security list-keychains -d user -s build.keychain login.keychain
+          security unlock-keychain -p "temp" build.keychain
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp profile.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
-      - name: Upload unsigned build
+      # ===== 归档：有密钥→签名归档；无密钥→免签归档（仍产出完整工程）=====
+      - name: Archive (signed)
+        if: ${{ secrets.APPLE_CERT_P12 != '' }}
+        working-directory: app-android/ios/App
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_NAME: ${{ secrets.APPLE_PROVISIONING_NAME }}
+        run: xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/App.xcarchive archive CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="iPhone Distribution" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" DEVELOPMENT_TEAM="$TEAM"
+
+      - name: Archive (unsigned)
+        if: ${{ secrets.APPLE_CERT_P12 == '' }}
+        working-directory: app-android/ios/App
+        run: xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/App.xcarchive archive CODE_SIGNING_ALLOWED=NO
+
+      # ===== 有密钥则导出可安装 IPA（method 由 APPLE_EXPORT_METHOD 决定：app-store / ad-hoc / development）=====
+      - name: Export IPA (signed)
+        if: ${{ secrets.APPLE_CERT_P12 != '' }}
+        working-directory: app-android/ios/App
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_NAME: ${{ secrets.APPLE_PROVISIONING_NAME }}
+          METHOD: ${{ secrets.APPLE_EXPORT_METHOD }}
+        run: |
+          cat > ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>$METHOD</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict>
+              <key>net.net2net.alphasun</key><string>$PROFILE_NAME</string>
+            </dict>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/App.xcarchive -exportPath build/ipa -exportOptionsPlist ExportOptions.plist
+
+      # ===== 产物：完整 Xcode 工程（用户用自己 Apple 账号在 Xcode 签名即可装 iPhone）=====
+      - name: Upload Xcode project
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: alphasun-ios-build
-          path: app-android/ios/App/build/**
+          name: alphasun-ios-xcode-project
+          path: app-android/ios
+          retention-days: 30
+
+      # ===== 产物：签名 IPA（仅当提供密钥时才有）=====
+      - name: Upload signed IPA
+        if: ${{ secrets.APPLE_CERT_P12 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: alphasun-ios-ipa
+          path: app-android/ios/App/build/ipa/*.ipa
+          retention-days: 30
