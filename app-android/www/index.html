@@ -13,7 +13,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>AlphaSun · 北海极端气候全景系统</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="vendor/leaflet.css"/>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -189,6 +189,12 @@
 <footer class="foot">
   数据源：Open-Meteo（气象/空气/海洋/洪水/气候）· USGS（地震）· NASA FIRMS（火点，需KEY）· 国家海洋信息中心（潮汐，需凭证）｜ 演示底图 高德(Amap, GCJ-02 纠偏)｜ 作者：阳光 net2net2net（ Vx: net2net ）
 </footer>
+
+<!-- 数据自检面板：展示各数据源成功/失败与请求通道，便于在 iOS 设备上确认修复与排查残留问题 -->
+<details class="diag-panel" id="diagPanel">
+  <summary>🔧 数据自检 <span class="muted" style="font-weight:400;font-size:11px">（点开排查数据源）</span></summary>
+  <div id="diagBody" class="diag-body">加载中…</div>
+</details>
 
 <script src="vendor/leaflet.js"></script>
 <script>window.L||document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');</script>

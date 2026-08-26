@@ -270,6 +270,20 @@ function render() {
   safe(() => AlphaMap.setData(d), 'mapSetData'); safe(() => AlphaMap.legend($('mapLegend')), 'mapLegend');
   safe(renderChart, 'chart'); // 初始也绘制 24h 曲线，修复面板长期空白
   safe(renderGlobalLevelAlert, 'globalLevel');
+  safe(renderDiag, 'diag');
+}
+
+// 数据自检面板：依据 data.js buildOverview 返回的 diag 数组渲染每个数据源状态
+function renderDiag() {
+  const el = $('diagBody'); if (!el) return;
+  const d = state.data;
+  if (!d || !d.diag || !d.diag.length) { el.innerHTML = '<div class="muted">暂无诊断信息</div>'; return; }
+  el.innerHTML = d.diag.map(x => {
+    const cls = x.info ? 'info' : (x.ok ? 'ok' : 'err');
+    const icon = x.info ? 'ℹ️' : (x.ok ? '✅' : '❌');
+    return `<div class="diag-row ${cls}"><span class="diag-ico">${icon}</span>` +
+      `<span class="diag-name">${x.name}</span><span class="diag-detail">${x.detail || ''}</span></div>`;
+  }).join('');
 }
 
 function renderChartDims() {

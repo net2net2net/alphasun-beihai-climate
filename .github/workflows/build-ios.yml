@@ -41,6 +41,20 @@ jobs:
         working-directory: app-android
         run: npx cap sync ios
 
+      # 注入 ATS 放行（双保险）：所有数据源均为 HTTPS，ATS 本不应拦截；
+      # 此为边缘情况保险，避免任何非预期明文/重定向被 WKWebView 拒绝导致模块无数据。
+      # 同时确保所有 fetch 走 CapacitorHttp 原生 HTTP（见 capacitor.config.ts plugins.CapacitorHttp）。
+      - name: Inject ATS exception (allow arbitrary loads)
+        working-directory: app-android
+        run: |
+          PLIST=$(find ios/App -name "Info.plist" -path "*/App/*" | head -1)
+          if [ -z "$PLIST" ]; then echo "Info.plist not found, skip"; exit 0; fi
+          echo "Target Info.plist: $PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$PLIST" 2>/dev/null || true
+          echo "ATS injected:"
+          /usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity" "$PLIST" 2>/dev/null || true
+
       # 检测是否配置了签名密钥（step 的 if 不能直接读 secrets，故用输出传递）
       - name: Check signing secrets
         id: signcheck

@@ -507,4 +507,19 @@ img,a{ -webkit-touch-callout:none; }
 .mbar button .mi{ font-size:19px; line-height:1; }
 .mbar button:active{ border-color:var(--accent); background:rgba(88,166,255,.14); }
 
+/* 数据自检面板 */
+.diag-panel{margin:10px 14px 18px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.diag-panel>summary{cursor:pointer;padding:9px 14px;font-weight:600;font-size:13px;background:linear-gradient(90deg,#111827,#0d1117);border-bottom:1px solid var(--line);list-style:none}
+.diag-panel>summary::-webkit-details-marker{display:none}
+.diag-panel>summary::before{content:"▶";display:inline-block;margin-right:8px;font-size:10px;color:var(--muted);transition:transform .15s}
+.diag-panel[open]>summary::before{transform:rotate(90deg)}
+.diag-body{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.diag-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 8px;border-radius:6px;background:var(--bg3);border:1px solid var(--line)}
+.diag-row.ok{border-left:3px solid var(--ok)}
+.diag-row.err{border-left:3px solid var(--red);background:rgba(229,72,77,.10)}
+.diag-row.info{border-left:3px solid var(--accent)}
+.diag-ico{flex:0 0 auto}
+.diag-name{flex:0 0 210px;font-weight:600}
+.diag-detail{color:var(--muted);flex:1;word-break:break-all}
+@media (max-width:560px){.diag-name{flex-basis:auto}}
 

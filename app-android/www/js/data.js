@@ -16,6 +16,69 @@
   // 通过可选 CORS 代理转发（仅当配置了 proxy 时；用于 nmc 等跨域受限源）
   function proxied(u) { return PROXY ? PROXY + encodeURIComponent(u) : u; }
 
+  // ===================== 原生 HTTP（绕过 WKWebView CORS）=====================
+  // 在 Capacitor 原生壳内（iOS/Android），优先用 Capacitor.Http（原生 NSURLSession /
+  // HttpURLConnection）发请求，彻底绕过浏览器 CORS。需 capacitor.config 中启用
+  // plugins.CapacitorHttp.enabled=true。Web / PWA 环境无原生桥，回退到标准 fetch。
+  const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  function getCapHttp() {
+    try {
+      if (typeof window === 'undefined' || !window.Capacitor) return null;
+      if (window.CapacitorHttp) return window.CapacitorHttp;
+      if (window.Capacitor.Http) return window.Capacitor.Http;
+      if (window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp) return window.Capacitor.Plugins.CapacitorHttp;
+    } catch (e) {}
+    return null;
+  }
+  const CapHttp = IS_NATIVE ? getCapHttp() : null;
+
+  // 原生 GET → 解析后的对象（JSON 自动解析；若返回字符串则原样返回待后续解析）
+  async function httpGetParsed(url, timeout = 15000) {
+    if (CapHttp) {
+      const resp = await CapHttp.get({
+        url: proxied(url),
+        headers: { 'Accept': 'application/json, text/plain, */*' },
+        connectTimeout: timeout,
+        readTimeout: timeout,
+      });
+      if (!resp || resp.status == null || resp.status < 200 || resp.status >= 300) {
+        throw new Error('HTTP ' + (resp && resp.status != null ? resp.status : 'no-response'));
+      }
+      let body = resp.data;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch (_) {} }
+      return body;
+    }
+    // Web / PWA 回退：标准 fetch
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeout);
+    const r = await fetch(proxied(url), { signal: ctrl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    clearTimeout(t);
+    return r.json();
+  }
+  // 原生 GET → 文本（用于 JSONP / 非 JSON 响应）
+  async function httpGetText(url, timeout = 15000) {
+    if (CapHttp) {
+      const resp = await CapHttp.get({
+        url: proxied(url),
+        headers: { 'Accept': 'application/javascript, text/plain, */*' },
+        connectTimeout: timeout,
+        readTimeout: timeout,
+        responseType: 'text',
+      });
+      if (!resp || resp.status == null || resp.status < 200 || resp.status >= 300) {
+        throw new Error('HTTP ' + (resp && resp.status != null ? resp.status : 'no-response'));
+      }
+      return typeof resp.data === 'string' ? resp.data : String(resp.data);
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeout);
+    const r = await fetch(proxied(url), { signal: ctrl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    clearTimeout(t);
+    return r.text();
+  }
+
   // ===================== 配置中心 =====================
   const STATIONS = [
     { id: 'beihai',   name: '北海市区', lat: 21.48, lon: 109.11, kind: 'main',   desc: '主城区·海城区',
@@ -373,11 +436,7 @@
 
   // ===================== 数据源适配层 =====================
   function fetchJSON(url, timeout = 15000) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeout);
-    return fetch(proxied(url), { signal: ctrl.signal })
-      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .finally(() => clearTimeout(t));
+    return httpGetParsed(url, timeout);
   }
   function parseJSONP(text) {
     const m = text.match(/^\s*[\w$]+\s*\(+\s*([\s\S]*?)\s*\)+\s*;?\s*$/);
@@ -385,12 +444,7 @@
     return JSON.parse(m[1]);
   }
   function fetchJSONP(url, timeout = 15000) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeout);
-    return fetch(proxied(url), { signal: ctrl.signal })
-      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(parseJSONP)
-      .finally(() => clearTimeout(t));
+    return httpGetText(url, timeout).then(parseJSONP);
   }
   function geoFromTitle(title) {
     if (!title) return null;
@@ -731,7 +785,57 @@
       warnings: (warnRes.status === 'fulfilled' && warnRes.value.ok) ? warnRes.value : { all: [] },
       quakes,
     });
+    // ===================== 数据自检（diagnostics）=====================
+    // 供屏上「数据自检」面板展示每个数据源的成功/失败，便于在 iOS 设备上确认
+    // CapacitorHttp 原生 HTTP 修复是否生效，以及快速定位残留问题。
+    const diag = [];
+    const stationAgg = stationsAgg.status === 'fulfilled' ? stationsAgg.value : [];
+    const sx = stationAgg.filter(s => s.weather && s.weather.ok).length;
+    const sa = stationAgg.filter(s => s.air && s.air.ok).length;
+    const sm = stationAgg.filter(s => s.marine && s.marine.ok).length;
+    const sf = stationAgg.filter(s => s.flood && s.flood.ok).length;
+    diag.push({
+      name: 'Open-Meteo 站点(实时/空气/海洋/洪水)',
+      ok: sx > 0,
+      detail: `实时 ${sx}/${stationAgg.length} · 空气 ${sa} · 海洋 ${sm} · 洪水 ${sf}`,
+    });
+    diag.push({
+      name: '潮汐/水位',
+      ok: tideRes.status === 'fulfilled',
+      detail: tideRes.status === 'fulfilled' ? `载入 ${tideList.length} 站` : String(tideRes.reason && (tideRes.reason.message || tideRes.reason)),
+    });
+    const quakeOk = quakeRes.status === 'fulfilled' && quakeRes.value.ok;
+    diag.push({
+      name: '地震 (USGS)',
+      ok: quakeOk,
+      detail: quakeRes.status === 'fulfilled' ? (quakeOk ? `事件 ${quakes.length}` : (quakeRes.value.error || '返回失败')) : String(quakeRes.reason && (quakeRes.reason.message || quakeRes.reason)),
+    });
+    let fireDetail;
+    if (fireRes.status !== 'fulfilled') fireDetail = String(fireRes.reason && (fireRes.reason.message || fireRes.reason));
+    else if (!fireRes.value.configured) fireDetail = '未配置 FIRMS_KEY（预期跳过）';
+    else if (fireRes.value.ok) fireDetail = `火点 ${fires.length}`;
+    else fireDetail = (fireRes.value.error || '返回失败');
+    diag.push({ name: '野火 (NASA FIRMS)', ok: fireRes.status === 'fulfilled', detail: fireDetail });
+    const tyOk = tyRes.status === 'fulfilled' && tyRes.value.ok;
+    diag.push({
+      name: '台风 (中央气象台)',
+      ok: tyOk,
+      detail: tyRes.status === 'fulfilled' ? (tyOk ? `活跃 ${typhoons.length}` : (tyRes.value.error || '返回失败')) : String(tyRes.reason && (tyRes.reason.message || tyRes.reason)),
+    });
+    const warnOk = warnRes.status === 'fulfilled' && warnRes.value.ok;
+    diag.push({
+      name: '预警 (中央气象台)',
+      ok: warnOk,
+      detail: warnRes.status === 'fulfilled' ? (warnOk ? `预警 ${warningsAll.length}` : (warnRes.value.error || '返回失败')) : String(warnRes.reason && (warnRes.reason.message || warnRes.reason)),
+    });
+    // WebView 来源与请求通道：iOS 源固定为 capacitor://localhost（无法改 https），
+    // 但启用 CapacitorHttp 后 fetch 走原生 HTTP，不再受 CORS 限制。
+    const origin = (typeof window !== 'undefined' && window.location) ? (window.location.protocol + '//' + window.location.host) : 'unknown';
+    const transport = (IS_NATIVE && CapHttp) ? '原生 HTTP (CapacitorHttp)' : (IS_NATIVE ? '原生壳(未启用CapacitorHttp)' : 'WebView fetch (Web/PWA)');
+    diag.push({ name: '请求通道', ok: true, info: true, detail: transport + ' ｜ 源 ' + origin });
+
     return {
+      diag,
       updated: new Date().toISOString(),
       center: { name: '北海', lat: 21.48, lon: 109.11 },
       maxLevel: globalAlerts.reduce((m, x) => Math.max(m, x.level), 0),
