@@ -1,0 +1,17 @@
+{
+  "name": "AlphaSun 北海气候",
+  "short_name": "北海气候",
+  "description": "北海极端气候全景：极端气候告警情报、台风、预警、海洋、潮汐、天文景观与周期预报",
+  "lang": "zh-CN",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#042C53",
+  "theme_color": "#0C447C",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

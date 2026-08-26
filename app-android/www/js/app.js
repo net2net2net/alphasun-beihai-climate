@@ -1086,6 +1086,15 @@ AlphaMap.buildOverlayUI($('overlayPanel'));
 startWorldClock();
 load().then(() => renderChartOn('hourlyChart'));
 
+// PWA：仅在浏览器环境注册 Service Worker（Capacitor 原生壳内跳过，避免冲突）
+if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+}
+
 /* ======================================================================
    移动端增强（v8.1.0）：旋转重排 / 情报条滑动 / 下拉刷新 / 放大捏合缩放 / 底栏 / 返回键
    全部以渐进增强方式实现：缺失插件或 API 时静默降级，绝不影响桌面与既有功能。
