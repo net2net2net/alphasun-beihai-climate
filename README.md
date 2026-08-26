@@ -86,7 +86,8 @@ npm run build:exe             # 输出 app/dist/AlphaSun.exe
 - **降级项**：中央气象台卫星/雷达产品图在手机端无法跨域抓取，地图叠加层提示「点 ↗ 看官方原图」；野火 / 潮汐缺省降级（可在 `www/index.html` 填 key 增强）
 - **获取安卓 APK（无需本机装 Android Studio）**：仓库内置 GitHub Actions 工作流，推送到 `main` 后自动在云端编译出 APK 并作为构建产物提供下载。步骤：进入 [Actions](https://github.com/net2net2net/alphasun-beihai-climate/actions) → 找 **Build Android APK** 运行 → 下载 Artifact `alphasun-beihai-apk` → 解压 `app-debug.apk` 安装。未自动触发时可手动 **Run workflow**。
 - **本机构建（安卓）**：装 Android Studio + Node 18+ 后，`cd app-android && npm install && npx cap add android && npx cap build android` 生成 APK（详见 [app-android/README.md](app-android/README.md)）。
-- **本机构建（iOS，需 Mac + Xcode）**：`cd app-android && npm install && npx cap add ios && npx cap open ios`，Xcode 中 Run / Archive。
+- **iOS（无需 Mac，推荐）**：仓库内置 `build-ios.yml` 工作流在 GitHub 云端产出**未签名 IPA**，拿到后用 **Sideloadly + 免费 Apple ID** 自签装 iPad/iPhone。步骤：Actions → **Build iOS** → Run workflow → 下载 Artifact `alphasun-ios-unsigned-ipa` → Sideloadly 重签安装（详见 [app-android/docs/iOS-Sideload-Guide.md](app-android/docs/iOS-Sideload-Guide.md)）。
+- **本机构建（iOS，需 Mac + Xcode）**：`cd app-android && npm install && npx cap add ios && npx cap open ios`，Xcode 中 Run / Archive（详见 [app-android/README.md](app-android/README.md)）。
 
 ## 说明
 - 部分中央气象台产品页为 JS 动态渲染，叠加失败时保留官方原图链接（不伪造坏图）。
