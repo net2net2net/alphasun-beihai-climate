@@ -2,6 +2,7 @@ name: Build Android APK
 
 # 在 GitHub 云端构建真实可安装的 APK，免去本机安装 Android Studio。
 # 触发：推送到 main（含 app-android/ 或本文件改动），或手动 Run workflow。
+# 构建完成后自动把 APK 提交回仓库 downloads/ 目录（实现 "CI 自动写 downloads"）。
 on:
   push:
     branches: [main]
@@ -9,6 +10,10 @@ on:
       - 'app-android/**'
       - '.github/workflows/build-android.yml'
   workflow_dispatch:
+
+# 允许工作流把构建产物提交回仓库
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -20,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -59,3 +66,18 @@ jobs:
           name: alphasun-beihai-apk
           path: app-android/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # 构建产物写回仓库 downloads/，使 "CI 自动写 downloads" 成立。
+      # 注意：本步骤仅改动 downloads/，不命中 paths 触发器，不会产生构建循环。
+      - name: Publish APK to downloads/
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate-debug.apk"
+          cd "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloads/alphasun-beihai-climate-debug.apk
+          git commit -m "ci: 自动发布 APK v8.0.5 至 downloads（含江河/水库模块）" || echo "no changes"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          git push origin HEAD:refs/heads/main
