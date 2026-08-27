@@ -262,6 +262,13 @@ const testSrc = `
     };
   } catch (e) { globalThis.__algo = { err: String(e) }; }
   try { var dq = document.getElementById('dqChip'); if (dq.onclick) dq.onclick(); globalThis.__dqClick = 'ok'; } catch (e) { globalThis.__dqClick = 'ERR ' + e.message; }
+  try {
+    if (state.data.globalAlerts[0]) openAlertModal(state.data.globalAlerts[0]);
+    openBeihaiModal();
+    openAllIntelModal();
+    var lb3 = document.getElementById('locAlertBtn'); if (lb3 && lb3.onclick) lb3.onclick();
+    globalThis.__modalOk = 'ok';
+  } catch (e) { globalThis.__modalOk = 'ERR ' + e.message; }
 })();
 `;
 try {
@@ -288,6 +295,7 @@ function runAssertions() {
   const dqText = (els['dqChip'] && els['dqChip'].textContent) || '';
   ok(dqText.indexOf('数据可信度') >= 0, '顶部 #dqChip 已渲染数据可信度（' + dqText + '）');
   ok(ctx.__dqClick === 'ok', '点击 #dqChip 跳转逻辑不抛错（' + (ctx.__dqClick || '?') + '）');
+  ok(ctx.__modalOk === 'ok', '告警模态 + 定位联动不抛错（' + (ctx.__modalOk || '?') + '）');
 
   const updated = (els['updated'] && els['updated'].textContent) || '';
   ok(updated.indexOf('更新于') >= 0, '顶部更新时间已渲染（' + updated + '）');

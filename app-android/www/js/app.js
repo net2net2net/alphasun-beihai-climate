@@ -1139,6 +1139,23 @@ function openIntelModal(it) {
   $('intelModal').classList.remove('hidden');
 }
 
+// 告警 → 实时天气 / 地图 跨模块定位（模块联动 / 数据共享）：切换监测站 + 滚动并高亮实时卡 + 聚焦地图
+function locateAlert(a) {
+  if (!a) return;
+  const stationOf = { '北海': 'beihai', '广西': 'beihai' };
+  let sid = stationOf[a.region];
+  if (!sid && a.station) { const s = state.data.stations.find(x => x.id === a.station || x.name === a.station); if (s) sid = s.id; }
+  if (!sid) sid = state.sel || (state.data.stations[0] && state.data.stations[0].id);
+  if (sid && state.sel !== sid) {
+    state.sel = sid;
+    renderRealtime(); renderAir(); renderMarine(); renderAstro(); renderGlow(); renderMorningGlow();
+    renderForecast7(); renderForecast15(); renderChart();
+  }
+  const rt = document.getElementById('realtimeCard');
+  if (rt) { rt.scrollIntoView({ behavior: 'smooth', block: 'center' }); rt.classList.add('flash'); setTimeout(() => rt.classList.remove('flash'), 1200); }
+  const mp = document.getElementById('mapPanel'); if (mp) mp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 // 活跃告警（globalAlerts）详情弹窗：与情报弹窗共用容器
 function openAlertModal(a) {
   const body = $('modalBody');
@@ -1164,7 +1181,8 @@ function openAlertModal(a) {
       <div><span class="muted">坐标</span><b>${coordTxt}</b></div>
     </div>
     ${a.advice ? `<div class="m-advice"><b>处置建议：</b>${a.advice}</div>` : ''}
-  `;
+    <div style="margin-top:10px"><button id="locAlertBtn" class="m-link" style="cursor:pointer;border:1px solid var(--accent);border-radius:8px;padding:6px 12px;background:rgba(88,166,255,.10)">📍 在实时天气 / 地图中定位</button></div>`;
+  const lb = document.getElementById('locAlertBtn'); if (lb) lb.onclick = () => locateAlert(a);
   $('intelModal').classList.remove('hidden');
 }
 // 顶部"极端气候告警情报"标签 → 全部情报弹窗（需求3）
@@ -1235,6 +1253,8 @@ function openBeihaiModal() {
     const a = bh[+r.dataset.i];
     r.onclick = () => { if (a) openAlertModal(a); };
   });
+  if (bh.length) body.innerHTML += '<div style="margin-top:10px"><button id="locBeihaiBtn" class="m-link" style="cursor:pointer;border:1px solid var(--accent);border-radius:8px;padding:6px 12px;background:rgba(88,166,255,.10)">📍 在实时天气 / 地图中定位（涉北海）</button></div>';
+  const lbb = document.getElementById('locBeihaiBtn'); if (lbb) lbb.onclick = () => locateAlert(bh[0]);
   $('intelModal').classList.remove('hidden');
 }
 
