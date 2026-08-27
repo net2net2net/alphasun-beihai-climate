@@ -128,7 +128,7 @@ function parseAlertTime(t) {
 // 实况修正：优先采用可达的权威实况源（CMA 官方 > wttr.in 独立第三方），如实反映当前强度
 // （如暴雨减弱为零星小雨）；预警仍生效时在「实时天气」顶部以淡红标注，但不强行覆盖实况强度。
 // 仅当所有实况源均不可达、且北海暴雨/强对流预警生效时，才以预警类别预估实况（标注「预估」）。
-function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes) {
+function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes) {
   const cma = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : null;
   const cmaOk = !!(cma && cma.ok && cma.current);
   const wttr = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : null;
@@ -182,8 +182,9 @@ async function buildOverview() {
     src.fetchRiverReservoir().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchCmaLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchWttrLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchCaiyunLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -195,11 +196,12 @@ async function buildOverview() {
   const primaryAgg = (stationsAgg.status === 'fulfilled') ? stationsAgg.value[0] : null;
   const cmaVal = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : cmaRes;
   const wttrVal = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : wttrRes;
+  const caiyunVal = (caiyunRes && caiyunRes.status === 'fulfilled') ? caiyunRes.value : caiyunRes;
   const warnCtx = [
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.rainstorm) ? warnRes.value.rainstorm : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.convective) ? warnRes.value.convective : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
   ];
-  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal }, warnCtx);
+  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal }, warnCtx);
   persistRealtimeCheck(realtimeCheck);
   const quakes = quakeRes.status === 'fulfilled' && quakeRes.value.ok ? quakeRes.value.events : [];
   const fires = fireRes.status === 'fulfilled' && fireRes.value.ok ? fireRes.value.fires : [];
@@ -234,7 +236,7 @@ async function buildOverview() {
   });
   const maxLevel = globalAlerts.reduce((m, x) => Math.max(m, x.level), 0);
   const alertIntel = intel.buildAlertIntel({ typhoons, warnings: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value : { all: [] }, quakes });
-  applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes);
+  applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes);
   return {
     updated: new Date().toISOString(),
     center: { name: '北海', lat: 21.48, lon: 109.11 },

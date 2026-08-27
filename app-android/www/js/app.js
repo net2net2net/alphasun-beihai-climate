@@ -356,7 +356,7 @@ function renderRealtime() {
     <div class="rt-trend">${trend}</div>`;
 }
 
-// 多源实况校核面板：展示 CMA / Open-Meteo / wttr.in 三源读数与综合判定（inline 样式自包含）
+// 多源实况校核面板：展示 Open-Meteo / 中国天气网(CMA·和风) / wttr.in / 彩云天气 多源读数与综合判定（inline 样式自包含）
 function catLabelZh(cat) {
   return ({ rain: '降雨', storm: '雷暴', snow: '降雪', fog: '雾', clear: '晴', cloud: '多云', other: '其他' })[cat] || '其他';
 }
@@ -372,7 +372,7 @@ function renderRealtimeCheck() {
       <span style="flex:0 0 96px;color:${s.ok ? 'var(--info)' : 'var(--muted)'}">${s.label}</span>
       <span style="flex:1">${s.ok
         ? `${s.temp.toFixed(1)}℃ · ${s.text}${s.precip > 0.1 ? ' · 💧' + s.precip.toFixed(1) + 'mm' : ''}`
-        : '<span style="color:#e5484d">✗ 不可达</span>'}</span>
+        : (s.skipped ? '<span style="color:var(--muted)">未配置·可选</span>' : '<span style="color:#e5484d">✗ 不可达</span>')}</span>
       <span style="flex:0 0 48px;text-align:right;color:var(--muted);font-size:11px">${s.ok ? catLabelZh(s.category) : ''}</span>
     </div>`).join('');
   const cons = rc.consensus
