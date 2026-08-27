@@ -397,3 +397,25 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 #focusBody .wc-big-ms{font-size:24px}
 #focusBody .wc-zones{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 
+
+/* 农历日历模块（右侧底部） */
+.calendar-panel .calendar-body{padding:8px 10px 10px;}
+.cal-bar{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:6px;}
+.cal-title{font-weight:600;font-size:13px;min-width:96px;text-align:center;color:var(--text);}
+.cal-nav{background:var(--panel-2,#1b2030);color:var(--text);border:1px solid var(--line);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
+.cal-nav:hover{border-color:var(--accent);}
+.cal-today{width:auto;padding:0 8px;font-size:12px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-head{margin-bottom:3px;}
+.cal-w{text-align:center;font-size:10px;color:var(--muted);padding:2px 0;}
+.cal-cell{position:relative;min-height:38px;border:1px solid var(--line);border-radius:6px;padding:3px 2px;text-align:center;background:var(--panel,#11151f);}
+.cal-cell.cal-empty{background:transparent;border:none;}
+.cal-d{font-size:13px;font-weight:600;color:var(--text);}
+.cal-sub{font-size:10px;color:var(--muted);line-height:1.2;margin-top:1px;}
+.cal-weekend .cal-d,.cal-weekend .cal-sub{color:#58a6ff;}
+.cal-today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;}
+.cal-today .cal-d{color:var(--accent);}
+.cal-badge{position:absolute;top:2px;right:3px;font-size:9px;padding:0 3px;border-radius:4px;line-height:1.5;}
+.cal-badge.rest{background:rgba(229,72,77,.18);color:#ff7b82;}
+.cal-badge.work{background:rgba(210,153,34,.22);color:#ffce5a;}
+.cal-hname{font-size:9px;color:var(--muted);margin-top:1px;}

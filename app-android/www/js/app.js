@@ -197,19 +197,146 @@ function startWorldClock() {
   const btn = document.getElementById('syncBtn'); if (btn) btn.onclick = syncTime;
   if (!rafWorld) tickWorld();
 }
+
+// ===== 农历 / 节气 / 中国法定节假日（客户端计算，无需联网） =====
+const LUNAR_INFO = [0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b6a0,0x195a6,0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x055c0,0x0ab60,0x096d5,0x092e0,0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,0x14b63,0x09370,0x049f8,0x04970,0x064b0,0x168a6,0x0ea50,0x06b20,0x1a6c4,0x0aae0,0x0a2e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,0x0a6d0,0x055d4,0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,0x0a5b0,0x052b0,0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,0x054e4,0x0d160,0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252,0x0d520];
+function lYearDays(y){ let sum=348; for(let i=0x8000;i>0x8;i>>=1) sum += (LUNAR_INFO[y-1900]&i)?1:0; return sum + leapDays(y); }
+function leapDays(y){ const lm=leapMonth(y); if(lm){ return (LUNAR_INFO[y-1900]&0x10000)?30:29; } return 0; }
+function leapMonth(y){ return LUNAR_INFO[y-1900]&0xf; }
+function monthDays(y,m){ return (LUNAR_INFO[y-1900]&(0x10000>>m))?30:29; }
+function solar2lunar(y,m,d){
+  const baseDate = new Date(1900, 0, 31);
+  const objDate = new Date(y, m-1, d);
+  let offset = Math.round((objDate - baseDate)/86400000);
+  let lunarY = 1900;
+  for(; lunarY < 2101 && offset > 0; lunarY++) offset -= lYearDays(lunarY);
+  if(offset < 0){ offset += lYearDays(lunarY-1); lunarY--; }
+  const leap = leapMonth(lunarY);
+  let month = 1, isLeap = false;
+  while(offset > 0){
+    if(!isLeap && leap > 0 && month === leap){
+      offset -= leapDays(lunarY);
+      isLeap = true;
+      if(offset <= 0) break;
+      continue;
+    }
+    if(offset > monthDays(lunarY, month)){ offset -= monthDays(lunarY, month); if(isLeap) isLeap = false; month++; }
+    else break;
+  }
+  return { lYear:lunarY, lMonth:month, lDay:offset + 1, isLeap };
+}
+const CN_MONTH=['正','二','三','四','五','六','七','八','九','十','冬','腊'];
+const CN_DAY=['初一','初二','初三','初四','初五','初六','初七','初八','初九','初十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十','廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
+function lunarDate(y,m,d){
+  const s=solar2lunar(y,m,d);
+  const gz=['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+  const dz=['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+  const sx=['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
+  const g=i=>((s.lYear-4)%10+10)%10, j=i=>((s.lYear-4)%12+12)%12;
+  return { monthCn: CN_MONTH[s.lMonth-1], dayCn: CN_DAY[s.lDay-1], leap: s.isLeap,
+    ganzhi: gz[g(0)]+dz[j(0)], zodiac: sx[j(0)] };
+}
+// 二十四节气
+const TERM_NAME=['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
+const TERM_INFO=[0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+function solarTermDay(y,n){ const off=new Date((31556925974.7*(y-1900)+TERM_INFO[n]*60000)+Date.UTC(1900,0,6,2,5)); return off.getUTCDate(); }
+function getTerm(y,m,d){ const i=(m-1)*2; if(d===solarTermDay(y,i)) return TERM_NAME[i]; if(d===solarTermDay(y,i+1)) return TERM_NAME[i+1]; return ''; }
+// 中国法定节假日（2025-2026 依据国务院办公厅通知；2027 待公布，仅显示周末）
+const HOLIDAY_RAW = {
+  '2025': [
+    ['01-01','01-01','元旦','rest'], ['01-28','02-04','春节','rest'], ['01-26','01-26','春节补班','work'],
+    ['04-04','04-06','清明','rest'], ['05-01','05-05','劳动节','rest'], ['04-27','04-27','劳动节补班','work'],
+    ['05-31','06-02','端午','rest'], ['10-01','10-08','中秋·国庆','rest'], ['09-28','09-28','中秋国庆补班','work'],
+  ],
+  '2026': [
+    ['01-01','01-03','元旦','rest'], ['01-04','01-04','元旦补班','work'],
+    ['02-15','02-23','春节','rest'], ['02-14','02-14','春节补班','work'], ['02-28','02-28','春节补班','work'],
+    ['04-04','04-06','清明','rest'], ['05-01','05-05','劳动节','rest'], ['05-09','05-09','劳动节补班','work'],
+    ['06-19','06-21','端午','rest'], ['09-25','09-27','中秋','rest'],
+    ['10-01','10-07','国庆','rest'], ['09-20','09-20','国庆补班','work'], ['10-10','10-10','国庆补班','work'],
+  ],
+};
+const HOLIDAYS = {};
+(function buildHolidays(){
+  for(const y in HOLIDAY_RAW){
+    for(const [s,e,n,t] of HOLIDAY_RAW[y]){
+      let [sm,sd]=s.split('-').map(Number), [em,ed]=e.split('-').map(Number), d=sd;
+      while(true){
+        HOLIDAYS[y+'-'+String(sm).padStart(2,'0')+'-'+String(d).padStart(2,'0')]={t,n};
+        if(sm===em && d===ed) break;
+        d++; if(d>31){ d=1; sm++; }
+      }
+    }
+  }
+})();
+function getHoliday(y,m,d){ return HOLIDAYS[y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')] || null; }
+
+// ===== 农历日历模块（右侧底部，可翻看） =====
+let calView = null;
+function renderCalendar(){
+  const el = $('calendarBody'); if(!el) return;
+  const now = new Date();
+  if(!calView) calView = { y: now.getFullYear(), m: now.getMonth()+1 };
+  const y = calView.y, m = calView.m;
+  const startW = (new Date(y, m-1, 1).getDay()+6)%7; // 周一为首列
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const wkns=['一','二','三','四','五','六','日'];
+  let html = '<div class="cal-bar">';
+  html += '<button class="cal-nav" data-cal="prev" title="上一月">‹</button>';
+  html += '<span class="cal-title">'+y+'年 '+m+'月</span>';
+  html += '<button class="cal-nav" data-cal="next" title="下一月">›</button>';
+  html += '<button class="cal-nav cal-today" data-cal="today" title="回到今天">今</button>';
+  html += '</div><div class="cal-grid cal-head">';
+  for(const w of wkns) html += '<div class="cal-w">'+w+'</div>';
+  html += '</div><div class="cal-grid">';
+  for(let i=0;i<startW;i++) html += '<div class="cal-cell cal-empty"></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const lu = lunarDate(y,m,d), term = getTerm(y,m,d), hol = getHoliday(y,m,d);
+    const isToday = (y===now.getFullYear() && m===now.getMonth()+1 && d===now.getDate());
+    const dow = new Date(y,m-1,d).getDay();
+    const isWeekend = (dow===0||dow===6) && !(hol && hol.t==='work');
+    let cls = 'cal-cell'; if(isToday) cls += ' cal-today'; if(isWeekend) cls += ' cal-weekend';
+    const sub = term || ((lu.leap?'闰':'')+lu.monthCn+lu.dayCn);
+    html += '<div class="'+cls+'"><div class="cal-d">'+d+'</div><div class="cal-sub">'+sub+'</div>';
+    if(hol) html += '<span class="cal-badge '+(hol.t==='rest'?'rest':'work')+'">'+(hol.t==='rest'?'休':'班')+'</span><div class="cal-hname">'+hol.n+'</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+function startCalendar(){
+  const el = $('calendarBody'); if(!el) return;
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-cal]'); if(!b) return;
+    const act = b.getAttribute('data-cal');
+    if(act==='prev'){ calView.m--; if(calView.m<1){ calView.m=12; calView.y--; } }
+    else if(act==='next'){ calView.m++; if(calView.m>12){ calView.m=1; calView.y++; } }
+    else if(act==='today'){ const n=new Date(); calView={ y:n.getFullYear(), m:n.getMonth()+1 }; }
+    renderCalendar();
+  });
+  renderCalendar();
+  setInterval(renderCalendar, 60000); // 跨日自动刷新“今天”高亮
+}
+
 function startTopClock() {
   const dEl = document.getElementById('clkDate');
   const tEl = document.getElementById('clkTime');
   if (!dEl || !tEl) return;
   const pad = n => String(n).padStart(2, '0');
   const wk = ['日','一','二','三','四','五','六'];
-  function tick() {
+  let lastKey = '';
+  function frame() {
     const d = new Date();
-    dEl.textContent = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' 周' + wk[d.getDay()];
-    tEl.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    const key = d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
+    if (key !== lastKey) {
+      lastKey = key;
+      const lu = lunarDate(d.getFullYear(), d.getMonth()+1, d.getDate());
+      dEl.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 周'+wk[d.getDay()]+' · 农历'+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn;
+    }
+    tEl.textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0');
+    requestAnimationFrame(frame);
   }
-  tick();
-  setInterval(tick, 1000);
+  requestAnimationFrame(frame);
 }
 
 const LNAME = ['正常','注意','预警','警报','紧急'];
@@ -1150,4 +1277,5 @@ AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
 startWorldClock();
 startTopClock();
+startCalendar();
 load().then(() => renderChartOn('hourlyChart'));
