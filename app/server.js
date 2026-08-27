@@ -106,6 +106,46 @@ async function getClimate(s) {
   catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
 
+function parseAlertTime(t) {
+  if (!t) return 0;
+  const m = String(t).match(/(\d{4})\D(\d{2})\D(\d{2})\D(\d{2})\D(\d{2})/);
+  if (!m) return 0;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+}
+// 实况修正：优先用中国天气网站测(CMA 官方)；不可达时若北海暴雨/强对流预警生效则以预警兜底，
+// 避免 Open-Meteo 在局地强对流暴雨时漏报导致主卡片与预警自相矛盾。
+function applyRealtimeOverride(stations, alertIntel, cmaRes) {
+  const cma = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : null;
+  const cmaOk = !!(cma && cma.ok && cma.current);
+  const items = (alertIntel && alertIntel.items) || [];
+  const now = Date.now();
+  const storm = items.find(a =>
+    a.beihaiRelation === 'direct' &&
+    /暴雨|雷雨|强对流|大风/.test(a.category || '') &&
+    (a.level || 0) >= 2 &&
+    parseAlertTime(a.time) && (now - parseAlertTime(a.time)) < 6 * 3600e3
+  );
+  for (const st of stations) {
+    if (!st.weather || !st.weather.ok || !st.weather.current) continue;
+    const cur = st.weather.current;
+    if (cmaOk) {
+      const cc = cma.current;
+      Object.assign(cur, {
+        temp: cc.temp, feels: cc.feels, rh: cc.rh, precip: cc.precip,
+        code: cc.code, text: cc.text, icon: cc.icon, wind: cc.wind, windDir: cc.windDir,
+        source: 'cma', realtimeSource: '中国天气网实况',
+      });
+    } else if (storm) {
+      cur.code = 95;
+      cur.text = (storm.category || '暴雨').replace('·汛情', '');
+      cur.icon = 'storm';
+      cur.source = 'warning-override';
+      cur.realtimeSource = '预警优先·实况以气象台预警为准';
+      cur.warningOverride = { title: storm.title, level: storm.levelName, time: storm.time };
+    }
+  }
+}
+
 async function buildOverview() {
   const results = await Promise.allSettled([
     Promise.all(STATIONS.map(s => src.aggregateStation(s))),
@@ -115,8 +155,9 @@ async function buildOverview() {
     src.fetchTyphoon().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchWarnings().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchRiverReservoir().catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchCmaLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -151,6 +192,7 @@ async function buildOverview() {
   }).sort((a, b) => b.level - a.level);
   const maxLevel = globalAlerts.reduce((m, x) => Math.max(m, x.level), 0);
   const alertIntel = intel.buildAlertIntel({ typhoons, warnings: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value : { all: [] }, quakes });
+  applyRealtimeOverride(stations, alertIntel, cmaRes);
   return {
     updated: new Date().toISOString(),
     center: { name: '北海', lat: 21.48, lon: 109.11 },

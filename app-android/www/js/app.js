@@ -316,6 +316,7 @@ function renderRealtime() {
         <div class="rt-cond">${c.text}</div>
       </div>
       <div class="rt-feels"><span class="l">体感</span><b>${c.feels.toFixed(1)}℃</b></div>
+      ${c.realtimeSource ? `<div class="rt-src">📡 ${c.realtimeSource}</div>` : ''}
     </div>
     <div class="rt-band">
       <div class="rt-grp rt-grp-weather">
