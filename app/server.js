@@ -226,11 +226,11 @@ async function buildOverview() {
     }
     return { ...a, region, beihaiRelation: rel, relLabel: REL_TXT[rel] || '' };
   }).sort((a, b) => {
-    // 优先 北海(涉北海) -> 广西 -> 其他（广西之外）；同级按级别、再时间
-    const RANK = { '北海': 0, '广西': 1, '其他': 2 };
-    const ra = RANK[a.region] != null ? RANK[a.region] : 2;
-    const rb = RANK[b.region] != null ? RANK[b.region] : 2;
-    return (ra - rb) || (b.level - a.level) || String(b.time || '').localeCompare(String(a.time || ''));
+    // 情报优先级：北海(direct) -> 可能涉及北海(possible) -> 广西 -> 其他；同级按级别、再时间
+    const pri = x => (x.beihaiRelation === 'direct' || x.region === '北海') ? 0
+      : (x.beihaiRelation === 'possible') ? 1
+      : (x.region === '广西') ? 2 : 3;
+    return (pri(a) - pri(b)) || (b.level - a.level) || String(b.time || '').localeCompare(String(a.time || ''));
   });
   const maxLevel = globalAlerts.reduce((m, x) => Math.max(m, x.level), 0);
   const alertIntel = intel.buildAlertIntel({ typhoons, warnings: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value : { all: [] }, quakes });
