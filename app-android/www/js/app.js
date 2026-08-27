@@ -242,11 +242,11 @@ function render() {
   updateSoundAlarm(hasAlert);
   // 横幅（活跃告警，点击查看详情）
   const banner = $('alertBanner');
-  const top = d.globalAlerts.filter(a => a.level >= 2).slice(0, 6);
+  const top = d.globalAlerts.filter(a => a.beihaiRelation === 'direct' || a.beihaiRelation === 'possible').slice(0, 8);
   if (top.length) {
     banner.classList.remove('hidden');
     banner.innerHTML = '<span class="a-label">⚠ 活跃告警：</span>' + top.map((a, i) =>
-      `<span class="a-item" data-i="${i}">${a.type}·${a.station}（${a.levelName}）</span>`).join('');
+      `<span class="a-item" data-i="${i}">${a.type}·${a.station || a.region || '—'}（${a.levelName}）</span>`).join('');
     banner.querySelectorAll('.a-item').forEach(el => {
       el.onclick = () => openAlertModal(top[+el.dataset.i]);
     });
