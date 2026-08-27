@@ -21,6 +21,20 @@
 }
 ```
 
+### 1.x riverReservoir（江河水文 · 水库水情，v8.0.5 新增）
+
+`riverReservoir` 为 `/api/overview` 顶层字段，结构如下：
+
+- `ok`: boolean
+- `realtime`: boolean（当前恒为 false，实时源不可达）
+- `realtimeStatus`: "unreachable" | "blocked" | "reachable"（内置 5s 探测结果）
+- `source`: 数据来源说明（广西水文中心 / 北海市政府等公开资料整理）
+- `updated`: 档案更新日期
+- `rivers`: 江河数组，每项含 `name` / `type` / `outfall` / `basin` / `stations` / `note` / `verified` / `src`
+- `reservoirs`: 水库数组，每项含 `name` / `scale` / `county` / `river` / `totalCapM3` / `effectiveCapM3` / `basinKm2` / `built` / `func` / `drinking` / `note` / `verified` / `src`
+
+> 数据性质：依据公开资料整理的**权威档案**，**非实时站测**；北海本地江河实测站与水库的实时源当前不可程序化对接，界面已明确标注非实时。
+
 ## 2. GET /api/alerts
 告警情报列表（与 overview.alertIntel.items 同源，独立端点便于轮询）。
 

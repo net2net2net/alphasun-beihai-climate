@@ -257,8 +257,6 @@ window.AlphaMap = (function () {
     return layer;
   }
   function buildNmcLayer(def) {
-    // 手机端（纯前端）无 Node 后端代理，无法跨域抓取中央气象台产品图 → 降级
-    if (window.ALPHASUN_APP) return Promise.resolve(null);
     // 先探测代理是否可取图，避免坏图
     return fetch(`/api/nmc-img?p=${def.p}&meta=1`).then(r => r.json()).then(meta => {
       if (!meta || !meta.ok) return null;

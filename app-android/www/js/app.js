@@ -177,9 +177,9 @@ async function syncTime() {
   if (st) st.textContent = '对时中…';
   try {
     const t0 = performance.now();
-    const r = await window.AlphaData.now();
+    const r = await fetch('/api/time');
     const t1 = performance.now();
-    const data = r;
+    const data = await r.json();
     const rtt = t1 - t0;
     const clientReceive = Date.now();
     const serverEst = data.now + rtt / 2;       // 估算服务器在客户端接收时刻的真实时间
@@ -215,25 +215,17 @@ const DIMS = {
   aqi:       { label:'AQI',      unit:'',   color:'#e0aaff', axis:'y1', dec:0, key:'aqi' },
 };
 
-function fmt(t){ if (t instanceof Date) t = t.toISOString(); return t ? t.slice(11,16) : '—'; }
+function fmt(t){ return t ? t.slice(11,16) : '—'; }
 function $(id){ return document.getElementById(id); }
-// 渲染隔离：任一子模块渲染抛错都不影响其它模块（移动端单点数据/组件失败不再整体空白）
-function safe(fn, label){ try { (typeof fn === 'function') ? fn() : fn; } catch(e){ if (window.console) console.error('[render] ' + (label||'') + ' failed:', e); } }
 
 async function load() {
   try {
-    const d = await window.AlphaData.buildOverview();
-    state.data = d;
-    if (state.data.stations && state.data.stations.length) {
-      if (!state.data.stations.find(s => s.id === state.sel)) state.sel = state.data.stations[0].id;
-    } else {
-      state.sel = null;
-    }
+    const r = await fetch('/api/overview');
+    state.data = await r.json();
+    if (!state.sel) state.sel = state.data.stations[0].id;
     render();
   } catch (e) {
-    const msg = (e && e.message) ? e.message : String(e);
-    try { $('updated').textContent = '加载失败：' + msg; } catch (_) {}
-    if (state.data) { try { render(); } catch (_) {} } // 即便聚合抛错，也尽量渲染已拿到的部分数据
+    $('updated').textContent = '加载失败：' + e.message;
   }
 }
 
@@ -260,30 +252,15 @@ function render() {
     });
   } else banner.classList.add('hidden');
 
-  safe(renderStations, 'stations'); safe(renderRealtime, 'realtime'); safe(renderAir, 'air'); safe(renderMarine, 'marine');
-  safe(renderAstro, 'astro'); safe(renderGlow, 'glow'); safe(renderMorningGlow, 'morningGlow'); safe(renderTides, 'tides');
-  safe(renderForecast7, 'fc7'); safe(renderForecast15, 'fc15');
-  safe(renderAlerts, 'alerts'); safe(renderEvents, 'events'); safe(renderChartDims, 'chartDims');
-  safe(renderClimate, 'climate'); safe(renderLinks, 'links');
-  safe(renderTicker, 'ticker');
-  if (!tk.autostarted) { tk.autostarted = true; safe(tkStartAuto, 'tickerAuto'); }
-  safe(() => AlphaMap.setData(d), 'mapSetData'); safe(() => AlphaMap.legend($('mapLegend')), 'mapLegend');
-  safe(renderChart, 'chart'); // 初始也绘制 24h 曲线，修复面板长期空白
-  safe(renderGlobalLevelAlert, 'globalLevel');
-  safe(renderDiag, 'diag');
-}
-
-// 数据自检面板：依据 data.js buildOverview 返回的 diag 数组渲染每个数据源状态
-function renderDiag() {
-  const el = $('diagBody'); if (!el) return;
-  const d = state.data;
-  if (!d || !d.diag || !d.diag.length) { el.innerHTML = '<div class="muted">暂无诊断信息</div>'; return; }
-  el.innerHTML = d.diag.map(x => {
-    const cls = x.info ? 'info' : (x.ok ? 'ok' : 'err');
-    const icon = x.info ? 'ℹ️' : (x.ok ? '✅' : '❌');
-    return `<div class="diag-row ${cls}"><span class="diag-ico">${icon}</span>` +
-      `<span class="diag-name">${x.name}</span><span class="diag-detail">${x.detail || ''}</span></div>`;
-  }).join('');
+  renderStations(); renderRealtime(); renderAir(); renderMarine(); renderRiverReservoir();
+  renderAstro(); renderGlow(); renderMorningGlow(); renderTides();
+  renderForecast7(); renderForecast15();
+  renderAlerts(); renderEvents(); renderChartDims();
+  renderClimate(); renderLinks();
+  renderTicker();
+  if (!tk.autostarted) { tk.autostarted = true; tkStartAuto(); }
+  AlphaMap.setData(d); AlphaMap.legend($('mapLegend'));
+  renderGlobalLevelAlert();
 }
 
 function renderChartDims() {
@@ -755,6 +732,28 @@ const SITES = [
     { n: '中国天气网', u: 'http://www.weather.com.cn/', note: '公众天气预报' },
   ] },
 ];
+
+function renderRiverReservoir() {
+  var rr = state.data && state.data.riverReservoir;
+  var rb = $('riverBody'), sb = $('reservoirBody');
+  if (!rr || !rr.ok) {
+    if (rb) rb.innerHTML = '<div class="muted">江河数据暂不可用</div>';
+    if (sb) sb.innerHTML = '<div class="muted">水库数据暂不可用</div>';
+    return;
+  }
+  var statusTxt = rr.realtime ? '实时' : ('档案（' + (rr.realtimeStatus === 'unreachable' ? '实时源不可达' : rr.realtimeStatus) + '）');
+  var tbl = 'width:100%;border-collapse:collapse;border:1px solid #2a3b4d';
+  var th = '<th style="padding:3px 6px;text-align:left">';
+  var riverRows = (rr.rivers || []).map(function(r){
+    return '<tr><td style="padding:3px 6px"><b>'+(r.name||'')+'</b></td><td style="padding:3px 6px">'+(r.type||'')+'</td><td style="padding:3px 6px">'+(r.outfall||'—')+'</td><td class="muted" style="font-size:11px;padding:3px 6px">'+(r.note||'')+'</td></tr>';
+  }).join('');
+  var resRows = (rr.reservoirs || []).map(function(r){
+    var cap = r.totalCapM3 != null ? (r.totalCapM3/1e8).toFixed(2)+'亿m³' : '待核实';
+    return '<tr><td style="padding:3px 6px"><b>'+(r.name||'')+'</b></td><td style="padding:3px 6px">'+(r.scale||'')+'</td><td style="padding:3px 6px">'+(r.county||'—')+'</td><td style="padding:3px 6px">'+cap+'</td><td style="padding:3px 6px">'+(r.drinking?'🚰饮用水源':'—')+'</td><td class="muted" style="font-size:11px;padding:3px 6px">'+(r.note||'')+'</td></tr>';
+  }).join('');
+  if (rb) rb.innerHTML = '<div class="muted" style="font-size:11px;margin-bottom:6px">数据性质：'+statusTxt+' ｜ 来源：'+rr.source+'</div><table style="'+tbl+'"><thead><tr style="background:#16202c">'+th+'江河</th>'+th+'类型</th>'+th+'入海口/归属</th>'+th+'说明</th></tr></thead><tbody>'+riverRows+'</tbody></table>';
+  if (sb) sb.innerHTML = '<div class="muted" style="font-size:11px;margin-bottom:6px">数据性质：'+statusTxt+' ｜ 来源：'+rr.source+'</div><table style="'+tbl+'"><thead><tr style="background:#16202c">'+th+'水库</th>'+th+'规模</th>'+th+'位置</th>'+th+'总库容</th>'+th+'功能</th>'+th+'说明</th></tr></thead><tbody>'+resRows+'</tbody></table>';
+}
 function renderLinks() {
   $('linksBody').innerHTML = SITES.map(g => `
     <div class="ln-group">
@@ -768,7 +767,6 @@ function renderLinks() {
 
 function renderEvents() {
   const e = state.data.astronomy;
-  if (!e || !e.meteors) { $('eventBody').innerHTML = '<div class="muted">天文数据暂不可用</div>'; return; }
   const lat = (selStation().lat != null) ? selStation().lat : 21.48;
   const meteors = e.meteors
     .map(m => {
@@ -816,10 +814,6 @@ function chartDatasets() {
   return { labels, datasets };
 }
 function renderChartOn(canvasId) {
-  if (typeof Chart === 'undefined') {
-    const el = $(canvasId); if (el) { const c = el.getContext('2d'); if (c) { c.clearRect(0, 0, el.width, el.height); c.fillStyle = '#8b949e'; c.font = '12px sans-serif'; c.fillText('图表组件未加载', 10, 20); } }
-    return;
-  }
   const cd = chartDatasets(); if (!cd) return;
   if (charts[canvasId]) charts[canvasId].destroy();
   const ctx = $(canvasId).getContext('2d');
@@ -1046,9 +1040,6 @@ function closeFocus() {
   if (charts.focusChart) { try { charts.focusChart.destroy(); } catch (e) {} delete charts.focusChart; }
   $('focusModal').classList.add('hidden');
   $('focusBody').innerHTML = '';
-  // 复位放大模态的缩放变换（移动端双指/双击缩放）
-  try { const fb = $('focusBody'); if (fb) { fb.style.transform = ''; fb.style.transformOrigin = ''; } } catch (e) {}
-  try { document.dispatchEvent(new Event('focusclosed')); } catch (e) {}
   focusState = null;
 }
 function openFocus(panelId) {
@@ -1075,8 +1066,6 @@ function openFocus(panelId) {
     $('focusModal').classList.remove('hidden');
     focusState = { type: 'html' };
   }
-  // 放大模态：地图走 Leaflet 自带手势(touch-action:none)；其它内容允许纵向滚动+双指捏合(pan-y)
-  try { $('focusBody').style.touchAction = (focusState && focusState.type === 'map') ? 'none' : 'pan-y'; } catch (e) {}
 }
 $('focusClose').onclick = closeFocus;
 $('focusModal').onclick = (e) => { if (e.target === $('focusModal')) closeFocus(); };
@@ -1099,126 +1088,3 @@ AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
 startWorldClock();
 load().then(() => renderChartOn('hourlyChart'));
-
-// PWA：仅在浏览器环境注册 Service Worker（Capacitor 原生壳内跳过，避免冲突）
-if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    });
-  }
-}
-
-/* ======================================================================
-   移动端增强（v8.1.0）：旋转重排 / 情报条滑动 / 下拉刷新 / 放大捏合缩放 / 底栏 / 返回键
-   全部以渐进增强方式实现：缺失插件或 API 时静默降级，绝不影响桌面与既有功能。
-   ====================================================================== */
-(function mobileEnhance(){
-  function scrollEl(){ return document.scrollingElement || document.documentElement; }
-
-  // —— 1) 旋转 / 尺寸变化：地图重算 + 图表重绘 + 情报卡重排 ——
-  let rzT = null;
-  function onViewportChange(){
-    try { AlphaMap.invalidate(); } catch (e) {}
-    try { Object.keys(charts).forEach(k => { const c = charts[k]; if (c && c.resize) c.resize(); }); } catch (e) {}
-    try { if (tk && tk.items.length) renderTicker(); } catch (e) {}
-  }
-  window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(onViewportChange, 200); });
-  window.addEventListener('orientationchange', () => { setTimeout(onViewportChange, 350); });
-
-  // —— 2) 顶部情报条：左右滑动切换 ——
-  const tkCard = document.getElementById('tickerCard');
-  if (tkCard) {
-    let sx = 0, sy = 0, sw = false;
-    tkCard.addEventListener('touchstart', e => { const t = e.changedTouches[0]; sx = t.clientX; sy = t.clientY; sw = true; }, { passive: true });
-    tkCard.addEventListener('touchend', e => {
-      if (!sw) return; sw = false;
-      const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { try { tkGo(dx < 0 ? 1 : -1); } catch (e) {} }
-    }, { passive: true });
-  }
-
-  // —— 3) 下拉刷新（仅页面置顶且非地图/弹窗内）——
-  const ptr = document.getElementById('ptr');
-  const ptrText = ptr ? ptr.querySelector('.ptr-text') : null;
-  const TH = 64;
-  let pActive = false, pStartY = 0, pPull = 0, pMoved = false;
-  function canPTR(t){
-    if (!t) return false;
-    if (scrollEl().scrollTop > 1) return false;
-    if (t.closest('#map, .modal, .alert-body, .m-list, .overlay-panel, #focusBody, .forecast-body, .ln-items, .ticker-pager')) return false;
-    return true;
-  }
-  window.addEventListener('touchstart', e => {
-    if (!canPTR(e.target)) { pActive = false; return; }
-    pActive = true; pMoved = false; pPull = 0; pStartY = e.touches[0].clientY;
-  }, { passive: true });
-  window.addEventListener('touchmove', e => {
-    if (!pActive) return;
-    const d = e.touches[0].clientY - pStartY;
-    if (d > 8 && scrollEl().scrollTop <= 0) {
-      pMoved = true; pPull = Math.min(d * 0.6, TH + 40);
-      if (ptr) { ptr.classList.add('show'); ptr.classList.toggle('armed', pPull >= TH); if (ptrText) ptrText.textContent = pPull >= TH ? '释放刷新' : '下拉刷新'; }
-      if (e.cancelable) e.preventDefault();
-    } else if (ptr) { ptr.classList.remove('show', 'armed'); }
-  }, { passive: false });
-  window.addEventListener('touchend', () => {
-    if (!pActive) return; pActive = false;
-    if (ptr) ptr.classList.remove('show', 'armed');
-    if (pMoved && pPull >= TH) {
-      if (ptr) { ptr.classList.add('loading'); if (ptrText) ptrText.textContent = '刷新中…'; }
-      load().then(() => { try { renderChartOn('hourlyChart'); } catch (e) {}; if (ptr) ptr.classList.remove('loading'); }).catch(() => { if (ptr) ptr.classList.remove('loading'); });
-    }
-  }, { passive: true });
-
-  // —— 4) 放大模态：双指捏合缩放 + 双击还原（内容放大/缩小）——
-  const fb = document.getElementById('focusBody');
-  if (fb) {
-    let pts = new Map(), s0 = 1, d0 = 0, ox = 0, oy = 0, cur = 1;
-    function apply(){ if (focusState && focusState.type === 'map') return; fb.style.transformOrigin = ox + 'px ' + oy + 'px'; fb.style.transform = 'scale(' + cur + ')'; }
-    function reset(){ cur = 1; d0 = 0; pts.clear(); fb.style.transform = ''; fb.style.transformOrigin = ''; }
-    fb.addEventListener('pointerdown', e => { pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
-    fb.addEventListener('pointermove', e => {
-      if (!pts.has(e.pointerId)) return;
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pts.size === 2) {
-        const a = [...pts.values()][0], b = [...pts.values()][1];
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (!d0) { d0 = d; s0 = cur; const r = fb.getBoundingClientRect(); ox = (a.x + b.x) / 2 - r.left; oy = (a.y + b.y) / 2 - r.top; }
-        else { cur = Math.max(1, Math.min(4, s0 * d / d0)); apply(); if (e.cancelable) e.preventDefault(); }
-      }
-    });
-    function up(e){ pts.delete(e.pointerId); if (pts.size < 2) d0 = 0; }
-    fb.addEventListener('pointerup', up);
-    fb.addEventListener('pointercancel', up);
-    fb.addEventListener('dblclick', () => { cur = cur > 1 ? 1 : 2; const r = fb.getBoundingClientRect(); ox = r.width / 2; oy = r.height / 2; apply(); });
-    document.addEventListener('focusclosed', reset);
-  }
-
-  // —— 5) 移动端底栏按钮（拇指操作区）——
-  document.querySelectorAll('#mbar [data-mbar]').forEach(b => {
-    b.addEventListener('click', () => {
-      const act = b.getAttribute('data-mbar');
-      try {
-        if (act === 'refresh') { load().then(() => renderChartOn('hourlyChart')); }
-        else if (act === 'theme') { toggleTheme(); const mi = b.querySelector('.mi'); if (mi) mi.textContent = theme === 'light' ? '🌙' : '☀'; }
-        else if (act === 'sound') { setSound(!soundOn); const mi = b.querySelector('.mi'); if (mi) mi.textContent = soundOn ? '🔊' : '🔇'; }
-        else if (act === 'top') { window.scrollTo({ top: 0, behavior: 'smooth' }); }
-      } catch (e) {}
-    });
-  });
-
-  // —— 6) 硬件返回键：优先关闭弹窗（依赖 @capacitor/app；缺失则忽略，交还系统）——
-  try {
-    const Cap = window.Capacitor;
-    const App = Cap && Cap.Plugins && Cap.Plugins.App;
-    if (App && App.addListener) {
-      App.addListener('backButton', () => {
-        const im = document.getElementById('intelModal'), fm = document.getElementById('focusModal');
-        if (im && !im.classList.contains('hidden')) { im.classList.add('hidden'); return; }
-        if (fm && !fm.classList.contains('hidden')) { closeFocus(); return; }
-      });
-    }
-  } catch (e) {}
-})();
-
