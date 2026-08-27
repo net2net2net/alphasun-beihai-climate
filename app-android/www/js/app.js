@@ -332,7 +332,42 @@ function renderRealtime() {
       </div>
       ${regionBlock(s)}
     </div>
-    <div class="rt-trend">${trend}</div>`;
+    <div class="rt-trend">${trend}</div>
+    ${renderRealtimeCheck(state.data && state.data.realtimeCheck)}`;
+}
+
+// 多源实况校核面板：展示 CMA / Open-Meteo / wttr.in 三源读数与综合判定（inline 样式自包含）
+function catLabelZh(cat) {
+  return ({ rain: '降雨', storm: '雷暴', snow: '降雪', fog: '雾', clear: '晴', cloud: '多云', other: '其他' })[cat] || '其他';
+}
+function renderRealtimeCheck(rc) {
+  if (!rc) return '';
+  const agrTxt = { high: '高度一致', medium: '部分分歧', low: '显著分歧', unknown: '源不可达' }[rc.agreement] || rc.agreement;
+  const confPct = Math.round((rc.confidence || 0) * 100);
+  const srcRows = (rc.sources || []).map(s => `
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid var(--line)">
+      <span style="flex:0 0 96px;color:${s.ok ? 'var(--info)' : 'var(--muted)'}">${s.label}</span>
+      <span style="flex:1">${s.ok
+        ? `${s.temp.toFixed(1)}℃ · ${s.text}${s.precip > 0.1 ? ' · 💧' + s.precip.toFixed(1) + 'mm' : ''}`
+        : '<span style="color:#e5484d">✗ 不可达</span>'}</span>
+      <span style="flex:0 0 48px;text-align:right;color:var(--muted);font-size:11px">${s.ok ? catLabelZh(s.category) : ''}</span>
+    </div>`).join('');
+  const cons = rc.consensus
+    ? `综合判定：<b style="color:var(--accent)">${catLabelZh(rc.consensus.category)}</b> ｜ 气温 ${rc.consensus.tempMin}~${rc.consensus.tempMax}℃（均 ${rc.consensus.tempMean}） ｜ 湿度 ${rc.consensus.rhMean != null ? rc.consensus.rhMean + '%' : '—'}`
+    : '';
+  const disc = (rc.discrepancies && rc.discrepancies.length)
+    ? `<div style="margin-top:6px;color:#d29922;font-size:12px">⚠ ${rc.discrepancies.map(d => d.message).join('；')}</div>` : '';
+  const badgeColor = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
+  return `<div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--line);border-radius:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-weight:700">🛰 多源实况校核</span>
+      <span style="font-size:12px;color:#06121f;background:${badgeColor};padding:2px 8px;border-radius:10px">${agrTxt} · 置信 ${confPct}%</span>
+    </div>
+    <div style="font-size:13px">${srcRows}</div>
+    <div style="margin-top:6px;font-size:12px;color:var(--muted)">${cons}</div>
+    ${disc}
+    <div style="margin-top:4px;font-size:11px;color:var(--muted)">校核于 ${new Date(rc.checkedAt).toLocaleTimeString('zh-CN')} ｜ 主值采用 ${rc.recommended ? rc.recommended.source : '—'}</div>
+  </div>`;
 }
 
 // 实时天气变化趋势：基于未来逐时数据给出降水/气温/风力预报（需求5）

@@ -106,6 +106,19 @@ async function getClimate(s) {
   catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
 
+// 多源实况校核快照：节流写入 data/realtime-check.json，作为可审计的校核数据留存（本地缓存，不入库提交）
+const rtCheckCache = { last: 0, path: path.join(__dirname, '..', 'data', 'realtime-check.json') };
+function persistRealtimeCheck(rc) {
+  const now = Date.now();
+  if (now - rtCheckCache.last < 60000) return; // 最多每分钟落盘一次
+  rtCheckCache.last = now;
+  try {
+    const dir = path.dirname(rtCheckCache.path);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(rtCheckCache.path, JSON.stringify(rc, null, 2));
+  } catch (e) { /* 落盘失败忽略 */ }
+}
+
 function parseAlertTime(t) {
   if (!t) return 0;
   const m = String(t).match(/(\d{4})\D(\d{2})\D(\d{2})\D(\d{2})\D(\d{2})/);
@@ -156,8 +169,9 @@ async function buildOverview() {
     src.fetchWarnings().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchRiverReservoir().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchCmaLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchWttrLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -165,6 +179,16 @@ async function buildOverview() {
     const morningGlow = astro.sunriseGlow(st);
     return { ...st, alert: ev, glow, morningGlow };
   });
+  // 多源实况交叉校核：使用尚未被覆盖的原始 Open-Meteo current + CMA + wttr.in（独立第三方源）
+  const primaryAgg = (stationsAgg.status === 'fulfilled') ? stationsAgg.value[0] : null;
+  const cmaVal = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : cmaRes;
+  const wttrVal = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : wttrRes;
+  const warnCtx = [
+    ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.rainstorm) ? warnRes.value.rainstorm : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
+    ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.convective) ? warnRes.value.convective : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
+  ];
+  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal }, warnCtx);
+  persistRealtimeCheck(realtimeCheck);
   const quakes = quakeRes.status === 'fulfilled' && quakeRes.value.ok ? quakeRes.value.events : [];
   const fires = fireRes.status === 'fulfilled' && fireRes.value.ok ? fireRes.value.fires : [];
     const typhoons = tyRes.status === 'fulfilled' && tyRes.value.ok ? tyRes.value.typhoons : [];
@@ -211,6 +235,7 @@ async function buildOverview() {
       convective: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.convective : [] },
     riverReservoir: rrRes.status === 'fulfilled' ? rrRes.value : { ok: false, error: 'unavailable' },
     astronomy: astro.astronomicalEvents(),
+    realtimeCheck,
     globalAlerts,
   };
 }

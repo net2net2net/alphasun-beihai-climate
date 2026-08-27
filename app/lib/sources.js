@@ -158,6 +158,138 @@ async function fetchCmaLive(s) {
   } catch (e) { return { ok: false, error: 'cma parse: ' + (e.message || e) }; }
 }
 
+// ===== 1.6 wttr.in 实况（第三方独立源，用于多源交叉校核）=====
+function enToWmo(text) {
+  const t = String(text || '').toLowerCase();
+  if (/thunder|storm|lightning/.test(t)) return { code: 95, zh: '雷阵雨' };
+  if (/heavy rain|暴雨|torrential/.test(t)) return { code: 65, zh: '大雨' };
+  if (/rain|shower|drizzle|wet|precip/.test(t)) return { code: 61, zh: '雨' };
+  if (/snow|sleet|blizzard|ice|frost/.test(t)) return { code: 71, zh: '雪' };
+  if (/fog|mist|haze|smog/.test(t)) return { code: 45, zh: '雾' };
+  if (/sunny|clear/.test(t)) return { code: 0, zh: '晴' };
+  if (/cloud|overcast|grey/.test(t)) return { code: 3, zh: '多云' };
+  return { code: 3, zh: '多云' };
+}
+async function fetchWttrLive(s) {
+  const url = `https://wttr.in/${s.lat.toFixed(2)},${s.lon.toFixed(2)}?format=j1`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12000);
+  let text;
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (AlphaSun-Beihai)' } });
+    text = await r.text();
+  } catch (e) { return { ok: false, error: 'wttr fetch failed: ' + (e.message || e) }; }
+  finally { clearTimeout(t); }
+  try {
+    const d = JSON.parse(text);
+    const c = d.current_condition && d.current_condition[0];
+    if (!c) return { ok: false, error: 'wttr: no current_condition' };
+    const desc = (c.weatherDesc && c.weatherDesc[0] && c.weatherDesc[0].value) || '';
+    const m = enToWmo(desc);
+    return {
+      ok: true, source: 'wttr', label: 'wttr.in', time: c.localObsDateTime || null,
+      current: {
+        temp: parseFloat(c.temp_C), feels: parseFloat(c.FeelsLikeC),
+        rh: parseInt(c.humidity, 10) || 0,
+        precip: parseFloat(c.precipMM) || 0,
+        code: m.code, text: m.zh, icon: wmo(m.code)[1],
+        wind: (parseFloat(c.windspeedKmph) || 0) / 3.6, gust: 0,
+        windDir: parseFloat(c.winddirDegree) || 0, pressure: 0,
+        cloud: parseInt(c.cloudcover, 10) || 0, isDay: 1,
+      },
+    };
+  } catch (e) { return { ok: false, error: 'wttr parse: ' + (e.message || e) }; }
+}
+
+// ===== 1.7 多数据源实况交叉校核（CMA / Open-Meteo / wttr.in）=====
+// 归一化天气大类，用于源间一致性判定
+function wxCategory(code, zh) {
+  const t = String(zh || '');
+  if (/雷|暴|雨|阵雨|降水|降雨/.test(t) || [61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return 'rain';
+  if (/雪|霰|冰/.test(t) || [71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
+  if (/雾|霾|沙尘/.test(t) || [45, 48].includes(code)) return 'fog';
+  if (/晴/.test(t) && code <= 1) return 'clear';
+  if (/多云|阴|云/.test(t) || [2, 3].includes(code)) return 'cloud';
+  return 'other';
+}
+function snapOf(result, label, key) {
+  let v = null;
+  if (result && result.status === 'fulfilled') v = result.value;
+  else if (result && typeof result.ok === 'boolean') v = result;
+  if (!v || !v.ok || !v.current) {
+    return { ok: false, label, source: key, error: (result && result.reason) ? String(result.reason) : (v ? '无实况数据' : '源不可达') };
+  }
+  const c = v.current;
+  return {
+    ok: true, source: v.source || key, label: v.label || label,
+    temp: c.temp, feels: c.feels, rh: c.rh, precip: c.precip,
+    code: c.code, text: c.text, icon: c.icon, wind: c.wind,
+    fetchedAt: v.time || null, category: wxCategory(c.code, c.text),
+  };
+}
+// results: { openMeteo, cma, wttr }（Promise.allSettled 条目或归一化对象）；warnings: 北海相关预警数组 [{category, level, levelName}]
+function verifyRealtime(results, warnings) {
+  const srcs = [
+    snapOf(results.openMeteo, 'Open-Meteo', 'openmeteo'),
+    snapOf(results.cma, '中国天气网(CMA)', 'cma'),
+    snapOf(results.wttr, 'wttr.in', 'wttr'),
+  ];
+  const valid = srcs.filter(s => s.ok);
+  const checkedAt = new Date().toISOString();
+  if (valid.length === 0) {
+    return { ok: false, checkedAt, city: '北海', sources: srcs, agreement: 'unknown', confidence: 0, consensus: null, discrepancies: [{ field: 'availability', message: '全部实况数据源不可达', severity: 'high' }], recommended: null };
+  }
+  const catCount = {};
+  valid.forEach(s => { catCount[s.category] = (catCount[s.category] || 0) + 1; });
+  const cats = Object.keys(catCount).sort((a, b) => catCount[b] - catCount[a]);
+  let consensusCat = cats[0];
+  const temps = valid.map(s => s.temp).filter(x => typeof x === 'number' && !isNaN(x));
+  const tmin = Math.min.apply(null, temps), tmax = Math.max.apply(null, temps);
+  const tmean = temps.reduce((a, b) => a + b, 0) / temps.length;
+  const spread = tmax - tmin;
+  const rhs = valid.map(s => s.rh).filter(x => typeof x === 'number' && !isNaN(x) && x > 0);
+  const rhMean = rhs.length ? Math.round(rhs.reduce((a, b) => a + b, 0) / rhs.length) : null;
+  const precipMax = Math.max.apply(null, [0].concat(valid.map(s => s.precip || 0)));
+  const precipAny = precipMax > 0.3;
+  const discrepancies = [];
+  let conf = 1, agreement = 'high';
+  if (valid.length >= 2 && cats.length > 1) {
+    const minority = valid.length - catCount[consensusCat];
+    if (consensusCat === 'rain' || consensusCat === 'storm') {
+      discrepancies.push({ field: 'condition', message: '部分源未报降雨（综合判定：' + (consensusCat === 'storm' ? '雷暴' : '降雨') + '）', severity: minority >= 2 ? 'medium' : 'low' });
+      if (minority >= 2) conf -= 0.1;
+    } else {
+      discrepancies.push({ field: 'condition', message: '天气现象源间不一致（' + cats.join(' / ') + '）', severity: minority >= 2 ? 'high' : 'medium' });
+      conf -= minority >= 2 ? 0.35 : 0.18;
+      agreement = minority >= 2 ? 'low' : 'medium';
+    }
+  }
+  if (spread > 3) {
+    discrepancies.push({ field: 'temp', message: '气温源间差异较大（' + tmin.toFixed(1) + '~' + tmax.toFixed(1) + '℃，差 ' + spread.toFixed(1) + '℃）', severity: spread > 5 ? 'high' : 'medium' });
+    conf -= 0.2; if (agreement === 'high') agreement = 'medium';
+  }
+  if (precipAny && valid.some(s => (s.precip || 0) < 0.1 && consensusCat === 'rain')) {
+    discrepancies.push({ field: 'precip', message: '部分源实况无降水，但综合有降雨', severity: 'low' });
+  }
+  // 官方预警佐证：若北海暴雨/强对流预警生效而综合未判降雨，则上调为降雨
+  if (warnings && warnings.length) {
+    const storm = warnings.find(a => /暴雨|雷雨|强对流|大风/.test(a.category || '') && (a.level || 0) >= 2);
+    if (storm && consensusCat !== 'rain' && consensusCat !== 'storm') {
+      discrepancies.push({ field: 'warning', message: '官方预警佐证降雨（' + (storm.levelName || '') + '），综合判定上调为降雨', severity: 'low' });
+      consensusCat = 'rain'; conf = Math.min(1, conf + 0.1);
+      if (agreement === 'low') agreement = 'medium';
+    }
+  }
+  conf = Math.max(0, Math.min(1, +conf.toFixed(2)));
+  const rec = valid.find(s => s.source === 'cma') || valid.find(s => s.category === consensusCat) || valid[0];
+  const recommended = { temp: +tmean.toFixed(1), rh: rhMean, precip: +precipMax.toFixed(1), code: rec.code, text: rec.text, icon: rec.icon, source: rec.label };
+  return {
+    ok: true, checkedAt, city: '北海', sources: srcs,
+    consensus: { category: consensusCat, tempMin: +tmin.toFixed(1), tempMax: +tmax.toFixed(1), tempMean: +tmean.toFixed(1), tempSpread: +spread.toFixed(1), rhMean, precipAny, precipMax: +precipMax.toFixed(1) },
+    agreement, confidence: conf, discrepancies, recommended,
+  };
+}
+
 // ===== 2. 空气质量（Open-Meteo Air Quality）=====
 async function fetchAir(s) {
   const url = qs(API.air, {
@@ -383,4 +515,5 @@ async function aggregateStation(s, cache) {
 module.exports = {
   fetchForecast, fetchAir, fetchMarine, fetchFlood, fetchClimate,
   fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir, fetchCmaLive,
+  fetchWttrLive, verifyRealtime,
 };
