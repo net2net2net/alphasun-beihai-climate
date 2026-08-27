@@ -100,6 +100,64 @@ async function fetchForecast(s) {
   };
 }
 
+// ===== 1.5 中国天气网站测实况（CMA 官方，免 key，作为 current 权威校验/覆盖源）=====
+function zhWeatherToWmo(text) {
+  if (!text) return 3;
+  if (/雷阵雨|雷雨|雷电|暴雨|大暴雨|特大暴雨/.test(text)) return 95;
+  if (/暴雨/.test(text)) return 65;
+  if (/大雨/.test(text)) return 65;
+  if (/中雨/.test(text)) return 63;
+  if (/小雨|阵雨|零星小雨|小阵雨/.test(text)) return 80;
+  if (/雨夹雪/.test(text)) return 85;
+  if (/雪/.test(text)) return 73;
+  if (/雾|霾|沙尘/.test(text)) return 45;
+  if (/晴/.test(text)) return 0;
+  if (/多云|阴/.test(text)) return 3;
+  return 3;
+}
+function dirToDeg(d) {
+  const M = { 北: 0, 东北: 45, 东: 90, 东南: 135, 南: 180, 西南: 225, 西: 270, 西北: 315 };
+  if (!d) return 0;
+  for (const k of Object.keys(M)) if (String(d).includes(k)) return M[k];
+  return 0;
+}
+async function fetchCmaLive(s) {
+  const CITY = '101300501'; // 北海市（中国天气网城市代码）
+  const url = `http://d1.weather.com.cn/sk_${CITY}.html`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12000);
+  let text;
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'http://www.weather.com.cn/' } });
+    text = await r.text();
+  } catch (e) { return { ok: false, error: 'cma fetch failed: ' + (e.message || e) }; }
+  finally { clearTimeout(t); }
+  try {
+    const m = text.match(/var\s+dataSK\s*=\s*(\{[\s\S]*?\});/);
+    if (!m) return { ok: false, error: 'cma: no dataSK block' };
+    const j = JSON.parse(m[1]);
+    const zh = String(j.weather || '').trim();
+    const code = zhWeatherToWmo(zh);
+    const wmoPair = wmo(code);
+    const rh = parseInt(j.SD, 10);
+    const precip = parseFloat(j.rain);
+    const wind = parseFloat(String(j.WS || '0').replace(/[^0-9.]/g, ''));
+    return {
+      ok: true, source: 'cma', city: CITY, time: j.time,
+      current: {
+        time: new Date().toISOString().slice(0, 16),
+        temp: parseFloat(j.temp),
+        feels: parseFloat(j.temp),
+        rh: isNaN(rh) ? null : rh,
+        precip: isNaN(precip) ? 0 : precip,
+        code, text: zh || wmoPair[0], icon: wmoPair[1],
+        wind: isNaN(wind) ? 0 : wind, gust: 0,
+        windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1,
+      },
+    };
+  } catch (e) { return { ok: false, error: 'cma parse: ' + (e.message || e) }; }
+}
+
 // ===== 2. 空气质量（Open-Meteo Air Quality）=====
 async function fetchAir(s) {
   const url = qs(API.air, {
@@ -324,5 +382,5 @@ async function aggregateStation(s, cache) {
 
 module.exports = {
   fetchForecast, fetchAir, fetchMarine, fetchFlood, fetchClimate,
-  fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir,
+  fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir, fetchCmaLive,
 };
