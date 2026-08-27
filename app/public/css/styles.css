@@ -37,9 +37,15 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .brand h1{font-size:17px;margin:0}
 .sub{font-size:11px;color:var(--muted)}
 .status{display:flex;align-items:center;gap:12px}
-.clock{display:flex;flex-direction:column;align-items:center;line-height:1.2;font-variant-numeric:tabular-nums;letter-spacing:.5px}
-.clock .clk-date{font-size:12px;color:var(--muted)}
-.clock .clk-time{font-size:19px;font-weight:700;color:var(--accent)}
+.clock{display:flex;flex-direction:column;align-items:flex-end;gap:2px;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:.5px;
+  padding:6px 14px;border-radius:12px;border:1px solid var(--line);
+  background:linear-gradient(160deg,rgba(88,166,255,.14),rgba(88,166,255,.03));
+  box-shadow:0 2px 14px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.02)}
+.clock .clk-date{font-size:13px;color:var(--muted);letter-spacing:.3px}
+.clock .clk-time{font-size:33px;font-weight:800;color:var(--accent);
+  text-shadow:0 0 14px rgba(88,166,255,.5);line-height:1.04}
+.clk-sep{opacity:.5;font-weight:600}
+.clk-ms{font-size:.5em;font-weight:600;color:var(--muted);margin-left:2px;letter-spacing:0}
 .badge{padding:3px 12px;border-radius:20px;font-weight:600;font-size:12px;background:var(--bg3);border:1px solid var(--line)}
 
 /* 顶部"警报 / 无警报"指示器（需求3） */
@@ -432,7 +438,7 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .rr-table .rr-m{ color:var(--muted); }
 
 /* ===== 更新横幅 / Toast ===== */
-.update-banner{ margin:0 12px 10px; padding:10px 12px; border:1px solid #2ea043; background:linear-gradient(180deg,#10261a,#0d1b14); border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,.35); }
+.update-banner{ margin:8px 0 0; padding:10px 12px; border:1px solid #2ea043; background:linear-gradient(180deg,#10261a,#0d1b14); border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,.35); }
 .update-banner.hidden{ display:none; }
 .ub-head{ display:flex; align-items:center; gap:8px; }
 .ub-name{ font-weight:700; color:#56d364; font-size:13px; }
@@ -459,3 +465,35 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .hl-yi{ color:#56d364; }
 .hl-ji{ color:#f0883e; }
 .hl-foot{ margin-top:8px; font-size:11px; }
+
+
+/* ===== 程序更新面板（看板底部） ===== */
+.update-panel{ margin:0 12px 12px; background:var(--bg2); border:1px solid var(--line); border-radius:10px; overflow:hidden }
+.update-panel .panel-h{ padding:8px 12px; font-weight:600; background:var(--bg3); border-bottom:1px solid var(--line);
+  display:flex; justify-content:space-between; align-items:center; gap:10px }
+.update-panel .up-sub{ font-weight:400; font-size:11px; margin-left:6px }
+.update-panel .panel-h .btn{ margin-left:auto }
+.update-body{ padding:10px 12px }
+.update-body #updateStatus{ font-size:12px }
+
+/* ===== 多源实况校核 · 卡片化布局 ===== */
+.realtime-check-body{ padding:0 }
+.rc-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 12px; background:var(--bg3); border-bottom:1px solid var(--line) }
+.rc-agree{ font-size:12px; color:#06121f; padding:2px 10px; border-radius:10px; font-weight:700; white-space:nowrap }
+.rc-cons{ font-size:12px; color:var(--txt); flex:1 1 auto; min-width:0 }
+.rc-cons b{ color:var(--accent) }
+.rc-srcs{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; padding:10px 12px }
+.rc-src{ border:1px solid var(--line); border-radius:8px; padding:8px 10px; background:var(--bg3); display:flex; flex-direction:column; gap:3px }
+.rc-src.bad{ border-color:var(--red); background:rgba(229,72,77,.08) }
+.rc-src.skip{ opacity:.6 }
+.rc-src-name{ font-size:12px; font-weight:600; color:var(--info); display:flex; justify-content:space-between; align-items:center; gap:6px }
+.rc-src-state{ font-size:11px }
+.rc-src.ok .rc-src-state{ color:var(--ok) }
+.rc-src.bad .rc-src-state{ color:var(--red) }
+.rc-src.skip .rc-src-state{ color:var(--muted) }
+.rc-src-val{ font-size:15px; font-weight:700; color:var(--txt) }
+.rc-src-meta{ font-size:11px; color:var(--muted) }
+.rc-reg{ margin:0 12px 10px; padding:8px 10px; border-radius:8px; background:rgba(88,166,255,.08); border:1px solid var(--line); font-size:12px; color:var(--muted) }
+.rc-reg b{ color:var(--accent) }
+.rc-disc{ margin:0 12px 10px; padding:6px 10px; border-radius:8px; background:rgba(210,153,34,.1); border:1px solid var(--warn); color:var(--warn); font-size:12px }
+.rc-foot{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 12px 10px; font-size:11px; color:var(--muted) }

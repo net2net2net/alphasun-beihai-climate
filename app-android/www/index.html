@@ -27,7 +27,6 @@
     <span id="globalLevel" class="badge" title="涉及/可能涉及北海的告警，点击查看详情">—</span>
     <button id="themeBtn" class="btn" title="切换深色 / 浅色背景（默认深色）">🌙 浅色</button>
     <button id="refreshBtn" class="btn">刷新</button>
-    <button id="updateCheckBtn" class="btn" title="检查新版本并升级">🔄 更新</button>
   </div>
 </header>
 
@@ -201,11 +200,20 @@
   </section>
 </main>
 
-<div id="updateBanner" class="update-banner hidden">
-  <div class="ub-head"><span class="ub-name">发现新版本</span><span class="ub-date muted"></span><button id="updateLaterBtn" class="ub-x" title="稍后">×</button></div>
-  <ul class="ub-notes"></ul>
-  <div class="ub-actions"><button id="updateNowBtn" class="btn ub-go">立即升级</button><button id="updateLaterBtn2" class="btn" onclick="document.getElementById('updateBanner').classList.add('hidden')">稍后</button></div>
-</div>
+<section class="update-panel" id="updatePanel">
+  <div class="panel-h">🔧 程序更新
+    <span class="muted up-sub">当前版本 v<span id="curVer">8.1.0</span> · 每 30 分钟自动检查</span>
+    <button id="updateCheckBtn" class="btn" title="检查新版本并升级">🔄 检查更新</button>
+  </div>
+  <div class="update-body">
+    <span id="updateStatus" class="muted">正在初始化…</span>
+    <div id="updateBanner" class="update-banner hidden">
+      <div class="ub-head"><span class="ub-name">发现新版本</span><span class="ub-date muted"></span><button id="updateLaterBtn" class="ub-x" title="稍后">×</button></div>
+      <ul class="ub-notes"></ul>
+      <div class="ub-actions"><button id="updateNowBtn" class="btn ub-go">立即升级</button><button id="updateLaterBtn2" class="btn" onclick="document.getElementById('updateBanner').classList.add('hidden')">稍后</button></div>
+    </div>
+  </div>
+</section>
 <div id="hlModal" class="modal hl-modal hidden">
   <div class="modal-card">
     <button id="hlClose" class="modal-close" aria-label="关闭">×</button>

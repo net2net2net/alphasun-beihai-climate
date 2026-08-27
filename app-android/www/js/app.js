@@ -408,7 +408,7 @@ function startTopClock() {
       const lu = lunarDate(d.getFullYear(), d.getMonth()+1, d.getDate());
       dEl.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 周'+wk[d.getDay()]+' · 农历'+lu.ganzhi+'年'+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn;
     }
-    tEl.textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0');
+    tEl.innerHTML = pad(d.getHours())+'<span class="clk-sep">:</span>'+pad(d.getMinutes())+'<span class="clk-sep">:</span>'+pad(d.getSeconds())+'<span class="clk-ms">.'+String(d.getMilliseconds()).padStart(3,'0')+'</span>';
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -568,34 +568,44 @@ function renderRealtimeCheck() {
   const el = $('realtimeCheckBody');
   if (!el) return;
   const rc = state.data && state.data.realtimeCheck;
-  if (!rc) { el.innerHTML = '<div class="muted">校核数据暂不可用</div>'; return; }
+  if (!rc) { el.innerHTML = '<div class="muted" style="padding:12px">校核数据暂不可用</div>'; return; }
   const agrTxt = { high: '高度一致', medium: '部分分歧', low: '显著分歧', unknown: '源不可达' }[rc.agreement] || rc.agreement;
   const confPct = Math.round((rc.confidence || 0) * 100);
-  const srcRows = (rc.sources || []).map(s => `
-    <div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid var(--line)">
-      <span style="flex:0 0 96px;color:${s.ok ? 'var(--info)' : 'var(--muted)'}">${s.label}</span>
-      <span style="flex:1">${s.ok
-        ? `${s.temp.toFixed(1)}℃ · ${s.text}${s.precip > 0.1 ? ' · 💧' + s.precip.toFixed(1) + 'mm' : ''}${s.uv != null ? ' · ☀UV' + s.uv.toFixed(0) : ''}`
-        : (s.skipped ? '<span style="color:var(--muted)">未配置·可选</span>' : '<span style="color:#e5484d">✗ 不可达</span>')}</span>
-      <span style="flex:0 0 48px;text-align:right;color:var(--muted);font-size:11px">${s.ok ? catLabelZh(s.category) : ''}</span>
-    </div>`).join('');
-  const cons = rc.consensus
-    ? `综合判定：<b style="color:var(--accent)">${catLabelZh(rc.consensus.category)}</b> ｜ 气温 ${rc.consensus.tempMin}~${rc.consensus.tempMax}℃（均 ${rc.consensus.tempMean}） ｜ 湿度 ${rc.consensus.rhMean != null ? rc.consensus.rhMean + '%' : '—'}${rc.consensus.uvMean != null ? ' ｜ ☀UV ' + rc.consensus.uvMean + (rc.consensus.uvMax && rc.consensus.uvMax !== rc.consensus.uvMean ? '(' + rc.consensus.uvMin + '~' + rc.consensus.uvMax + ')' : '') : ''}${rc.air && rc.air.aqi != null ? ' ｜ AQI ' + rc.air.aqi : ''}`
-    : '';
-  const disc = (rc.discrepancies && rc.discrepancies.length)
-    ? `<div style="margin-top:6px;color:#d29922;font-size:12px">⚠ ${rc.discrepancies.map(d => d.message).join('；')}</div>` : '';
-  const reg = state.data && state.data.regionalWeather;
-  const regHtml = (reg && reg.ok) ? `<div style="margin-top:6px;font-size:12px;color:var(--muted)">北海区域（${reg.count}点）：气温 ${reg.tempMin}~${reg.tempMax}℃ ｜ 主导 <b style="color:var(--accent)">${catLabelZh(reg.dominantCat)}</b> ｜ 最大风 ${reg.windMax}m/s${reg.precipAny ? ' ｜ ⚠有降水' : ''}<div style="margin-top:3px;line-height:1.6">${reg.points.map(p => p.name + ' ' + p.temp.toFixed(1) + '℃·' + p.text).join('　｜　')}</div></div>` : '';
   const badgeColor = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
-  el.innerHTML = `<div style="font-size:13px">${srcRows}</div>
-    <div style="margin-top:6px;font-size:12px;color:var(--muted)">${cons}</div>
-    ${disc}
-    ${regHtml}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-      <span style="font-size:11px;color:var(--muted)">校核于 ${new Date(rc.checkedAt).toLocaleTimeString('zh-CN')} ｜ 主值采用 ${rc.recommended ? rc.recommended.source : '—'}</span>
-      <span style="font-size:12px;color:#06121f;background:${badgeColor};padding:2px 8px;border-radius:10px">${agrTxt} · 置信 ${confPct}%</span>
-    </div>`;
+  const srcCards = (rc.sources || []).map(s => {
+    const stateTxt = s.ok ? '✓ 可达' : (s.skipped ? '未配置·可选' : '✗ 不可达');
+    const cls = s.ok ? 'ok' : (s.skipped ? 'skip' : 'bad');
+    const val = s.ok
+      ? s.temp.toFixed(1) + '℃ · ' + s.text
+      : (s.skipped ? '<span style="color:var(--muted)">未配置</span>' : '<span style="color:#e5484d">数据源不可达</span>');
+    const meta = s.ok
+      ? ([ s.uv != null ? ('☀UV' + s.uv.toFixed(0)) : '',
+           s.precip > 0.1 ? ('💧' + s.precip.toFixed(1) + 'mm') : '',
+           s.category ? catLabelZh(s.category) : '' ].filter(Boolean).join(' · ') || '—')
+      : '';
+    return '<div class="rc-src ' + cls + '">'
+      + '<div class="rc-src-name"><span>' + s.label + '</span><span class="rc-src-state">' + stateTxt + '</span></div>'
+      + '<div class="rc-src-val">' + val + '</div>'
+      + '<div class="rc-src-meta">' + meta + '</div>'
+      + '</div>';
+  }).join('');
+  const cons = rc.consensus
+    ? '综合判定：<b>' + catLabelZh(rc.consensus.category) + '</b> ｜ 气温 ' + rc.consensus.tempMin + '~' + rc.consensus.tempMax + '℃（均 ' + rc.consensus.tempMean + '） ｜ 湿度 ' + (rc.consensus.rhMean != null ? rc.consensus.rhMean + '%' : '—') + (rc.consensus.uvMean != null ? ' ｜ ☀UV ' + rc.consensus.uvMean + (rc.consensus.uvMax && rc.consensus.uvMax !== rc.consensus.uvMean ? '(' + rc.consensus.uvMin + '~' + rc.consensus.uvMax + ')' : '') : '') + (rc.air && rc.air.aqi != null ? ' ｜ AQI ' + rc.air.aqi : '') + ''
+    : '综合判定：暂不可用';
+  const disc = (rc.discrepancies && rc.discrepancies.length)
+    ? '<div class="rc-disc">⚠ ' + rc.discrepancies.map(d => d.message).join('；') + '</div>' : '';
+  const reg = state.data && state.data.regionalWeather;
+  const regHtml = (reg && reg.ok)
+    ? '<div class="rc-reg">北海区域（' + reg.count + '点）：气温 ' + reg.tempMin + '~' + reg.tempMax + '℃ ｜ 主导 <b>' + catLabelZh(reg.dominantCat) + '</b> ｜ 最大风 ' + reg.windMax + 'm/s' + (reg.precipAny ? ' ｜ ⚠有降水' : '') + '<div style="margin-top:4px;line-height:1.6">' + reg.points.map(p => p.name + ' ' + p.temp.toFixed(1) + '℃·' + p.text).join('　｜　') + '</div></div>'
+    : '';
+  el.innerHTML = ''
+    + '<div class="rc-head"><span class="rc-agree" style="background:' + badgeColor + '">' + agrTxt + ' · 置信 ' + confPct + '%</span>'
+    + '<span class="rc-cons">' + cons + '</span></div>'
+    + '<div class="rc-srcs">' + srcCards + '</div>'
+    + disc + regHtml
+    + '<div class="rc-foot"><span>校核于 ' + new Date(rc.checkedAt).toLocaleTimeString('zh-CN') + ' ｜ 主值采用 ' + (rc.recommended ? rc.recommended.source : '—') + '</span></div>';
 }
+
 
 // 实时天气变化趋势：基于未来逐时数据给出降水/气温/风力预报（需求5）
 function buildWeatherTrend(w) {
@@ -1003,7 +1013,7 @@ const APK_URL = 'https://net2net2net.github.io/alphasun-beihai-climate/downloads
 function appToast(msg){ let t=document.getElementById('appToast'); if(!t){ t=document.createElement('div'); t.id='appToast'; t.className='app-toast'; document.body.appendChild(t); } t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2800); }
 function platformInfo(){ const ua=navigator.userAgent||''; const isAndroid=/Android/i.test(ua)||!!window.cordova||!!(window.Capacitor&&window.Capacitor.getPlatform&&window.Capacitor.getPlatform()==='android'); const isPWA=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; return { isAndroid, isPWA, isWeb:!isAndroid }; }
 function cmpVer(a,b){ const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number); for(let i=0;i<3;i++){ if((y[i]||0)>(x[i]||0))return 1; if((y[i]||0)<(x[i]||0))return -1; } return 0; }
-async function checkUpdate(silent){ try{ let man=null; for(const u of UPDATE_MANIFEST){ try{ const r=await fetch(u,{cache:'no-store'}); if(r.ok){ man=await r.json(); break; } }catch(e){} } if(!man){ if(!silent) appToast('更新检查失败：无法连接更新源'); return; } window.__latestVer=man; const r=cmpVer(APP_VERSION, man.version||'0'); if(r>0){ showUpdateBanner(man); } else if(!silent){ appToast('已是最新版本 v'+APP_VERSION); } }catch(e){ if(!silent) appToast('更新检查失败'); } }
+async function checkUpdate(silent){ const st=document.getElementById('updateStatus'); if(st) st.textContent='正在检查更新…'; try{ let man=null; for(const u of UPDATE_MANIFEST){ try{ const r=await fetch(u,{cache:'no-store'}); if(r.ok){ man=await r.json(); break; } }catch(e){} } if(!man){ if(st) st.textContent='更新检查失败：无法连接更新源'; if(!silent) appToast('更新检查失败：无法连接更新源'); return; } window.__latestVer=man; const r=cmpVer(APP_VERSION, man.version||'0'); if(r>0){ showUpdateBanner(man); if(st) st.textContent='发现新版本 '+man.version+'，可升级'; } else { if(st) st.textContent='已是最新版本 v'+APP_VERSION; if(!silent) appToast('已是最新版本 v'+APP_VERSION); } }catch(e){ if(st) st.textContent='更新检查失败'; if(!silent) appToast('更新检查失败'); } }
 function showUpdateBanner(man){ const b=document.getElementById('updateBanner'); if(!b) return; const nm=man.name||''; b.querySelector('.ub-name').textContent='发现新版本 '+(man.version||'?')+(nm&&nm.indexOf(man.version)<0?('（'+nm+'）'):''); const notes=(man.notes||[]).map(n=>'<li>'+n+'</li>').join(''); b.querySelector('.ub-notes').innerHTML=notes||'<li>暂无说明</li>'; b.querySelector('.ub-date').textContent='发布：'+(man.date||'—'); b.classList.remove('hidden'); }
 function doUpgrade(){ const man=window.__latestVer||{}; const p=platformInfo(); if(p.isAndroid){ const url=man.apk||APK_URL; if(window.__alphasunInstall){ try{ window.__alphasunInstall(url); appToast('正在安装更新…'); return; }catch(e){} } try{ window.open(url,'_blank'); }catch(e){ location.href=url; } appToast('正在打开 APK 下载（下载后允许“未知来源”安装）'); } else { if(navigator.serviceWorker){ navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.update())).catch(()=>{}); } appToast('正在刷新升级…'); setTimeout(()=>location.reload(),400); } }
 
@@ -1365,6 +1375,7 @@ startWorldClock();
 startTopClock();
 startCalendar();
 // 版本自检与一键升级
+const cv = document.getElementById('curVer'); if (cv) cv.textContent = APP_VERSION;
 const updChk = document.getElementById('updateCheckBtn');
 if (updChk) updChk.onclick = () => checkUpdate(false);
 const updNow = document.getElementById('updateNowBtn');
