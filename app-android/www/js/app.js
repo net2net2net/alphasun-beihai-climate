@@ -382,7 +382,6 @@ function render() {
     else { asEl.textContent = '✅ 无警报'; asEl.className = 'alert-status ok'; }
   }
   updateSoundAlarm(hasAlert);
-  renderDataQuality();
   // 横幅（活跃告警，点击查看详情）
   const banner = $('alertBanner');
   const top = d.globalAlerts.filter(a => a.beihaiRelation === 'direct' || a.beihaiRelation === 'possible').slice(0, 8);
@@ -404,23 +403,6 @@ function render() {
   if (!tk.autostarted) { tk.autostarted = true; tkStartAuto(); }
   AlphaMap.setData(d); AlphaMap.legend($('mapLegend'));
   renderGlobalLevelAlert();
-}
-
-// ===== 顶部"🛰 数据可信度"芯片：由「多源实况校核」结论派生，全板可见、可点击跳转（模块联动 / 数据共享）=====
-function renderDataQuality() {
-  const el = document.getElementById('dqChip'); if (!el) return;
-  const rc = state.data && state.data.realtimeCheck;
-  if (!rc) { el.textContent = '🛰 数据可信度 —'; el.className = 'dq-chip unknown'; return; }
-  const agrTxt = { high: '高', medium: '中', low: '低', unknown: '未知' }[rc.agreement] || '未知';
-  const confPct = Math.round((rc.confidence || 0) * 100);
-  const srcs = rc.sources || [];
-  const reachable = srcs.filter(s => s.ok).length;
-  const total = srcs.length;
-  // 沉淀为共享状态，供其它模块（如校核面板、气候态势）复用，避免重复计算
-  state.dataQuality = { agreement: rc.agreement, confidence: rc.confidence, reachable, total };
-  el.textContent = '🛰 数据可信度 ' + agrTxt + ' · ' + confPct + '%（' + reachable + '/' + total + ' 源可达）';
-  el.className = 'dq-chip ' + (rc.agreement || 'unknown');
-  el.title = '多源实况校核：' + agrTxt + '一致 · 置信 ' + confPct + '% · ' + reachable + '/' + total + ' 源可达（点「多源实况校核」模块看详情）';
 }
 
 // ===== 刷新可用性：忙碌态 + 下次自动刷新倒计时（日常可用）=====
@@ -495,6 +477,7 @@ function renderRealtime() {
     : '';
   $('realtimeBody').innerHTML = `
     ${warnBanner}
+    ${rcBadgeHtml(state.data.realtimeCheck)}
     <div class="rt-head">
       <div class="rt-icon">${ICON[c.icon]||'❓'}</div>
       <div class="rt-main">
@@ -527,6 +510,24 @@ function renderRealtime() {
 function catLabelZh(cat) {
   return ({ rain: '降雨', storm: '雷暴', snow: '降雪', fog: '雾', clear: '晴', cloud: '多云', other: '其他' })[cat] || '其他';
 }
+// 实况多源校验徽标（用于实时天气模块顶部，体现「校验结果→其它实况展示」联动）
+function rcBadgeHtml(rc) {
+  if (!rc) return '';
+  const agr = rc.agreement;
+  const label = { high: '✓ 实况多源校验一致', medium: '⚠ 源间有分歧', low: '✗ 源间显著分歧', unknown: '？ 源不可达' }[agr] || '';
+  const reach = (rc.sources || []).filter(s => s.ok).length;
+  const total = (rc.sources || []).length;
+  const color = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[agr] || '#8b949e';
+  return `<div class="rc-badge" style="border-color:${color};color:${color}">${label} · ${reach}/${total} 源</div>`;
+}
+// 预测置信提示（基于多源实况一致度，体现「校验结果→预测天气」联动）
+function fcConfHtml(rc) {
+  if (!rc) return '';
+  const map = { high: '高 · 预测可信', medium: '中 · 不确定性略升', low: '低 · 不确定性升高，谨慎参考', unknown: '未知' };
+  const txt = map[rc.agreement] || '';
+  const color = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
+  return `<div class="fc-note" style="color:${color}">🛰 预测置信：多源实况一致度 ${txt}</div>`;
+}
 function renderRealtimeCheck() {
   const el = $('realtimeCheckBody');
   if (!el) return;
@@ -542,6 +543,14 @@ function renderRealtimeCheck() {
         : (s.skipped ? '<span style="color:var(--muted)">未配置·可选</span>' : '<span style="color:#e5484d">✗ 不可达</span>')}</span>
       <span style="flex:0 0 48px;text-align:right;color:var(--muted);font-size:11px">${s.ok ? catLabelZh(s.category) : ''}</span>
     </div>`).join('');
+  const fieldRows = (rc.fields || []).map(f => `
+    <tr>
+      <td style="padding:3px 6px;color:var(--muted);white-space:nowrap">${f.label}<span style="font-size:10px;color:var(--muted)"> ${f.unit}</span></td>
+      ${f.vals.map(v => `<td style="padding:3px 6px;text-align:right;color:${v.v == null ? 'var(--muted)' : (f.consistent ? 'var(--text)' : '#d29922')}">${v.v == null ? '—' : v.v}</td>`).join('')}
+    </tr>`).join('');
+  const tableHtml = (rc.fields && rc.fields.length) ? `<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px">
+    <thead><tr><th style="text-align:left;color:var(--muted);font-weight:400;padding:3px 6px">交叉校验</th>${rc.fields[0].vals.map(v => `<th style="text-align:right;color:var(--muted);font-weight:400;padding:3px 6px">${v.label}</th>`).join('')}</tr></thead>
+    <tbody>${fieldRows}</tbody></table>` : '';
   const cons = rc.consensus
     ? `综合判定：<b style="color:var(--accent)">${catLabelZh(rc.consensus.category)}</b> ｜ 气温 ${rc.consensus.tempMin}~${rc.consensus.tempMax}℃（均 ${rc.consensus.tempMean}） ｜ 湿度 ${rc.consensus.rhMean != null ? rc.consensus.rhMean + '%' : '—'}${rc.consensus.uvMean != null ? ' ｜ ☀UV ' + rc.consensus.uvMean + (rc.consensus.uvMax && rc.consensus.uvMax !== rc.consensus.uvMean ? '(' + rc.consensus.uvMin + '~' + rc.consensus.uvMax + ')' : '') : ''}${rc.air && rc.air.aqi != null ? ' ｜ AQI ' + rc.air.aqi : ''}`
     : '';
@@ -550,12 +559,15 @@ function renderRealtimeCheck() {
   const reg = state.data && state.data.regionalWeather;
   const regHtml = (reg && reg.ok) ? `<div style="margin-top:6px;font-size:12px;color:var(--muted)">北海区域（${reg.count}点）：气温 ${reg.tempMin}~${reg.tempMax}℃ ｜ 主导 <b style="color:var(--accent)">${catLabelZh(reg.dominantCat)}</b> ｜ 最大风 ${reg.windMax}m/s${reg.precipAny ? ' ｜ ⚠有降水' : ''}<div style="margin-top:3px;line-height:1.6">${reg.points.map(p => p.name + ' ' + p.temp.toFixed(1) + '℃·' + p.text).join('　｜　')}</div></div>` : '';
   const badgeColor = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
+  const reach = (rc.sources || []).filter(s => s.ok).length;
+  const total = (rc.sources || []).length;
   el.innerHTML = `<div style="font-size:13px">${srcRows}</div>
+    ${tableHtml}
     <div style="margin-top:6px;font-size:12px;color:var(--muted)">${cons}</div>
     ${disc}
     ${regHtml}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-      <span style="font-size:11px;color:var(--muted)">校核于 ${new Date(rc.checkedAt).toLocaleTimeString('zh-CN')} ｜ 主值采用 ${rc.recommended ? rc.recommended.source : '—'}</span>
+      <span style="font-size:11px;color:var(--muted)">校核于 ${new Date(rc.checkedAt).toLocaleTimeString('zh-CN')} ｜ ${reach}/${total} 源可达 ｜ 主值 ${rc.recommended ? rc.recommended.source : '—'}</span>
       <span style="font-size:12px;color:#06121f;background:${badgeColor};padding:2px 8px;border-radius:10px">${agrTxt} · 置信 ${confPct}%</span>
     </div>`;
 }
@@ -845,7 +857,7 @@ function renderForecast(days, targetId) {
     return `<div class="fc-day"><div class="d">${dt.getMonth()+1}/${dt.getDate()} 周${wk[dt.getDay()]}</div>
       <div class="ic">${ic}</div><div class="t">${d.tmax.toFixed(0)}°/${d.tmin.toFixed(0)}°</div>
       <div class="p">💧${d.precipProb.toFixed(0)}%</div></div>`;
-  }).join('');
+  }).join('') + fcConfHtml(state.data.realtimeCheck);
 }
 function renderForecast7() { renderForecast(7, 'forecastBody'); }
 function renderForecast15() { renderForecast(15, 'forecast15Body'); }
@@ -878,6 +890,20 @@ function renderClimate() {
   const aqi = aqis.length ? Math.round(aqis.reduce((a, b) => a + b, 0) / aqis.length) : null;
   const waves = d.stations.map(s => s.marine && s.marine.ok ? s.marine.waveHeight : null).filter(v => v != null);
   const wv = waves.length ? Math.max(...waves) : null;
+  // 气候距平联动：将当前实况气温与气候月均态（Open-Meteo 1991–2020）对比，体现「校验结果→气候数据」联动
+  const pc = d.primaryClimate;
+  let anomalyHtml = '';
+  if (pc && pc.monthlyTemp && temps.length) {
+    const m = new Date().getMonth();
+    const normal = pc.monthlyTemp[m];
+    const cur = (tmin + tmax) / 2;
+    if (normal != null && !isNaN(cur)) {
+      const diff = +(cur - normal).toFixed(1);
+      const cls = diff > 1 ? 'warm' : (diff < -1 ? 'cool' : 'ok');
+      const tag = diff > 1 ? '偏暖' : (diff < -1 ? '偏冷' : '接近常年');
+      anomalyHtml = `<div class="cl-anom cl-anom-${cls}">📊 气候距平：本月气候均温 <b>${normal}℃</b> ｜ 当前实况 <b>${cur.toFixed(1)}℃</b> ｜ 距平 <b>${diff >= 0 ? '+' : ''}${diff}℃</b>（${tag} · 基于多源实况校验）</div>`;
+    }
+  }
   const ai = d.alertIntel || { count: 0, items: [] };
   const ty = (d.typhoon && d.typhoon.ok) ? d.typhoon.count : 0;
   const wn = (d.warnings && d.warnings.ok) ? d.warnings.count : 0;
@@ -898,6 +924,7 @@ function renderClimate() {
   $('climateBody').innerHTML = `
     <div class="cl-narr">${narrative}</div>
     <div class="cl-stats">${stats.map(([k, v]) => `<div class="cl-stat"><span class="cl-k">${k}</span><b class="cl-v">${v}</b></div>`).join('')}</div>
+    ${anomalyHtml}
     ${dyn}
     <div class="cl-note muted">注：气候特征为长期统计概况；下方数据为本次加载的实时/近期值，仅供参考。涉及北海的告警已在上方情报条与告警卡中标注。</div>`;
 }
@@ -1276,13 +1303,6 @@ const tAll = $('tickerAll'); if (tAll) tAll.onclick = openAllIntelModal;
 $('refreshBtn').onclick = () => doRefresh();
 setInterval(doRefresh, 10 * 60 * 1000);
 setInterval(updateAutoRefresh, 1000);
-// 顶部"🛰 数据可信度"芯片 → 平滑滚动并高亮「多源实况校核」模块（模块间真实联动）
-const dqEl = document.getElementById('dqChip');
-if (dqEl) dqEl.onclick = () => {
-  const p = document.getElementById('realtimeCheckCard');
-  if (p) { p.scrollIntoView({ behavior: 'smooth', block: 'center' }); p.classList.add('flash'); setTimeout(() => p.classList.remove('flash'), 1200); }
-};
-
 // ===== 模块放大（点击模块标题 → 在页面中央放大展示该板块与数据）=====
 let focusState = null;
 function closeFocus() {

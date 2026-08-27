@@ -296,7 +296,51 @@ async function fetchCaiyunLive(s) {
   } catch (e) { return { ok: false, error: 'caiyun parse: ' + (e.message || e) }; }
 }
 
-// ===== 1.7 多数据源实况交叉校核（CMA / Open-Meteo / wttr.in / 彩云天气）=====
+// ===== 1.65 挪威气象局(yr.no) 实况（独立第三方欧洲源，免费免密钥，用于与 Open-Meteo / wttr.in 交叉校核；提供气温/风/湿度/气压）=====
+async function fetchMetNoLive(s) {
+  const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
+  const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
+  const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12000);
+  let d;
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'AlphaSunBeihai/1.0 (alphasun-beihai monitor; contact: ops@local)' } });
+    if (!r.ok) throw new Error('metno HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) { return { ok: false, error: 'metno fetch: ' + (e.message || e) }; }
+  finally { clearTimeout(t); }
+  try {
+    const ts = (d && d.properties && d.properties.timeseries && d.properties.timeseries[0]);
+    if (!ts) return { ok: false, error: 'metno: 无 timeseries' };
+    const ins = ts.data.instant.details;
+    const temp = ins.air_temperature;
+    const wind = (ins.wind_speed != null) ? ins.wind_speed : 0;
+    const windDir = (ins.wind_from_direction != null) ? ins.wind_from_direction : 0;
+    const rh = (ins.relative_humidity != null) ? Math.round(ins.relative_humidity) : null;
+    const pressure = (ins.air_pressure_at_sea_level != null) ? +ins.air_pressure_at_sea_level.toFixed(0) : 0;
+    const cloud = (ins.cloud_area_fraction != null) ? Math.round(ins.cloud_area_fraction) : 100;
+    const gust = (ins.wind_speed_of_gust != null) ? ins.wind_speed_of_gust : 0;
+    let code = 3, text = '多云';
+    if (cloud < 20) { code = 0; text = '晴'; }
+    else if (cloud < 50) { code = 2; text = '局部多云'; }
+    else if (cloud >= 85) { code = 3; text = '阴'; }
+    const n1 = (ts.data.next_1_hours && ts.data.next_1_hours.details && ts.data.next_1_hours.details.precipitation_amount);
+    if (typeof n1 === 'number' && n1 > 0.1) { code = 61; text = '雨'; }
+    const cat = wxCategory(code, text);
+    return {
+      ok: true, source: 'metno', label: '挪威气象局(yr.no)', time: ts.time || null,
+      current: {
+        time: new Date().toISOString().slice(0, 16),
+        temp, feels: temp, rh, precip: (typeof n1 === 'number' ? n1 : 0),
+        code, text, icon: wmo(code)[1], wind, gust, windDir, pressure, cloud, isDay: 1, uv: null, vis: null,
+        realtimeSource: 'MET Norway (yr.no)',
+      },
+    };
+  } catch (e) { return { ok: false, error: 'metno parse: ' + (e.message || e) }; }
+}
+
+// ===== 1.7 多数据源实况交叉校核（CMA / Open-Meteo / wttr.in / 彩云天气 / yr.no）=====
 // 归一化天气大类，用于源间一致性判定
 function wxCategory(code, zh) {
   const t = String(zh || '');
@@ -331,6 +375,7 @@ function verifyRealtime(results, warnings, air) {
     snapOf(results.cma, '中国天气网(CMA)', 'cma'),
     snapOf(results.wttr, 'wttr.in', 'wttr'),
     snapOf(results.caiyun, '彩云天气(Caiyun)', 'caiyun'),
+    snapOf(results.metno, '挪威气象局(yr.no)', 'metno'),
   ];
   const valid = srcs.filter(s => s.ok);
   const uvs = valid.map(s => s.uv).filter(x => typeof x === 'number' && !isNaN(x));
@@ -351,6 +396,11 @@ function verifyRealtime(results, warnings, air) {
   const spread = tmax - tmin;
   const rhs = valid.map(s => s.rh).filter(x => typeof x === 'number' && !isNaN(x) && x > 0);
   const rhMean = rhs.length ? Math.round(rhs.reduce((a, b) => a + b, 0) / rhs.length) : null;
+  const rhSpread = rhs.length > 1 ? Math.max.apply(null, rhs) - Math.min.apply(null, rhs) : 0;
+  const winds = valid.map(s => s.wind).filter(x => typeof x === 'number' && !isNaN(x));
+  const windSpread = winds.length > 1 ? Math.max.apply(null, winds) - Math.min.apply(null, winds) : 0;
+  const presses = valid.map(s => s.pressure).filter(x => typeof x === 'number' && !isNaN(x) && x > 0);
+  const presSpread = presses.length > 1 ? Math.max.apply(null, presses) - Math.min.apply(null, presses) : 0;
   const precipMax = Math.max.apply(null, [0].concat(valid.map(s => s.precip || 0)));
   const precipAny = precipMax > 0.3;
   const discrepancies = [];
@@ -373,6 +423,10 @@ function verifyRealtime(results, warnings, air) {
   if (precipAny && valid.some(s => (s.precip || 0) < 0.1 && consensusCat === 'rain')) {
     discrepancies.push({ field: 'precip', message: '部分源实况无降水，但综合有降雨', severity: 'low' });
   }
+  if (presSpread > 4) {
+    discrepancies.push({ field: 'pressure', message: '气压源间差异较大（' + Math.min.apply(null, presses).toFixed(0) + '~' + Math.max.apply(null, presses).toFixed(0) + 'hPa）', severity: 'low' });
+    if (agreement === 'high') agreement = 'medium';
+  }
   if (uvs.length >= 2) {
     const uspread = uvMax - uvMin;
     if (uspread > 3) { discrepancies.push({ field: 'uv', message: '紫外线指数源间差异较大（' + uvMin.toFixed(1) + '~' + uvMax.toFixed(1) + '）', severity: 'low' }); if (agreement === 'high') agreement = 'medium'; }
@@ -387,10 +441,18 @@ function verifyRealtime(results, warnings, air) {
     }
   }
   conf = Math.max(0, Math.min(1, +conf.toFixed(2)));
+  // 逐字段交叉校验表（源×字段）：用于前端「多源实况校核」模块可视化校验矩阵
+  const fields = [
+    { key: 'temp', label: '气温', unit: '℃', vals: valid.map(s => ({ label: s.label, v: (s.temp != null ? +s.temp.toFixed(1) : null) })), spread: +spread.toFixed(1), consistent: spread <= 1.5 },
+    { key: 'rh', label: '湿度', unit: '%', vals: valid.map(s => ({ label: s.label, v: (s.rh != null ? s.rh : null) })), spread: +rhSpread.toFixed(0), consistent: rhSpread <= 12 },
+    { key: 'wind', label: '风速', unit: 'm/s', vals: valid.map(s => ({ label: s.label, v: (s.wind != null ? +s.wind.toFixed(1) : null) })), spread: +windSpread.toFixed(1), consistent: windSpread <= 2.5 },
+    { key: 'pressure', label: '气压', unit: 'hPa', vals: valid.map(s => ({ label: s.label, v: (s.pressure > 0 ? s.pressure : null) })), spread: +presSpread.toFixed(0), consistent: presSpread <= 4 },
+    { key: 'precip', label: '降水', unit: 'mm', vals: valid.map(s => ({ label: s.label, v: (s.precip != null ? +s.precip.toFixed(1) : null) })), spread: 0, consistent: true },
+  ];
   const rec = valid.find(s => s.source === 'cma') || valid.find(s => s.category === consensusCat) || valid[0];
   const recommended = { temp: +tmean.toFixed(1), rh: rhMean, precip: +precipMax.toFixed(1), code: rec.code, text: rec.text, icon: rec.icon, source: rec.label };
   return {
-    ok: true, checkedAt, city: '北海', sources: srcs,
+    ok: true, checkedAt, city: '北海', sources: srcs, fields,
     consensus: { category: consensusCat, tempMin: +tmin.toFixed(1), tempMax: +tmax.toFixed(1), tempMean: +tmean.toFixed(1), tempSpread: +spread.toFixed(1), rhMean, precipAny, precipMax: +precipMax.toFixed(1), uvMean, uvMin, uvMax },
     agreement, confidence: conf, discrepancies, recommended,
     air: (air && air.ok) ? { aqi: air.aqi, primary: air.primary, pm25: air.pm25, pm10: air.pm10, o3: air.o3 } : null,
@@ -690,5 +752,5 @@ async function fetchRegionalBeihai() {
 module.exports = {
   fetchForecast, fetchAir, fetchMarine, fetchFlood, fetchClimate,
   fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir, fetchCmaLive,
-  fetchWttrLive, fetchCaiyunLive, verifyRealtime, fetchRegionalBeihai,
+  fetchWttrLive, fetchCaiyunLive, fetchMetNoLive, verifyRealtime, fetchRegionalBeihai,
 };

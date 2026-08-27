@@ -105,6 +105,13 @@ async function getClimate(s) {
   try { const d = await src.fetchClimate(s); climateCache.set(s.id, { expire: Date.now() + 24 * 3600e3, data: d }); return d; }
   catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
+// 取主站气候月均态用于「气候距平」联动；用 9s 上限包裹，避免冷缓存首屏被 30 年气候请求拖慢
+function fetchClimateNormals(s) {
+  return Promise.race([
+    getClimate(s).catch(() => null),
+    new Promise(res => setTimeout(res, 9000)),
+  ]).then(c => (c && c.ok) ? { monthlyTemp: c.monthlyTemp, monthlyPrecip: c.monthlyPrecip } : null);
+}
 
 // 多源实况校核快照：节流写入 data/realtime-check.json，作为可审计的校核数据留存（本地缓存，不入库提交）
 const rtCheckCache = { last: 0, path: path.join(__dirname, '..', 'data', 'realtime-check.json') };
@@ -185,8 +192,10 @@ async function buildOverview() {
     src.fetchWttrLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchCaiyunLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchRegionalBeihai().catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchMetNoLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+    fetchClimateNormals(STATIONS[0]).catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes, regionalRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes, regionalRes, metnoRes, climateRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -203,8 +212,10 @@ async function buildOverview() {
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.rainstorm) ? warnRes.value.rainstorm : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.convective) ? warnRes.value.convective : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
   ];
-  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal }, warnCtx, primaryAgg ? primaryAgg.air : null);
+  const metnoVal = (metnoRes && metnoRes.status === 'fulfilled') ? metnoRes.value : metnoRes;
+  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal, metno: metnoVal }, warnCtx, primaryAgg ? primaryAgg.air : null);
   const regionalWeather = (regionalRes && regionalRes.status === 'fulfilled') ? regionalRes.value : { ok: false, error: (regionalRes && regionalRes.reason) ? String(regionalRes.reason) : '区域天气采集失败' };
+  const primaryClimate = (climateRes && climateRes.status === 'fulfilled') ? climateRes.value : null;
   persistRealtimeCheck(realtimeCheck);
   const quakes = quakeRes.status === 'fulfilled' && quakeRes.value.ok ? quakeRes.value.events : [];
   const fires = fireRes.status === 'fulfilled' && fireRes.value.ok ? fireRes.value.fires : [];
@@ -260,6 +271,7 @@ async function buildOverview() {
     astronomy: astro.astronomicalEvents(),
     realtimeCheck,
     regionalWeather,
+    primaryClimate,
     globalAlerts,
   };
 }
@@ -299,6 +311,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`AlphaSun 北海极端气候全景系统 -> http://localhost:${PORT}`);
+  // 预热气候均态缓存（24h），使 «气候距平» 联动即时可用，不阻塞首屏
+  getClimate(STATIONS[0]).catch(() => {});
   // 双击 exe 运行时自动打开浏览器（设环境变量 OPEN=0 可关闭）
   if (process.env.OPEN !== '0' && process.platform === 'win32') {
     setTimeout(() => { try { exec('start http://localhost:' + PORT); } catch (e) {} }, 1200);

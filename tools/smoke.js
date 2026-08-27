@@ -107,12 +107,20 @@ function buildMock() {
   const realtimeCheck = {
     agreement: 'high', confidence: 0.95,
     sources: [
-      { label: 'Open-Meteo', ok: true, skipped: false, temp: 30, text: '晴', precip: 0, uv: 8, category: 'clear' },
-      { label: '中国天气网', ok: true, skipped: false, temp: 30.2, text: '晴', precip: 0, uv: 8, category: 'clear' },
-      { label: 'wttr.in', ok: true, skipped: false, temp: 29.8, text: '晴', precip: 0, uv: 8, category: 'clear' },
-      { label: '彩云天气', ok: true, skipped: false, temp: 30.1, text: '晴', precip: 0, uv: 8, category: 'clear' },
+      { label: 'Open-Meteo', ok: true, skipped: false, temp: 30, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4, pressure: 1008 },
+      { label: '中国天气网', ok: true, skipped: false, temp: 30.2, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 76, wind: 4.2, pressure: 1009 },
+      { label: 'wttr.in', ok: true, skipped: false, temp: 29.8, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 74, wind: 3.8, pressure: 0 },
+      { label: '彩云天气', ok: true, skipped: false, temp: 30.1, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4.1, pressure: 0 },
+      { label: '挪威气象局(yr.no)', ok: true, skipped: false, temp: 30.3, text: '晴', precip: 0, uv: null, category: 'clear', rh: 73, wind: 4.4, pressure: 1007 },
     ],
-    consensus: { category: 'clear', tempMin: 29.8, tempMax: 30.2, tempMean: 30, rhMean: 75, uvMean: 8, uvMin: 8, uvMax: 8, air: { aqi: 45 } },
+    fields: [
+      { key: 'temp', label: '气温', unit: '℃', vals: [{ label: 'Open-Meteo', v: 30 }, { label: '中国天气网', v: 30.2 }, { label: 'wttr.in', v: 29.8 }, { label: '彩云天气', v: 30.1 }, { label: '挪威气象局(yr.no)', v: 30.3 }], spread: 0.5, consistent: true },
+      { key: 'rh', label: '湿度', unit: '%', vals: [{ label: 'Open-Meteo', v: 75 }, { label: '中国天气网', v: 76 }, { label: 'wttr.in', v: 74 }, { label: '彩云天气', v: 75 }, { label: '挪威气象局(yr.no)', v: 73 }], spread: 3, consistent: true },
+      { key: 'wind', label: '风速', unit: 'm/s', vals: [{ label: 'Open-Meteo', v: 4 }, { label: '中国天气网', v: 4.2 }, { label: 'wttr.in', v: 3.8 }, { label: '彩云天气', v: 4.1 }, { label: '挪威气象局(yr.no)', v: 4.4 }], spread: 0.6, consistent: true },
+      { key: 'pressure', label: '气压', unit: 'hPa', vals: [{ label: 'Open-Meteo', v: 1008 }, { label: '中国天气网', v: null }, { label: 'wttr.in', v: null }, { label: '彩云天气', v: null }, { label: '挪威气象局(yr.no)', v: 1007 }], spread: 1, consistent: true },
+      { key: 'precip', label: '降水', unit: 'mm', vals: [{ label: 'Open-Meteo', v: 0 }, { label: '中国天气网', v: 0 }, { label: 'wttr.in', v: 0 }, { label: '彩云天气', v: 0 }, { label: '挪威气象局(yr.no)', v: 0 }], spread: 0, consistent: true },
+    ],
+    consensus: { category: 'clear', tempMin: 29.8, tempMax: 30.3, tempMean: 30, rhMean: 75, uvMean: 8, uvMin: 8, uvMax: 8, air: { aqi: 45 } },
     discrepancies: [],
     checkedAt: new Date().toISOString(),
     recommended: { source: 'Open-Meteo' },
@@ -168,6 +176,7 @@ function buildMock() {
   return {
     updated: new Date().toISOString(),
     stations, realtimeCheck, regionalWeather, globalAlerts, alertIntel, astronomy, tides, riverReservoir,
+    primaryClimate: { monthlyTemp: [15, 16, 19, 23, 27, 29, 30, 29, 28, 25, 21, 17], monthlyPrecip: [30, 40, 60, 90, 180, 260, 300, 320, 220, 90, 50, 35] },
     typhoon: { ok: true, count: 0 }, warnings: { ok: true, count: 1 },
   };
 }
@@ -261,7 +270,6 @@ const testSrc = `
       leap2033: (function () { try { lunarDate(2033, 1, 1); lunarDate(2033, 12, 31); return 'ok'; } catch (e) { return 'ERR ' + e.message; } })(),
     };
   } catch (e) { globalThis.__algo = { err: String(e) }; }
-  try { var dq = document.getElementById('dqChip'); if (dq.onclick) dq.onclick(); globalThis.__dqClick = 'ok'; } catch (e) { globalThis.__dqClick = 'ERR ' + e.message; }
   try {
     if (state.data.globalAlerts[0]) openAlertModal(state.data.globalAlerts[0]);
     openBeihaiModal();
@@ -292,15 +300,20 @@ function runAssertions() {
   ok(algo.gz2026 === '丙午', '2026 年为丙午年（' + algo.gz2026 + '）');
   ok(algo.leap2033 === 'ok', '2033 闰月年 lunarDate 不抛错（' + algo.leap2033 + '）');
 
-  const dqText = (els['dqChip'] && els['dqChip'].textContent) || '';
-  ok(dqText.indexOf('数据可信度') >= 0, '顶部 #dqChip 已渲染数据可信度（' + dqText + '）');
-  ok(ctx.__dqClick === 'ok', '点击 #dqChip 跳转逻辑不抛错（' + (ctx.__dqClick || '?') + '）');
   ok(ctx.__modalOk === 'ok', '告警模态 + 定位联动不抛错（' + (ctx.__modalOk || '?') + '）');
 
   const updated = (els['updated'] && els['updated'].textContent) || '';
   ok(updated.indexOf('更新于') >= 0, '顶部更新时间已渲染（' + updated + '）');
   const rc = (els['realtimeCheckBody'] && els['realtimeCheckBody'].innerHTML) || '';
   ok(rc.indexOf('校核') >= 0, '多源实况校核面板已渲染');
+  ok(rc.indexOf('yr.no') >= 0, '多源校核含新增 yr.no 数据源');
+  ok(rc.indexOf('交叉校验') >= 0, '多源校核渲染逐字段交叉校验表');
+  const rt = (els['realtimeBody'] && els['realtimeBody'].innerHTML) || '';
+  ok(rt.indexOf('rc-badge') >= 0, '实时天气模块显示多源校验徽标（联动）');
+  const fc = (els['forecastBody'] && els['forecastBody'].innerHTML) || '';
+  ok(fc.indexOf('预测置信') >= 0, '预报模块显示预测置信（联动）');
+  const cl = (els['climateBody'] && els['climateBody'].innerHTML) || '';
+  ok(cl.indexOf('气候距平') >= 0, '气候模块显示实况距平（联动）');
   const cal = (els['calendarBody'] && els['calendarBody'].innerHTML) || '';
   ok(cal.indexOf('cal-grid') >= 0, '农历日历模块已渲染');
   const alertStatus = (els['alertStatus'] && els['alertStatus'].textContent) || '';
