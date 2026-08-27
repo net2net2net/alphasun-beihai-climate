@@ -121,7 +121,46 @@ function dirToDeg(d) {
   for (const k of Object.keys(M)) if (String(d).includes(k)) return M[k];
   return 0;
 }
+// 中国天气网(CMA) 公开接口 d1.weather.com.cn/sk_ 已于近年全局下线（301 跳转商用引导页），
+// 故改用「和风天气 QWeather」——CMA 数据的官方商业分发方——作为权威中国实况源。
+// 配置环境变量 QWEATHER_KEY（免费 dev key）后启用；未配置时回退原 d1 接口（通常不可达，标记 skipped）。
+async function qweatherNow(s) {
+  const key = process.env.QWEATHER_KEY;
+  if (!key) return null;
+  const host = process.env.QWEATHER_HOST || 'devapi.qweather.com';
+  const url = `https://${host}/v7/weather/now?location=${s.lon.toFixed(3)},${s.lat.toFixed(3)}&key=${encodeURIComponent(key)}`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12000);
+  let d;
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0', 'X-Qweather-Token': key } });
+    if (!r.ok) throw new Error('qweather HTTP ' + r.status);
+    d = await r.json();
+  } finally { clearTimeout(t); }
+  if (!d || String(d.code) !== '200' || !d.now) throw new Error('qweather: ' + (d && d.code) + ' ' + (d && d.message || ''));
+  const n = d.now;
+  const zh = String(n.text || '').trim();
+  const code = zhWeatherToWmo(zh);
+  const wind = (parseFloat(n.windSpeed) || 0) / 3.6; // km/h -> m/s
+  return {
+    ok: true, source: 'cma', label: '中国天气网(CMA)', time: n.obsTime || null,
+    current: {
+      time: new Date().toISOString().slice(0, 16),
+      temp: parseFloat(n.temp), feels: parseFloat(n.feelsLike),
+      rh: parseInt(n.humidity, 10) || 0, precip: parseFloat(n.precip) || 0,
+      code, text: zh || wmo(code)[0], icon: wmo(code)[1],
+      wind, gust: 0, windDir: dirToDeg(n.windDir),
+      pressure: parseFloat(n.pressure) || 0, cloud: parseInt(n.cloud, 10) || 100, isDay: 1,
+    },
+  };
+}
 async function fetchCmaLive(s) {
+  const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
+  const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
+  // 1) 优先和风天气（CMA 官方分发，需免费 key）；无 key 或拉取失败则回落原接口
+  const qw = await qweatherNow({ lat, lon }).catch(() => null);
+  if (qw) { return qw; }
+  // 2) 原公开接口（多数网络已停用，保留兼容）
   const CITY = '101300501'; // 北海市（中国天气网城市代码）
   const url = `http://d1.weather.com.cn/sk_${CITY}.html`;
   const ctrl = new AbortController();
@@ -130,11 +169,11 @@ async function fetchCmaLive(s) {
   try {
     const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'http://www.weather.com.cn/' } });
     text = await r.text();
-  } catch (e) { return { ok: false, error: 'cma fetch failed: ' + (e.message || e) }; }
+  } catch (e) { return { ok: false, error: 'cma fetch failed: ' + (e.message || e), skipped: !process.env.QWEATHER_KEY }; }
   finally { clearTimeout(t); }
   try {
     const m = text.match(/var\s+dataSK\s*=\s*(\{[\s\S]*?\});/);
-    if (!m) return { ok: false, error: 'cma: no dataSK block' };
+    if (!m) return { ok: false, error: 'cma: 公开接口已停用(需配置 QWEATHER_KEY)', skipped: !process.env.QWEATHER_KEY };
     const j = JSON.parse(m[1]);
     const zh = String(j.weather || '').trim();
     const code = zhWeatherToWmo(zh);
@@ -146,10 +185,8 @@ async function fetchCmaLive(s) {
       ok: true, source: 'cma', city: CITY, time: j.time,
       current: {
         time: new Date().toISOString().slice(0, 16),
-        temp: parseFloat(j.temp),
-        feels: parseFloat(j.temp),
-        rh: isNaN(rh) ? null : rh,
-        precip: isNaN(precip) ? 0 : precip,
+        temp: parseFloat(j.temp), feels: parseFloat(j.temp),
+        rh: isNaN(rh) ? null : rh, precip: isNaN(precip) ? 0 : precip,
         code, text: zh || wmoPair[0], icon: wmoPair[1],
         wind: isNaN(wind) ? 0 : wind, gust: 0,
         windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1,
@@ -201,7 +238,59 @@ async function fetchWttrLive(s) {
   } catch (e) { return { ok: false, error: 'wttr parse: ' + (e.message || e) }; }
 }
 
-// ===== 1.7 多数据源实况交叉校核（CMA / Open-Meteo / wttr.in）=====
+// ===== 1.6b 彩云天气实况（独立中国源，用于与 CMA/和风、Open-Meteo、wttr.in 交叉校核；
+//        环境变量 CAIYUN_TOKEN 配置后启用；未配置标记 skipped。不同模型/提供商，增强分歧识别）=====
+function caiyunSkyconToWmo(sky) {
+  const t = String(sky || '').toUpperCase();
+  if (/THUNDER|LIGHTNING|HAIL/.test(t)) return { code: 95, zh: '雷阵雨' };
+  if (/RAIN|DRIZZLE/.test(t)) return { code: 61, zh: '雨' };
+  if (/SNOW|SLEET/.test(t)) return { code: 71, zh: '雪' };
+  if (/FOG|HAZE/.test(t)) return { code: 45, zh: '雾' };
+  if (/CLOUDY|OVERCAST/.test(t)) return { code: 3, zh: '多云' };
+  if (/CLEAR|PARTLY/.test(t)) return { code: 0, zh: '晴' };
+  return { code: 3, zh: '多云' };
+}
+async function fetchCaiyunLive(s) {
+  const token = process.env.CAIYUN_TOKEN;
+  if (!token) return { ok: false, error: '未配置 CAIYUN_TOKEN（可选中国源）', skipped: true };
+  const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
+  const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
+  const url = `https://api.caiyunapp.com/v2.6/${token}/${lon.toFixed(4)},${lat.toFixed(4)}/realtime.json`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12000);
+  let d;
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!r.ok) throw new Error('caiyun HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) { return { ok: false, error: 'caiyun fetch: ' + (e.message || e) }; }
+  finally { clearTimeout(t); }
+  try {
+    const rt = (d && d.result && d.result.realtime) || {};
+    const sky = caiyunSkyconToWmo(rt.skycon);
+    const rh = (typeof rt.humidity === 'number') ? Math.round(rt.humidity * 100) : 0;
+    const cloud = (typeof rt.cloudrate === 'number') ? Math.round(rt.cloudrate * 100) : 100;
+    const windObj = (rt.wind && typeof rt.wind === 'object') ? rt.wind : null;
+    const wind = windObj ? (parseFloat(windObj.speed) || 0) : 0;       // m/s
+    const windDir = windObj ? (parseFloat(windObj.direction) || 0) : 0; // deg
+    let precip = 0;
+    if (rt.precipitation && typeof rt.precipitation === 'object') precip = parseFloat(rt.precipitation.local) || 0;
+    else if (typeof rt.precipitation === 'number') precip = rt.precipitation;
+    return {
+      ok: true, source: 'caiyun', label: '彩云天气(Caiyun)', time: null,
+      current: {
+        time: new Date().toISOString().slice(0, 16),
+        temp: parseFloat(rt.temperature),
+        feels: parseFloat(rt.apparent_temperature != null ? rt.apparent_temperature : rt.temperature),
+        rh, precip: isNaN(precip) ? 0 : precip,
+        code: sky.code, text: sky.zh, icon: wmo(sky.code)[1],
+        wind, gust: 0, windDir, pressure: 0, cloud, isDay: 1,
+      },
+    };
+  } catch (e) { return { ok: false, error: 'caiyun parse: ' + (e.message || e) }; }
+}
+
+// ===== 1.7 多数据源实况交叉校核（CMA / Open-Meteo / wttr.in / 彩云天气）=====
 // 归一化天气大类，用于源间一致性判定
 function wxCategory(code, zh) {
   const t = String(zh || '');
@@ -217,7 +306,8 @@ function snapOf(result, label, key) {
   if (result && result.status === 'fulfilled') v = result.value;
   else if (result && typeof result.ok === 'boolean') v = result;
   if (!v || !v.ok || !v.current) {
-    return { ok: false, label, source: key, error: (result && result.reason) ? String(result.reason) : (v ? '无实况数据' : '源不可达') };
+    const err = (result && result.reason) ? String(result.reason) : (v && v.error ? v.error : (v ? '无实况数据' : '源不可达'));
+    return { ok: false, label, source: key, error: err, skipped: !!(v && v.skipped) };
   }
   const c = v.current;
   return {
@@ -233,6 +323,7 @@ function verifyRealtime(results, warnings) {
     snapOf(results.openMeteo, 'Open-Meteo', 'openmeteo'),
     snapOf(results.cma, '中国天气网(CMA)', 'cma'),
     snapOf(results.wttr, 'wttr.in', 'wttr'),
+    snapOf(results.caiyun, '彩云天气(Caiyun)', 'caiyun'),
   ];
   const valid = srcs.filter(s => s.ok);
   const checkedAt = new Date().toISOString();
@@ -515,5 +606,5 @@ async function aggregateStation(s, cache) {
 module.exports = {
   fetchForecast, fetchAir, fetchMarine, fetchFlood, fetchClimate,
   fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir, fetchCmaLive,
-  fetchWttrLive, verifyRealtime,
+  fetchWttrLive, fetchCaiyunLive, verifyRealtime,
 };
