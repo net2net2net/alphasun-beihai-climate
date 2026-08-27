@@ -114,8 +114,9 @@ async function buildOverview() {
     src.fetchFires().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchTyphoon().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchWarnings().catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchRiverReservoir().catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -166,6 +167,7 @@ async function buildOverview() {
       rainstorm: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.rainstorm : [],
       geological: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.geological : [],
       convective: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.convective : [] },
+    riverReservoir: rrRes.status === 'fulfilled' ? rrRes.value : { ok: false, error: 'unavailable' },
     astronomy: astro.astronomicalEvents(),
     globalAlerts,
   };

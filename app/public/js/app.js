@@ -252,7 +252,7 @@ function render() {
     });
   } else banner.classList.add('hidden');
 
-  renderStations(); renderRealtime(); renderAir(); renderMarine();
+  renderStations(); renderRealtime(); renderAir(); renderMarine(); renderRiverReservoir();
   renderAstro(); renderGlow(); renderMorningGlow(); renderTides();
   renderForecast7(); renderForecast15();
   renderAlerts(); renderEvents(); renderChartDims();
@@ -732,6 +732,28 @@ const SITES = [
     { n: '中国天气网', u: 'http://www.weather.com.cn/', note: '公众天气预报' },
   ] },
 ];
+
+function renderRiverReservoir() {
+  var rr = state.data && state.data.riverReservoir;
+  var rb = $('riverBody'), sb = $('reservoirBody');
+  if (!rr || !rr.ok) {
+    if (rb) rb.innerHTML = '<div class="muted">江河数据暂不可用</div>';
+    if (sb) sb.innerHTML = '<div class="muted">水库数据暂不可用</div>';
+    return;
+  }
+  var statusTxt = rr.realtime ? '实时' : ('档案（' + (rr.realtimeStatus === 'unreachable' ? '实时源不可达' : rr.realtimeStatus) + '）');
+  var tbl = 'width:100%;border-collapse:collapse;border:1px solid #2a3b4d';
+  var th = '<th style="padding:3px 6px;text-align:left">';
+  var riverRows = (rr.rivers || []).map(function(r){
+    return '<tr><td style="padding:3px 6px"><b>'+(r.name||'')+'</b></td><td style="padding:3px 6px">'+(r.type||'')+'</td><td style="padding:3px 6px">'+(r.outfall||'—')+'</td><td class="muted" style="font-size:11px;padding:3px 6px">'+(r.note||'')+'</td></tr>';
+  }).join('');
+  var resRows = (rr.reservoirs || []).map(function(r){
+    var cap = r.totalCapM3 != null ? (r.totalCapM3/1e8).toFixed(2)+'亿m³' : '待核实';
+    return '<tr><td style="padding:3px 6px"><b>'+(r.name||'')+'</b></td><td style="padding:3px 6px">'+(r.scale||'')+'</td><td style="padding:3px 6px">'+(r.county||'—')+'</td><td style="padding:3px 6px">'+cap+'</td><td style="padding:3px 6px">'+(r.drinking?'🚰饮用水源':'—')+'</td><td class="muted" style="font-size:11px;padding:3px 6px">'+(r.note||'')+'</td></tr>';
+  }).join('');
+  if (rb) rb.innerHTML = '<div class="muted" style="font-size:11px;margin-bottom:6px">数据性质：'+statusTxt+' ｜ 来源：'+rr.source+'</div><table style="'+tbl+'"><thead><tr style="background:#16202c">'+th+'江河</th>'+th+'类型</th>'+th+'入海口/归属</th>'+th+'说明</th></tr></thead><tbody>'+riverRows+'</tbody></table>';
+  if (sb) sb.innerHTML = '<div class="muted" style="font-size:11px;margin-bottom:6px">数据性质：'+statusTxt+' ｜ 来源：'+rr.source+'</div><table style="'+tbl+'"><thead><tr style="background:#16202c">'+th+'水库</th>'+th+'规模</th>'+th+'位置</th>'+th+'总库容</th>'+th+'功能</th>'+th+'说明</th></tr></thead><tbody>'+resRows+'</tbody></table>';
+}
 function renderLinks() {
   $('linksBody').innerHTML = SITES.map(g => `
     <div class="ln-group">

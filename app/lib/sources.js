@@ -1,7 +1,7 @@
 // AlphaSun · 数据源适配层
 // 所有函数返回归一化对象；失败返回 { ok:false, error } 不影响整体。
 const http = require('https');
-const { API, wmo, GEO, PROV_GEO, WARN_CAT, WARN_LEVEL } = require('./config');
+const { API, wmo, GEO, PROV_GEO, WARN_CAT, WARN_LEVEL, RIVER_PROFILE, RESERVOIR_PROFILE } = require('./config');
 
 function fetchJSON(url, timeout = 15000) {
   const ctrl = new AbortController();
@@ -153,6 +153,27 @@ async function fetchFlood(s) {
   return { ok: true, discharge: v[0], hasRiver: v.some(x => x !== null && x > 0) };
 }
 
+
+// ===== 10. 江河 · 水库 权威档案（依据广西水文中心/北海市政府等公开资料整理；实时接口当前不可达，降级为档案）=====
+async function fetchRiverReservoir() {
+  let realtimeStatus = 'unreachable';
+  try {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 5000);
+    const r = await fetch('http://swzx.gxzf.gov.cn/swfw/sqfw/sssq/', { signal: c.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    clearTimeout(t);
+    realtimeStatus = (r.status < 400) ? 'reachable' : 'blocked';
+  } catch (e) { realtimeStatus = 'unreachable'; }
+  return {
+    ok: true,
+    realtime: false,
+    realtimeStatus,
+    source: '广西水文中心 / 北海市政府 / 北海新闻网 等公开资料整理（非实时站测）',
+    updated: '2026-08-27',
+    rivers: RIVER_PROFILE,
+    reservoirs: RESERVOIR_PROFILE,
+  };
+}
 // ===== 5. 气候背景（Open-Meteo Climate：1991–2020 月均态）=====
 async function fetchClimate(s) {
   const url = qs(API.climate, {
@@ -303,5 +324,5 @@ async function aggregateStation(s, cache) {
 
 module.exports = {
   fetchForecast, fetchAir, fetchMarine, fetchFlood, fetchClimate,
-  fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation,
+  fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir,
 };
