@@ -271,6 +271,25 @@ const HOLIDAYS = {};
 })();
 function getHoliday(y,m,d){ return HOLIDAYS[y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')] || null; }
 
+// 黄历（传统历法推算，由 vendor/lunar.js 注入全局 Solar/Lunar；库未加载时安全降级为 null）
+// 输出：干支历 年/月/日柱、每日宜忌、冲煞、二十八宿（含吉凶）、彭祖百忌、值神、喜神方位
+function huangli(y, m, d) {
+  try {
+    if (typeof Solar === 'undefined' || !Solar.fromYmd) return null;
+    const lu = Solar.fromYmd(y, m, d).getLunar();
+    const join = a => (Array.isArray(a) ? a.join(' ') : (a || ''));
+    return {
+      yearGZ: lu.getYearInGanZhi(), monthGZ: lu.getMonthInGanZhi(), dayGZ: lu.getDayInGanZhi(),
+      yi: join(lu.getDayYi()), ji: join(lu.getDayJi()),
+      chong: lu.getDayChong(), sha: lu.getDaySha(),
+      xiu: lu.getXiu(), xiuLuck: lu.getXiuLuck(),
+      pengGan: lu.getPengZuGan(), pengZhi: lu.getPengZuZhi(),
+      tianShen: lu.getDayTianShen(), posXi: lu.getDayPositionXi(),
+      monthCn: lu.getMonthInChinese(), dayCn: lu.getDayInChinese(),
+    };
+  } catch (e) { return null; }
+}
+
 // ===== 农历日历模块（右侧底部，可翻看） =====
 let calView = null;
 function renderCalendar(){
@@ -297,7 +316,9 @@ function renderCalendar(){
     const isWeekend = (dow===0||dow===6) && !(hol && hol.t==='work');
     let cls = 'cal-cell'; if(isToday) cls += ' cal-today'; if(isWeekend) cls += ' cal-weekend';
     const sub = term || ((lu.leap?'闰':'')+lu.monthCn+lu.dayCn);
-    html += '<div class="'+cls+'"><div class="cal-d">'+d+'</div><div class="cal-sub">'+sub+'</div>';
+    const hl = huangli(y,m,d);
+    const yiTag = (hl && hl.yi) ? '<div class="cal-yi">宜 '+hl.yi.split(' ')[0]+'</div>' : '';
+    html += '<div class="'+cls+'" data-date="'+y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')+'" title="点击查看黄历·干支历"><div class="cal-d">'+d+'</div><div class="cal-sub">'+sub+'</div>'+yiTag;
     if(hol) html += '<span class="cal-badge '+(hol.t==='rest'?'rest':'work')+'">'+(hol.t==='rest'?'休':'班')+'</span><div class="cal-hname">'+hol.n+'</div>';
     html += '</div>';
   }
@@ -307,16 +328,61 @@ function renderCalendar(){
 function startCalendar(){
   const el = $('calendarBody'); if(!el) return;
   el.addEventListener('click', e => {
-    const b = e.target.closest('[data-cal]'); if(!b) return;
-    const act = b.getAttribute('data-cal');
-    if(act==='prev'){ calView.m--; if(calView.m<1){ calView.m=12; calView.y--; } }
-    else if(act==='next'){ calView.m++; if(calView.m>12){ calView.m=1; calView.y++; } }
-    else if(act==='today'){ const n=new Date(); calView={ y:n.getFullYear(), m:n.getMonth()+1 }; }
-    renderCalendar();
+    const b = e.target.closest('[data-cal]');
+    if (b) {
+      const act = b.getAttribute('data-cal');
+      if(act==='prev'){ calView.m--; if(calView.m<1){ calView.m=12; calView.y--; } }
+      else if(act==='next'){ calView.m++; if(calView.m>12){ calView.m=1; calView.y++; } }
+      else if(act==='today'){ const n=new Date(); calView={ y:n.getFullYear(), m:n.getMonth()+1 }; }
+      renderCalendar();
+      return;
+    }
+    const cell = e.target.closest('[data-date]');
+    if (cell) {
+      const p = cell.getAttribute('data-date').split('-').map(Number);
+      renderHuangliDetail(p[0], p[1], p[2]);
+    }
   });
   renderCalendar();
   setInterval(renderCalendar, 60000); // 跨日自动刷新“今天”高亮
+  // 黄历弹窗关闭（点击遮罩 / 关闭按钮 / Esc）
+  const mask = $('hlModal');
+  if (mask) mask.addEventListener('click', e => { if (e.target === mask || (e.target.closest && e.target.closest('[data-hl-close]'))) closeHuangli(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHuangli(); });
 }
+// 打开黄历·干支历详情弹窗
+function renderHuangliDetail(y, m, d) {
+  const el = $('hlModal'); if (!el) return;
+  const hl = huangli(y, m, d);
+  const lu = lunarDate(y, m, d);
+  const term = getTerm(y, m, d);
+  const hol = getHoliday(y, m, d);
+  const wk = ['日','一','二','三','四','五','六'][new Date(y, m-1, d).getDay()];
+  let html = '<div class="hl-card" role="dialog" aria-label="黄历详情">';
+  html += '<button class="hl-close" data-hl-close title="关闭">✕</button>';
+  html += '<div class="hl-h">'+y+'年'+m+'月'+d+'日 · 周'+wk+'</div>';
+  html += '<div class="hl-sub">农历 '+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn+(term?(' · '+term):'')+(hol?(' · '+hol.n):'')+'</div>';
+  if (hl) {
+    html += '<div class="hl-gz">干支历 <b>'+hl.yearGZ+'</b>年 <b>'+hl.monthGZ+'</b>月 <b>'+hl.dayGZ+'</b>日</div>';
+    html += '<div class="hl-grid">';
+    html += '<div class="hl-row"><span class="hl-k yi">宜</span><span class="hl-v">'+hl.yi+'</span></div>';
+    html += '<div class="hl-row"><span class="hl-k ji">忌</span><span class="hl-v">'+hl.ji+'</span></div>';
+    html += '<div class="hl-row"><span class="hl-k">冲煞</span><span class="hl-v">冲'+hl.chong+' · 煞'+hl.sha+'</span></div>';
+    const xiuCls = hl.xiuLuck === '吉' ? 'luck-good' : 'luck-bad';
+    html += '<div class="hl-row"><span class="hl-k">星宿</span><span class="hl-v">'+hl.xiu+' <em class="'+xiuCls+'">('+hl.xiuLuck+')</em></span></div>';
+    html += '<div class="hl-row"><span class="hl-k">彭祖百忌</span><span class="hl-v">'+hl.pengGan+'；'+hl.pengZhi+'</span></div>';
+    html += '<div class="hl-row"><span class="hl-k">值神</span><span class="hl-v">'+hl.tianShen+'</span></div>';
+    html += '<div class="hl-row"><span class="hl-k">喜神</span><span class="hl-v">'+(hl.posXi||'—')+'</span></div>';
+    html += '</div>';
+  } else {
+    html += '<div class="hl-sub muted">黄历数据暂不可用（lunar 库未加载）</div>';
+  }
+  html += '<div class="hl-foot muted">黄历为传统历法推算，宜忌趋避仅供参考</div>';
+  html += '</div>';
+  el.innerHTML = html;
+  el.hidden = false;
+}
+function closeHuangli() { const el = $('hlModal'); if (el) el.hidden = true; }
 
 function startTopClock() {
   const dEl = document.getElementById('clkDate');
@@ -331,7 +397,8 @@ function startTopClock() {
     if (key !== lastKey) {
       lastKey = key;
       const lu = lunarDate(d.getFullYear(), d.getMonth()+1, d.getDate());
-      dEl.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 周'+wk[d.getDay()]+' · 农历'+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn;
+      const hl0 = huangli(d.getFullYear(), d.getMonth()+1, d.getDate());
+      dEl.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 周'+wk[d.getDay()]+' · '+(hl0?hl0.yearGZ+'年 · ':'')+'农历'+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn;
     }
     tEl.textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0');
     requestAnimationFrame(frame);
@@ -519,14 +586,6 @@ function rcBadgeHtml(rc) {
   const total = (rc.sources || []).length;
   const color = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[agr] || '#8b949e';
   return `<div class="rc-badge" style="border-color:${color};color:${color}">${label} · ${reach}/${total} 源</div>`;
-}
-// 预测置信提示（基于多源实况一致度，体现「校验结果→预测天气」联动）
-function fcConfHtml(rc) {
-  if (!rc) return '';
-  const map = { high: '高 · 预测可信', medium: '中 · 不确定性略升', low: '低 · 不确定性升高，谨慎参考', unknown: '未知' };
-  const txt = map[rc.agreement] || '';
-  const color = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
-  return `<div class="fc-note" style="color:${color}">🛰 预测置信：多源实况一致度 ${txt}</div>`;
 }
 function renderRealtimeCheck() {
   const el = $('realtimeCheckBody');
@@ -857,7 +916,7 @@ function renderForecast(days, targetId) {
     return `<div class="fc-day"><div class="d">${dt.getMonth()+1}/${dt.getDate()} 周${wk[dt.getDay()]}</div>
       <div class="ic">${ic}</div><div class="t">${d.tmax.toFixed(0)}°/${d.tmin.toFixed(0)}°</div>
       <div class="p">💧${d.precipProb.toFixed(0)}%</div></div>`;
-  }).join('') + fcConfHtml(state.data.realtimeCheck);
+  }).join('');
 }
 function renderForecast7() { renderForecast(7, 'forecastBody'); }
 function renderForecast15() { renderForecast(15, 'forecast15Body'); }

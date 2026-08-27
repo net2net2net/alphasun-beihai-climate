@@ -193,13 +193,15 @@
       <div id="eventBody" class="event-body">…</div>
     </div>
 
-    <!-- 右侧底部：农历日历（农历·节气·法定假日，可翻看）-->
+    <!-- 右侧底部：日历（农历·节气·黄历·干支历，可翻看、点日看详情）-->
     <div class="panel calendar-panel" id="calendarCard">
-      <div class="panel-h">📅 农历日历 <span class="muted" style="font-weight:400;font-size:11px;margin-left:6px">农历·节气·假日 · 可翻看</span></div>
+      <div class="panel-h">📅 日历 <span class="muted" style="font-weight:400;font-size:11px;margin-left:6px">农历·节气·黄历·干支 · 可点日看详情</span></div>
       <div id="calendarBody" class="calendar-body">…</div>
     </div>
   </section>
 </main>
+
+<div id="hlModal" class="modal-mask" hidden></div>
 
 <footer class="foot">
   数据源：Open-Meteo（气象/空气/海洋/洪水/气候）· USGS（地震）· NASA FIRMS（火点，需KEY）· 国家海洋信息中心（潮汐，需凭证）｜ 演示底图 高德(Amap, GCJ-02 纠偏)｜ 作者：阳光 net2net2net（ Vx: net2net ）
@@ -209,6 +211,7 @@
 <script>window.L||document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>window.Chart||document.write('<script src="https://unpkg.com/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>');</script>
+<script src="vendor/lunar.js"></script>
 <script src="js/map.js"></script>
 <script src="js/app.js"></script>
 </body>

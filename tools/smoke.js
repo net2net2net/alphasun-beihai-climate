@@ -108,17 +108,19 @@ function buildMock() {
     agreement: 'high', confidence: 0.95,
     sources: [
       { label: 'Open-Meteo', ok: true, skipped: false, temp: 30, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4, pressure: 1008 },
-      { label: '中国天气网', ok: true, skipped: false, temp: 30.2, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 76, wind: 4.2, pressure: 1009 },
+      { label: '中国天气网(国家气象中心)', ok: true, skipped: false, temp: 30.2, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 76, wind: 4.2, pressure: 1009 },
+      { label: '和风天气(QWeather)', ok: true, skipped: false, temp: 30.1, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4.1, pressure: 1009 },
       { label: 'wttr.in', ok: true, skipped: false, temp: 29.8, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 74, wind: 3.8, pressure: 0 },
       { label: '彩云天气', ok: true, skipped: false, temp: 30.1, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4.1, pressure: 0 },
+      { label: '中国气象局(CMA)', ok: true, skipped: false, temp: 30.3, text: '晴', precip: 0, uv: null, category: 'clear', rh: 73, wind: 4.3, pressure: 1007 },
       { label: '挪威气象局(yr.no)', ok: true, skipped: false, temp: 30.3, text: '晴', precip: 0, uv: null, category: 'clear', rh: 73, wind: 4.4, pressure: 1007 },
     ],
     fields: [
-      { key: 'temp', label: '气温', unit: '℃', vals: [{ label: 'Open-Meteo', v: 30 }, { label: '中国天气网', v: 30.2 }, { label: 'wttr.in', v: 29.8 }, { label: '彩云天气', v: 30.1 }, { label: '挪威气象局(yr.no)', v: 30.3 }], spread: 0.5, consistent: true },
-      { key: 'rh', label: '湿度', unit: '%', vals: [{ label: 'Open-Meteo', v: 75 }, { label: '中国天气网', v: 76 }, { label: 'wttr.in', v: 74 }, { label: '彩云天气', v: 75 }, { label: '挪威气象局(yr.no)', v: 73 }], spread: 3, consistent: true },
-      { key: 'wind', label: '风速', unit: 'm/s', vals: [{ label: 'Open-Meteo', v: 4 }, { label: '中国天气网', v: 4.2 }, { label: 'wttr.in', v: 3.8 }, { label: '彩云天气', v: 4.1 }, { label: '挪威气象局(yr.no)', v: 4.4 }], spread: 0.6, consistent: true },
-      { key: 'pressure', label: '气压', unit: 'hPa', vals: [{ label: 'Open-Meteo', v: 1008 }, { label: '中国天气网', v: null }, { label: 'wttr.in', v: null }, { label: '彩云天气', v: null }, { label: '挪威气象局(yr.no)', v: 1007 }], spread: 1, consistent: true },
-      { key: 'precip', label: '降水', unit: 'mm', vals: [{ label: 'Open-Meteo', v: 0 }, { label: '中国天气网', v: 0 }, { label: 'wttr.in', v: 0 }, { label: '彩云天气', v: 0 }, { label: '挪威气象局(yr.no)', v: 0 }], spread: 0, consistent: true },
+      { key: 'temp', label: '气温', unit: '℃', vals: [{ label: 'Open-Meteo', v: 30 }, { label: '中国天气网(国家气象中心)', v: 30.2 }, { label: '和风天气(QWeather)', v: 30.1 }, { label: 'wttr.in', v: 29.8 }, { label: '彩云天气', v: 30.1 }, { label: '中国气象局(CMA)', v: 30.3 }, { label: '挪威气象局(yr.no)', v: 30.3 }], spread: 0.5, consistent: true },
+      { key: 'rh', label: '湿度', unit: '%', vals: [{ label: 'Open-Meteo', v: 75 }, { label: '中国天气网(国家气象中心)', v: 76 }, { label: '和风天气(QWeather)', v: 75 }, { label: 'wttr.in', v: 74 }, { label: '彩云天气', v: 75 }, { label: '中国气象局(CMA)', v: 73 }, { label: '挪威气象局(yr.no)', v: 73 }], spread: 3, consistent: true },
+      { key: 'wind', label: '风速', unit: 'm/s', vals: [{ label: 'Open-Meteo', v: 4 }, { label: '中国天气网(国家气象中心)', v: 4.2 }, { label: '和风天气(QWeather)', v: 4.1 }, { label: 'wttr.in', v: 3.8 }, { label: '彩云天气', v: 4.1 }, { label: '中国气象局(CMA)', v: 4.3 }, { label: '挪威气象局(yr.no)', v: 4.4 }], spread: 0.6, consistent: true },
+      { key: 'pressure', label: '气压', unit: 'hPa', vals: [{ label: 'Open-Meteo', v: 1008 }, { label: '中国天气网(国家气象中心)', v: 1009 }, { label: '和风天气(QWeather)', v: 1009 }, { label: 'wttr.in', v: null }, { label: '彩云天气', v: null }, { label: '中国气象局(CMA)', v: 1007 }, { label: '挪威气象局(yr.no)', v: 1007 }], spread: 1, consistent: true },
+      { key: 'precip', label: '降水', unit: 'mm', vals: [{ label: 'Open-Meteo', v: 0 }, { label: '中国天气网(国家气象中心)', v: 0 }, { label: '和风天气(QWeather)', v: 0 }, { label: 'wttr.in', v: 0 }, { label: '彩云天气', v: 0 }, { label: '中国气象局(CMA)', v: 0 }, { label: '挪威气象局(yr.no)', v: 0 }], spread: 0, consistent: true },
     ],
     consensus: { category: 'clear', tempMin: 29.8, tempMax: 30.3, tempMean: 30, rhMean: 75, uvMean: 8, uvMin: 8, uvMax: 8, air: { aqi: 45 } },
     discrepancies: [],
@@ -277,6 +279,9 @@ const testSrc = `
     var lb3 = document.getElementById('locAlertBtn'); if (lb3 && lb3.onclick) lb3.onclick();
     globalThis.__modalOk = 'ok';
   } catch (e) { globalThis.__modalOk = 'ERR ' + e.message; }
+  try {
+    globalThis.__hl = (typeof huangli === 'function') ? (function(){ try { return huangli(2026, 8, 28); } catch (e) { return 'ERR ' + e.message; } })() : 'NO_FN';
+  } catch (e) { globalThis.__hl = 'ERR ' + e.message; }
 })();
 `;
 try {
@@ -311,13 +316,32 @@ function runAssertions() {
   const rt = (els['realtimeBody'] && els['realtimeBody'].innerHTML) || '';
   ok(rt.indexOf('rc-badge') >= 0, '实时天气模块显示多源校验徽标（联动）');
   const fc = (els['forecastBody'] && els['forecastBody'].innerHTML) || '';
-  ok(fc.indexOf('预测置信') >= 0, '预报模块显示预测置信（联动）');
+  ok(fc.indexOf('预测置信') < 0, '预报模块不再显示预测置信（需求①已落实）');
   const cl = (els['climateBody'] && els['climateBody'].innerHTML) || '';
   ok(cl.indexOf('气候距平') >= 0, '气候模块显示实况距平（联动）');
   const cal = (els['calendarBody'] && els['calendarBody'].innerHTML) || '';
-  ok(cal.indexOf('cal-grid') >= 0, '农历日历模块已渲染');
+  ok(cal.indexOf('cal-grid') >= 0, '日历模块已渲染（农历·节气·假日）');
+  ok(cal.indexOf('data-date') >= 0, '日历每格可点击查看黄历·干支历（data-date）');
   const alertStatus = (els['alertStatus'] && els['alertStatus'].textContent) || '';
   ok(alertStatus.length > 0, '顶部告警指示器已渲染（' + alertStatus + '）');
+
+  // 日历面板改名 + lunar 库引入（文件级）
+  const idxHtml = fs.readFileSync(path.join(ROOT, 'app/public/index.html'), 'utf8');
+  ok(idxHtml.indexOf('农历日历') < 0 && idxHtml.indexOf('📅 日历') >= 0, '面板已由「农历日历」改名为「日历」');
+  ok(idxHtml.indexOf('vendor/lunar.js') >= 0, '已引入 vendor/lunar.js（黄历/干支数据源）');
+  // 黄历库（vendor/lunar.js）独立校验：2026-08-28 应为 丙午年 丙申月 甲戌日
+  try {
+    const LL = require(path.join(ROOT, 'app/public/vendor/lunar.js'));
+    const h = LL.Solar.fromYmd(2026, 8, 28).getLunar();
+    const gzOk = h.getYearInGanZhi() === '丙午' && h.getMonthInGanZhi() === '丙申' && h.getDayInGanZhi() === '甲戌';
+    ok(gzOk, 'vendor/lunar.js 干支历正确（' + h.getYearInGanZhi() + h.getMonthInGanZhi() + h.getDayInGanZhi() + '）');
+    ok(Array.isArray(h.getDayYi()) && h.getDayYi().length > 0 && Array.isArray(h.getDayJi()) && h.getDayJi().length > 0, 'vendor/lunar.js 宜忌可用（宜 ' + h.getDayYi().slice(0, 3).join('/') + ' …）');
+    ok(typeof h.getDayChong() === 'string' && typeof h.getDaySha() === 'string', 'vendor/lunar.js 冲煞可用（冲' + h.getDayChong() + '·煞' + h.getDaySha() + '）');
+    ok(typeof h.getXiu() === 'string' && typeof h.getXiuLuck() === 'string', 'vendor/lunar.js 星宿可用（' + h.getXiu() + '·' + h.getXiuLuck() + '）');
+    ok(typeof h.getPengZuGan() === 'string' && typeof h.getPengZuZhi() === 'string', 'vendor/lunar.js 彭祖百忌可用');
+  } catch (e) { ok(false, 'vendor/lunar.js 黄历校验: ' + e.message); }
+  // 前端 huangli() 在库未加载（沙箱无 Solar）时安全降级
+  ok(ctx.__hl === null || ctx.__hl === 'NO_FN', '前端 huangli() 库未加载时安全降级（沙箱 __hl=' + (ctx.__hl === null ? 'null' : ctx.__hl) + '）');
 
   finish();
 }

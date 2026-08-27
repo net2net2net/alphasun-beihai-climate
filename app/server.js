@@ -135,11 +135,15 @@ function parseAlertTime(t) {
 // 实况修正：优先采用可达的权威实况源（CMA 官方 > wttr.in 独立第三方），如实反映当前强度
 // （如暴雨减弱为零星小雨）；预警仍生效时在「实时天气」顶部以淡红标注，但不强行覆盖实况强度。
 // 仅当所有实况源均不可达、且北海暴雨/强对流预警生效时，才以预警类别预估实况（标注「预估」）。
-function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes) {
+function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes) {
   const cma = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : null;
   const cmaOk = !!(cma && cma.ok && cma.current);
   const wttr = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : null;
   const wttrOk = !!(wttr && wttr.ok && wttr.current);
+  const cmagov = (cmagovRes && cmagovRes.status === 'fulfilled') ? cmagovRes.value : null;
+  const cmagovOk = !!(cmagov && cmagov.ok && cmagov.current);
+  const weathercn = (weathercnRes && weathercnRes.status === 'fulfilled') ? weathercnRes.value : null;
+  const weathercnOk = !!(weathercn && weathercn.ok && weathercn.current);
   const items = (alertIntel && alertIntel.items) || [];
   const now = Date.now();
   const storm = items.find(a =>
@@ -151,16 +155,18 @@ function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes)
   for (const st of stations) {
     if (!st.weather || !st.weather.ok || !st.weather.current) continue;
     const cur = st.weather.current;
-    // 优先取可达实况源（CMA > wttr.in），如实反映当前强度
-    let live = null, liveSrc = '';
-    if (cmaOk) { live = cma.current; liveSrc = '中国天气网实况'; }
-    else if (wttrOk) { live = wttr.current; liveSrc = 'wttr.in 实况'; }
+    // 优先取可达国内实况源（中国气象局 > 中国天气网 > 和风天气 > wttr.in），将多源实况校验结果静默应用到实时天气（不改变展示样式）
+    let live = null, liveSrc = '', liveKey = '';
+    if (cmagovOk) { live = cmagov.current; liveSrc = '中国气象局实况'; liveKey = 'cmagov'; }
+    else if (weathercnOk) { live = weathercn.current; liveSrc = '中国天气网实况'; liveKey = 'weathercn'; }
+    else if (cmaOk) { live = cma.current; liveSrc = '和风天气实况'; liveKey = 'cma'; }
+    else if (wttrOk) { live = wttr.current; liveSrc = 'wttr.in 实况'; liveKey = 'wttr'; }
     if (live) {
       Object.assign(cur, {
         temp: live.temp, feels: live.feels, rh: live.rh, precip: live.precip,
         code: live.code, text: live.text, icon: live.icon, wind: live.wind, windDir: live.windDir,
         uv: (live.uv != null ? live.uv : cur.uv), vis: (live.vis != null ? live.vis : cur.vis),
-        source: cmaOk ? 'cma' : 'wttr', realtimeSource: liveSrc,
+        source: liveKey, realtimeSource: liveSrc,
       });
     }
     // 预警仍生效：顶部淡红标注（见前端）；有实况源则保留实况值仅附预警提示，无实况源才以预警预估
@@ -193,9 +199,11 @@ async function buildOverview() {
     src.fetchCaiyunLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchRegionalBeihai().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchMetNoLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchWeatherCnLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchCmaGovLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
     fetchClimateNormals(STATIONS[0]).catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes, regionalRes, metnoRes, climateRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes, regionalRes, metnoRes, weathercnRes, cmagovRes, climateRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -208,12 +216,14 @@ async function buildOverview() {
   const cmaVal = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : cmaRes;
   const wttrVal = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : wttrRes;
   const caiyunVal = (caiyunRes && caiyunRes.status === 'fulfilled') ? caiyunRes.value : caiyunRes;
+  const weathercnVal = (weathercnRes && weathercnRes.status === 'fulfilled') ? weathercnRes.value : weathercnRes;
+  const cmagovVal = (cmagovRes && cmagovRes.status === 'fulfilled') ? cmagovRes.value : cmagovRes;
   const warnCtx = [
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.rainstorm) ? warnRes.value.rainstorm : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.convective) ? warnRes.value.convective : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
   ];
   const metnoVal = (metnoRes && metnoRes.status === 'fulfilled') ? metnoRes.value : metnoRes;
-  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal, metno: metnoVal }, warnCtx, primaryAgg ? primaryAgg.air : null);
+  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, weathercn: weathercnVal, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal, cmagov: cmagovVal, metno: metnoVal }, warnCtx, primaryAgg ? primaryAgg.air : null);
   const regionalWeather = (regionalRes && regionalRes.status === 'fulfilled') ? regionalRes.value : { ok: false, error: (regionalRes && regionalRes.reason) ? String(regionalRes.reason) : '区域天气采集失败' };
   const primaryClimate = (climateRes && climateRes.status === 'fulfilled') ? climateRes.value : null;
   persistRealtimeCheck(realtimeCheck);
@@ -250,7 +260,7 @@ async function buildOverview() {
   });
   const maxLevel = globalAlerts.reduce((m, x) => Math.max(m, x.level), 0);
   const alertIntel = intel.buildAlertIntel({ typhoons, warnings: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value : { all: [] }, quakes });
-  applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes);
+  applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes);
   return {
     updated: new Date().toISOString(),
     center: { name: '北海', lat: 21.48, lon: 109.11 },
