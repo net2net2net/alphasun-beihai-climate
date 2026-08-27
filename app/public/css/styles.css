@@ -419,3 +419,20 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .cal-badge.rest{background:rgba(229,72,77,.18);color:#ff7b82;}
 .cal-badge.work{background:rgba(210,153,34,.22);color:#ffce5a;}
 .cal-hname{font-size:9px;color:var(--muted);margin-top:1px;}
+
+/* 顶部"🛰 数据可信度"芯片（由多源实况校核结论派生，可点击跳校核模块，v8.1.0） */
+.dq-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:12px;font-size:12px;
+  cursor:pointer;border:1px solid var(--line);background:var(--bg3);color:var(--muted);white-space:nowrap;transition:.15s}
+.dq-chip:hover{border-color:var(--accent)}
+.dq-chip.high{color:var(--ok);border-color:rgba(63,185,80,.5)}
+.dq-chip.medium{color:var(--warn);border-color:rgba(210,153,34,.5)}
+.dq-chip.low{color:var(--red);border-color:rgba(229,72,77,.5)}
+.dq-chip.unknown{color:var(--muted)}
+
+/* 刷新按钮忙碌态 + 下次自动刷新倒计时（v8.1.0） */
+.btn.busy,.btn:disabled{opacity:.55;cursor:wait}
+#autoRefresh{margin-left:8px;white-space:nowrap}
+
+/* 模块聚焦高亮（点击数据可信度芯片跳转校核模块时闪烁，v8.1.0） */
+.panel.flash{animation:flashHl 1.2s ease}
+@keyframes flashHl{0%{box-shadow:0 0 0 0 rgba(251,133,0,0)}30%{box-shadow:0 0 0 4px rgba(251,133,0,.55)}100%{box-shadow:0 0 0 0 rgba(251,133,0,0)}}

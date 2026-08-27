@@ -373,6 +373,7 @@ async function load() {
 function render() {
   const d = state.data;
   $('updated').textContent = '更新于 ' + new Date(d.updated).toLocaleString('zh-CN');
+  state.lastUpdatedTs = Date.now(); updateAutoRefresh();
   // 顶部"警报 / 无警报"指示器（唯一"警报"显示）：有告警显示闪烁"警报"，无告警显示绿色"无警报"
   const hasAlert = d.globalAlerts.length > 0;
   const asEl = $('alertStatus');
@@ -381,6 +382,7 @@ function render() {
     else { asEl.textContent = '✅ 无警报'; asEl.className = 'alert-status ok'; }
   }
   updateSoundAlarm(hasAlert);
+  renderDataQuality();
   // 横幅（活跃告警，点击查看详情）
   const banner = $('alertBanner');
   const top = d.globalAlerts.filter(a => a.beihaiRelation === 'direct' || a.beihaiRelation === 'possible').slice(0, 8);
@@ -402,6 +404,42 @@ function render() {
   if (!tk.autostarted) { tk.autostarted = true; tkStartAuto(); }
   AlphaMap.setData(d); AlphaMap.legend($('mapLegend'));
   renderGlobalLevelAlert();
+}
+
+// ===== 顶部"🛰 数据可信度"芯片：由「多源实况校核」结论派生，全板可见、可点击跳转（模块联动 / 数据共享）=====
+function renderDataQuality() {
+  const el = document.getElementById('dqChip'); if (!el) return;
+  const rc = state.data && state.data.realtimeCheck;
+  if (!rc) { el.textContent = '🛰 数据可信度 —'; el.className = 'dq-chip unknown'; return; }
+  const agrTxt = { high: '高', medium: '中', low: '低', unknown: '未知' }[rc.agreement] || '未知';
+  const confPct = Math.round((rc.confidence || 0) * 100);
+  const srcs = rc.sources || [];
+  const reachable = srcs.filter(s => s.ok).length;
+  const total = srcs.length;
+  // 沉淀为共享状态，供其它模块（如校核面板、气候态势）复用，避免重复计算
+  state.dataQuality = { agreement: rc.agreement, confidence: rc.confidence, reachable, total };
+  el.textContent = '🛰 数据可信度 ' + agrTxt + ' · ' + confPct + '%（' + reachable + '/' + total + ' 源可达）';
+  el.className = 'dq-chip ' + (rc.agreement || 'unknown');
+  el.title = '多源实况校核：' + agrTxt + '一致 · 置信 ' + confPct + '% · ' + reachable + '/' + total + ' 源可达（点「多源实况校核」模块看详情）';
+}
+
+// ===== 刷新可用性：忙碌态 + 下次自动刷新倒计时（日常可用）=====
+function doRefresh() {
+  const b = document.getElementById('refreshBtn');
+  if (b) { b.classList.add('busy'); b.disabled = true; }
+  load().finally(() => {
+    if (b) { b.classList.remove('busy'); b.disabled = false; }
+    updateAutoRefresh();
+    try { renderChartOn('hourlyChart'); } catch (e) {}
+  });
+}
+function updateAutoRefresh() {
+  const el = document.getElementById('autoRefresh'); if (!el) return;
+  const base = state.lastUpdatedTs || Date.now();
+  let ms = (base + 10 * 60 * 1000) - Date.now(); if (ms < 0) ms = 0;
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  el.textContent = '· 下次自动刷新 ' + m + ' 分 ' + String(s).padStart(2, '0') + ' 秒';
 }
 
 function renderChartDims() {
@@ -1215,8 +1253,15 @@ const tAll = $('tickerAll'); if (tAll) tAll.onclick = openAllIntelModal;
   if (box) box.onchange = () => AlphaMap.toggle(n.toLowerCase(), box.checked);
 });
 
-$('refreshBtn').onclick = () => load();
-setInterval(() => { load(); setTimeout(() => renderChartOn('hourlyChart'), 300); }, 10 * 60 * 1000);
+$('refreshBtn').onclick = () => doRefresh();
+setInterval(doRefresh, 10 * 60 * 1000);
+setInterval(updateAutoRefresh, 1000);
+// 顶部"🛰 数据可信度"芯片 → 平滑滚动并高亮「多源实况校核」模块（模块间真实联动）
+const dqEl = document.getElementById('dqChip');
+if (dqEl) dqEl.onclick = () => {
+  const p = document.getElementById('realtimeCheckCard');
+  if (p) { p.scrollIntoView({ behavior: 'smooth', block: 'center' }); p.classList.add('flash'); setTimeout(() => p.classList.remove('flash'), 1200); }
+};
 
 // ===== 模块放大（点击模块标题 → 在页面中央放大展示该板块与数据）=====
 let focusState = null;
