@@ -197,6 +197,20 @@ function startWorldClock() {
   const btn = document.getElementById('syncBtn'); if (btn) btn.onclick = syncTime;
   if (!rafWorld) tickWorld();
 }
+function startTopClock() {
+  const dEl = document.getElementById('clkDate');
+  const tEl = document.getElementById('clkTime');
+  if (!dEl || !tEl) return;
+  const pad = n => String(n).padStart(2, '0');
+  const wk = ['日','一','二','三','四','五','六'];
+  function tick() {
+    const d = new Date();
+    dEl.textContent = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' 周' + wk[d.getDay()];
+    tEl.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  tick();
+  setInterval(tick, 1000);
+}
 
 const LNAME = ['正常','注意','预警','警报','紧急'];
 const LCOL = ['#3fb950','#d29922','#fb8500','#e5484d','#bc1a1a'];
@@ -1129,4 +1143,5 @@ applyTheme(theme);
 AlphaMap.init();
 AlphaMap.buildOverlayUI($('overlayPanel'));
 startWorldClock();
+startTopClock();
 load().then(() => renderChartOn('hourlyChart'));
