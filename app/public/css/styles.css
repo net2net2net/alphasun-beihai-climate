@@ -353,7 +353,7 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 #focusBody .rt-region-shape svg{max-width:240px!important;margin-left:0}
 #focusMap{background:#0b1622}
 
-/* ===== 世界时钟（位于「推荐天气/数据源网站」面板底部，v8.0.3）===== */
+/* ===== 世界时钟（位于「推荐天气/数据源网站」面板底部，v8.0.5）===== */
 .world-clock{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
 .wc-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
 .wc-title{font-size:14px;font-weight:700;color:var(--accent)}

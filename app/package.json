@@ -1,6 +1,6 @@
 {
   "name": "alphasun-beihai-climate",
-  "version": "8.0.3",
+  "version": "8.0.5",
   "private": true,
   "description": "AlphaSun · 北海极端气候全景系统 — 纯 Node.js 聚合服务（零第三方依赖），以北海为中心的极端气候/海洋/卫星/天文/空气质量全景监测。",
   "main": "server.js",

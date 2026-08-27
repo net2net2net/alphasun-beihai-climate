@@ -1,6 +1,6 @@
 # AlphaSun · 北海极端气候全景系统 — API 接口文档
 
-> 版本 v8.0.3 ｜ 基础地址：`http://localhost:8765`
+> 版本 v8.0.5 ｜ 基础地址：`http://localhost:8765`
 
 所有 JSON 接口均含 `Access-Control-Allow-Origin: *`，便于前端与第三方调用。
 

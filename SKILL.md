@@ -4,7 +4,7 @@ target_agent: any
 description: "AlphaSun · 北海极端气候全景系统 — 以北海为中心的极端气候/海洋/卫星/天文/空气质量全景监测仪表盘。当用户需要运行、部署、打包、分发或二次开发该气候全景系统，或需要北海实时天气/台风/预警/潮汐/卫星云图/地震等综合监测能力时触发。纯 Node.js 零依赖，已内置便携运行时，支持一键独立运行与跨智能体安装。"
 tags: [alphasun, beihai, climate, weather, dashboard, panorama, standalone]
 required_commands: ['node (或使用内置 node/node.exe)']
-version: 8.0.3
+version: 8.0.5
 author: 阳光 net2net2net（ Vx: net2net ）
 license: MIT
 metadata: tags: [alphasun, beihai-climate, panorama]
@@ -28,7 +28,7 @@ alphasun-beihai-climate/
 ├── SKILL.md              # 本文件（触发 + 运行流程）
 ├── README.md             # 软件总览
 ├── INSTALL.md            # 跨智能体 / 独立安装说明
-├── CHANGELOG.md          # 版本变更总览（v7.0.0 → v8.0.3）
+├── CHANGELOG.md          # 版本变更总览（v7.0.0 → v8.0.5）
 ├── LICENSE               # MIT 许可
 ├── app/                  # 可独立运行的完整系统
 │   ├── server.js         # 聚合服务入口（纯 Node，零第三方依赖）
@@ -109,6 +109,6 @@ npm run build:exe
 | 应急推送 | 预留企微 / 邮件 / 短信接口（见设计方案，待接入） |
 
 ## 版本与许可
-- 版本：v8.0.3
+- 版本：v8.0.5
 - 作者：阳光 net2net2net（ Vx: net2net ）
 - 许可：MIT

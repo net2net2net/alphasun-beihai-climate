@@ -1,6 +1,6 @@
 # AlphaSun · 北海极端气候全景系统
 
-**版本 v8.0.3 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
+**版本 v8.0.5 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
 
 一套以**北海为中心**的极端气候全景监测仪表盘：聚合互联网权威多个气候数据源，实现实时天气、周期预报、多灾种极端告警、全景地图、世界时钟与可叠加卫星 / 雷达图层。纯 Node.js、零第三方依赖、内置便携运行时，**开箱即运行**。
 
@@ -11,7 +11,7 @@
 
 Windows exe： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/alphasun-exe-8.0.2/alphasun-beihai-climate8.0.2.exe
 
-安卓Android Apk（测试版本）： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/android-v8.0.3-debug/alphasun-beihai-climate-debug.apk
+安卓Android Apk（测试版本）： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/android-v8.0.5-debug/alphasun-beihai-climate-debug.apk
 
 IOS ipa（未签名测试版）： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/ios-v1.0.0/alphasun-ios-good.ipa
    
