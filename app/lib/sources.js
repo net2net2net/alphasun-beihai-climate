@@ -58,7 +58,7 @@ function qs(base, params) {
 async function fetchForecast(s) {
   const url = qs(API.forecast, {
     latitude: s.lat, longitude: s.lon,
-    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,cloud_cover,is_day',
+    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,cloud_cover,is_day,visibility,uv_index',
     hourly: 'temperature_2m,apparent_temperature,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,weather_code,relative_humidity_2m,cloud_cover,pressure_msl',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,pressure_msl_max,sunrise,sunset,moonrise,moonset,moon_phase',
     forecast_days: '16', timezone: 'Asia/Shanghai', wind_speed_unit: 'ms',
@@ -84,7 +84,7 @@ async function fetchForecast(s) {
       rh: cur.relative_humidity_2m, precip: cur.precipitation, code: cur.weather_code,
       text: wmo(cur.weather_code)[0], icon: wmo(cur.weather_code)[1],
       wind: cur.wind_speed_10m, gust: cur.wind_gusts_10m, windDir: cur.wind_direction_10m,
-      pressure: cur.pressure_msl, cloud: cur.cloud_cover, isDay: cur.is_day,
+      pressure: cur.pressure_msl, cloud: cur.cloud_cover, isDay: cur.is_day, uv: (cur.uv_index != null ? cur.uv_index : null), vis: (cur.visibility != null ? +(cur.visibility / 1000).toFixed(1) : null),
     },
     daily: daily.time.map((t, i) => ({
       date: t, code: daily.weather_code[i], text: wmo(daily.weather_code[i])[0],
@@ -139,6 +139,12 @@ async function qweatherNow(s) {
   } finally { clearTimeout(t); }
   if (!d || String(d.code) !== '200' || !d.now) throw new Error('qweather: ' + (d && d.code) + ' ' + (d && d.message || ''));
   const n = d.now;
+  // 并行获取紫外线指数（和风 /v7/indices/uv；失败不影响主流程）
+  let uvIdx = null;
+  try {
+    const r2 = await fetch(`https://${host}/v7/indices/uv?location=${s.lon.toFixed(3)},${s.lat.toFixed(3)}&key=${encodeURIComponent(key)}`, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0', 'X-Qweather-Token': key } });
+    if (r2.ok) { const uj = await r2.json(); if (uj && String(uj.code) === '200' && uj.now) uvIdx = parseFloat(uj.now.index); }
+  } catch (e) { /* uv 可选 */ }
   const zh = String(n.text || '').trim();
   const code = zhWeatherToWmo(zh);
   const wind = (parseFloat(n.windSpeed) || 0) / 3.6; // km/h -> m/s
@@ -150,7 +156,7 @@ async function qweatherNow(s) {
       rh: parseInt(n.humidity, 10) || 0, precip: parseFloat(n.precip) || 0,
       code, text: zh || wmo(code)[0], icon: wmo(code)[1],
       wind, gust: 0, windDir: dirToDeg(n.windDir),
-      pressure: parseFloat(n.pressure) || 0, cloud: parseInt(n.cloud, 10) || 100, isDay: 1,
+      pressure: parseFloat(n.pressure) || 0, cloud: parseInt(n.cloud, 10) || 100, isDay: 1, uv: (typeof uvIdx === 'number' && !isNaN(uvIdx)) ? +uvIdx.toFixed(1) : null, vis: (n.vis != null ? parseFloat(n.vis) : null),
     },
   };
 }
@@ -232,7 +238,7 @@ async function fetchWttrLive(s) {
         code: m.code, text: m.zh, icon: wmo(m.code)[1],
         wind: (parseFloat(c.windspeedKmph) || 0) / 3.6, gust: 0,
         windDir: parseFloat(c.winddirDegree) || 0, pressure: 0,
-        cloud: parseInt(c.cloudcover, 10) || 0, isDay: 1,
+        cloud: parseInt(c.cloudcover, 10) || 0, isDay: 1, uv: (c.uvIndex != null ? parseFloat(c.uvIndex) : null), vis: (c.visibility != null ? parseFloat(c.visibility) : null),
       },
     };
   } catch (e) { return { ok: false, error: 'wttr parse: ' + (e.message || e) }; }
@@ -314,11 +320,12 @@ function snapOf(result, label, key) {
     ok: true, source: v.source || key, label: v.label || label,
     temp: c.temp, feels: c.feels, rh: c.rh, precip: c.precip,
     code: c.code, text: c.text, icon: c.icon, wind: c.wind,
+    uv: (typeof c.uv === 'number' && !isNaN(c.uv)) ? c.uv : null,
     fetchedAt: v.time || null, category: wxCategory(c.code, c.text),
   };
 }
 // results: { openMeteo, cma, wttr }（Promise.allSettled 条目或归一化对象）；warnings: 北海相关预警数组 [{category, level, levelName}]
-function verifyRealtime(results, warnings) {
+function verifyRealtime(results, warnings, air) {
   const srcs = [
     snapOf(results.openMeteo, 'Open-Meteo', 'openmeteo'),
     snapOf(results.cma, '中国天气网(CMA)', 'cma'),
@@ -326,6 +333,10 @@ function verifyRealtime(results, warnings) {
     snapOf(results.caiyun, '彩云天气(Caiyun)', 'caiyun'),
   ];
   const valid = srcs.filter(s => s.ok);
+  const uvs = valid.map(s => s.uv).filter(x => typeof x === 'number' && !isNaN(x));
+  const uvMean = uvs.length ? +(uvs.reduce((a, b) => a + b, 0) / uvs.length).toFixed(1) : null;
+  const uvMin = uvs.length ? +Math.min.apply(null, uvs).toFixed(1) : null;
+  const uvMax = uvs.length ? +Math.max.apply(null, uvs).toFixed(1) : null;
   const checkedAt = new Date().toISOString();
   if (valid.length === 0) {
     return { ok: false, checkedAt, city: '北海', sources: srcs, agreement: 'unknown', confidence: 0, consensus: null, discrepancies: [{ field: 'availability', message: '全部实况数据源不可达', severity: 'high' }], recommended: null };
@@ -362,6 +373,10 @@ function verifyRealtime(results, warnings) {
   if (precipAny && valid.some(s => (s.precip || 0) < 0.1 && consensusCat === 'rain')) {
     discrepancies.push({ field: 'precip', message: '部分源实况无降水，但综合有降雨', severity: 'low' });
   }
+  if (uvs.length >= 2) {
+    const uspread = uvMax - uvMin;
+    if (uspread > 3) { discrepancies.push({ field: 'uv', message: '紫外线指数源间差异较大（' + uvMin.toFixed(1) + '~' + uvMax.toFixed(1) + '）', severity: 'low' }); if (agreement === 'high') agreement = 'medium'; }
+  }
   // 官方预警佐证：若北海暴雨/强对流预警生效而综合未判降雨，则上调为降雨
   if (warnings && warnings.length) {
     const storm = warnings.find(a => /暴雨|雷雨|强对流|大风/.test(a.category || '') && (a.level || 0) >= 2);
@@ -376,8 +391,9 @@ function verifyRealtime(results, warnings) {
   const recommended = { temp: +tmean.toFixed(1), rh: rhMean, precip: +precipMax.toFixed(1), code: rec.code, text: rec.text, icon: rec.icon, source: rec.label };
   return {
     ok: true, checkedAt, city: '北海', sources: srcs,
-    consensus: { category: consensusCat, tempMin: +tmin.toFixed(1), tempMax: +tmax.toFixed(1), tempMean: +tmean.toFixed(1), tempSpread: +spread.toFixed(1), rhMean, precipAny, precipMax: +precipMax.toFixed(1) },
+    consensus: { category: consensusCat, tempMin: +tmin.toFixed(1), tempMax: +tmax.toFixed(1), tempMean: +tmean.toFixed(1), tempSpread: +spread.toFixed(1), rhMean, precipAny, precipMax: +precipMax.toFixed(1), uvMean, uvMin, uvMax },
     agreement, confidence: conf, discrepancies, recommended,
+    air: (air && air.ok) ? { aqi: air.aqi, primary: air.primary, pm25: air.pm25, pm10: air.pm10, o3: air.o3 } : null,
   };
 }
 
@@ -385,7 +401,7 @@ function verifyRealtime(results, warnings) {
 async function fetchAir(s) {
   const url = qs(API.air, {
     latitude: s.lat, longitude: s.lon,
-    current: 'us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,sulphur_dioxide,carbon_monoxide',
+    current: 'us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,sulphur_dioxide,carbon_monoxide,uv_index,aerosol_optical_depth',
     hourly: 'us_aqi,pm2_5,ozone', forecast_days: '3', timezone: 'Asia/Shanghai',
   });
   const d = await fetchJSON(url);
@@ -397,11 +413,37 @@ async function fetchAir(s) {
     ok: true,
     aqi: c.us_aqi, pm25: c.pm2_5, pm10: c.pm10, o3: c.ozone,
     no2: c.nitrogen_dioxide, so2: c.sulphur_dioxide, co: c.carbon_monoxide,
+    uv: c.uv_index, aod: c.aerosol_optical_depth,
     primary: aqiPrimary(c), hourlyAqi: aqiByHour,
   };
 }
+// 计算单项 US AQI 子指数（分段线性），用于判定首要污染物（按 IAQI 而非原始浓度）
+function aqiPiecewise(c, bp) {
+  if (c == null || isNaN(c)) return null;
+  for (const b of bp) {
+    const [cLo, cHi, iLo, iHi] = b;
+    if (c >= cLo && c <= cHi) return Math.round((iHi - iLo) / (cHi - cLo) * (c - cLo) + iLo);
+  }
+  return null;
+}
+function aqiSubIndices(c) {
+  const pm25 = [[0,12,0,50],[12.1,35.4,51,100],[35.5,55.4,101,150],[55.5,150.4,151,200],[150.5,250.4,201,300],[250.5,350.4,301,400],[350.5,500.4,401,500]];
+  const pm10 = [[0,54,0,50],[55,154,51,100],[155,254,101,150],[255,354,151,200],[355,424,201,300],[425,504,301,400],[505,604,401,500]];
+  const o3 = [[0,108,0,50],[109,148,51,100],[149,180,101,150],[181,240,151,200],[241,320,201,300],[321,400,301,400],[401,504,401,500]];
+  const no2 = [[0,94,0,50],[95,188,51,100],[189,377,101,150],[378,565,151,200],[566,754,201,300],[755,943,301,400],[944,1130,401,500]];
+  const so2 = [[0,78,0,50],[79,188,51,100],[189,377,101,150],[378,565,151,200],[566,754,201,300],[755,943,301,400],[944,1130,401,500]];
+  const co = [[0,4.4,0,50],[4.5,9.4,51,100],[9.5,12.4,101,150],[12.5,15.4,151,200],[15.5,30.4,201,300],[30.5,40.4,301,400],[40.5,50.4,401,500]];
+  return [
+    ['PM2.5', c.pm2_5 != null ? aqiPiecewise(c.pm2_5, pm25) : null],
+    ['PM10', c.pm10 != null ? aqiPiecewise(c.pm10, pm10) : null],
+    ['O₃', c.ozone != null ? aqiPiecewise(c.ozone, o3) : null],
+    ['NO₂', c.nitrogen_dioxide != null ? aqiPiecewise(c.nitrogen_dioxide, no2) : null],
+    ['SO₂', c.sulphur_dioxide != null ? aqiPiecewise(c.sulphur_dioxide, so2) : null],
+    ['CO', c.carbon_monoxide != null ? aqiPiecewise(c.carbon_monoxide / 1000, co) : null],
+  ];
+}
 function aqiPrimary(c) {
-  const arr = [['PM2.5', c.pm2_5], ['PM10', c.pm10], ['O₃', c.ozone], ['NO₂', c.nitrogen_dioxide], ['SO₂', c.sulphur_dioxide], ['CO', c.carbon_monoxide]];
+  const arr = aqiSubIndices(c).filter(x => x[1] != null);
   arr.sort((a, b) => b[1] - a[1]);
   return arr[0][0];
 }
@@ -603,8 +645,50 @@ async function aggregateStation(s, cache) {
   };
 }
 
+
+// ===== 1.8 北海区域天气（多点采样，Open-Meteo keyless，确保北海区域实况采集正常）=====
+const BEIHAI_REGION = [
+  { name: '海城区(市区)', lat: 21.48, lon: 109.11 },
+  { name: '银海区', lat: 21.43, lon: 109.07 },
+  { name: '铁山港区', lat: 21.58, lon: 109.45 },
+  { name: '合浦县', lat: 21.66, lon: 109.20 },
+  { name: '涠洲岛', lat: 21.04, lon: 109.10 },
+];
+async function fetchOneRegionPoint(p) {
+  const url = qs(API.forecast, {
+    latitude: p.lat, longitude: p.lon,
+    current: 'temperature_2m,weather_code,precipitation,wind_speed_10m,relative_humidity_2m',
+    timezone: 'Asia/Shanghai', wind_speed_unit: 'ms',
+  });
+  const d = await fetchJSON(url);
+  const cur = d.current;
+  return {
+    name: p.name, lat: p.lat, lon: p.lon,
+    temp: cur.temperature_2m, code: cur.weather_code,
+    text: wmo(cur.weather_code)[0], icon: wmo(cur.weather_code)[1],
+    precip: cur.precipitation || 0, wind: cur.wind_speed_10m || 0, rh: cur.relative_humidity_2m,
+  };
+}
+async function fetchRegionalBeihai() {
+  const pts = await Promise.allSettled(BEIHAI_REGION.map(fetchOneRegionPoint));
+  const points = pts.filter(r => r.status === 'fulfilled').map(r => r.value);
+  if (!points.length) return { ok: false, error: '北海区域天气采集失败（全部点不可达）' };
+  const temps = points.map(p => p.temp).filter(x => typeof x === 'number');
+  const tmin = Math.min.apply(null, temps), tmax = Math.max.apply(null, temps);
+  const catCount = {};
+  points.forEach(p => { const cat = wxCategory(p.code, p.text); catCount[cat] = (catCount[cat] || 0) + 1; });
+  const dominantCat = Object.keys(catCount).sort((a, b) => catCount[b] - catCount[a])[0];
+  const precipAny = points.some(p => (p.precip || 0) > 0.3);
+  const windMax = Math.max.apply(null, [0].concat(points.map(p => p.wind || 0)));
+  return {
+    ok: true, count: points.length, points,
+    tempMin: +tmin.toFixed(1), tempMax: +tmax.toFixed(1), tempMean: +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1),
+    dominantCat, precipAny, windMax: +windMax.toFixed(1),
+  };
+}
+
 module.exports = {
   fetchForecast, fetchAir, fetchMarine, fetchFlood, fetchClimate,
   fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir, fetchCmaLive,
-  fetchWttrLive, fetchCaiyunLive, verifyRealtime,
+  fetchWttrLive, fetchCaiyunLive, verifyRealtime, fetchRegionalBeihai,
 };

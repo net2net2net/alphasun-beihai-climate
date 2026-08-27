@@ -152,6 +152,7 @@ function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes)
       Object.assign(cur, {
         temp: live.temp, feels: live.feels, rh: live.rh, precip: live.precip,
         code: live.code, text: live.text, icon: live.icon, wind: live.wind, windDir: live.windDir,
+        uv: (live.uv != null ? live.uv : cur.uv), vis: (live.vis != null ? live.vis : cur.vis),
         source: cmaOk ? 'cma' : 'wttr', realtimeSource: liveSrc,
       });
     }
@@ -183,8 +184,9 @@ async function buildOverview() {
     src.fetchCmaLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchWttrLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchCaiyunLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+    src.fetchRegionalBeihai().catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes, regionalRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -201,7 +203,8 @@ async function buildOverview() {
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.rainstorm) ? warnRes.value.rainstorm : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.convective) ? warnRes.value.convective : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
   ];
-  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal }, warnCtx);
+  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal }, warnCtx, primaryAgg ? primaryAgg.air : null);
+  const regionalWeather = (regionalRes && regionalRes.status === 'fulfilled') ? regionalRes.value : { ok: false, error: (regionalRes && regionalRes.reason) ? String(regionalRes.reason) : '区域天气采集失败' };
   persistRealtimeCheck(realtimeCheck);
   const quakes = quakeRes.status === 'fulfilled' && quakeRes.value.ok ? quakeRes.value.events : [];
   const fires = fireRes.status === 'fulfilled' && fireRes.value.ok ? fireRes.value.fires : [];
@@ -256,6 +259,7 @@ async function buildOverview() {
     riverReservoir: rrRes.status === 'fulfilled' ? rrRes.value : { ok: false, error: 'unavailable' },
     astronomy: astro.astronomicalEvents(),
     realtimeCheck,
+    regionalWeather,
     globalAlerts,
   };
 }

@@ -349,6 +349,8 @@ function renderRealtime() {
           <div class="rt-metric"><span class="l">降水</span><b>${c.precip.toFixed(1)}<i>mm</i></b></div>
           <div class="rt-metric"><span class="l">气压</span><b>${c.pressure.toFixed(0)}<i>hPa</i></b></div>
           <div class="rt-metric"><span class="l">云量</span><b>${c.cloud}%</b></div>
+          <div class="rt-metric"><span class="l">紫外线</span><b>${uvBadge(c.uv)}</b></div>
+          <div class="rt-metric"><span class="l">能见度</span><b>${c.vis != null ? c.vis.toFixed(1)+'<i>km</i>' : '—'}</b></div>
         </div>
       </div>
       ${regionBlock(s)}
@@ -371,19 +373,22 @@ function renderRealtimeCheck() {
     <div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid var(--line)">
       <span style="flex:0 0 96px;color:${s.ok ? 'var(--info)' : 'var(--muted)'}">${s.label}</span>
       <span style="flex:1">${s.ok
-        ? `${s.temp.toFixed(1)}℃ · ${s.text}${s.precip > 0.1 ? ' · 💧' + s.precip.toFixed(1) + 'mm' : ''}`
+        ? `${s.temp.toFixed(1)}℃ · ${s.text}${s.precip > 0.1 ? ' · 💧' + s.precip.toFixed(1) + 'mm' : ''}${s.uv != null ? ' · ☀UV' + s.uv.toFixed(0) : ''}`
         : (s.skipped ? '<span style="color:var(--muted)">未配置·可选</span>' : '<span style="color:#e5484d">✗ 不可达</span>')}</span>
       <span style="flex:0 0 48px;text-align:right;color:var(--muted);font-size:11px">${s.ok ? catLabelZh(s.category) : ''}</span>
     </div>`).join('');
   const cons = rc.consensus
-    ? `综合判定：<b style="color:var(--accent)">${catLabelZh(rc.consensus.category)}</b> ｜ 气温 ${rc.consensus.tempMin}~${rc.consensus.tempMax}℃（均 ${rc.consensus.tempMean}） ｜ 湿度 ${rc.consensus.rhMean != null ? rc.consensus.rhMean + '%' : '—'}`
+    ? `综合判定：<b style="color:var(--accent)">${catLabelZh(rc.consensus.category)}</b> ｜ 气温 ${rc.consensus.tempMin}~${rc.consensus.tempMax}℃（均 ${rc.consensus.tempMean}） ｜ 湿度 ${rc.consensus.rhMean != null ? rc.consensus.rhMean + '%' : '—'}${rc.consensus.uvMean != null ? ' ｜ ☀UV ' + rc.consensus.uvMean + (rc.consensus.uvMax && rc.consensus.uvMax !== rc.consensus.uvMean ? '(' + rc.consensus.uvMin + '~' + rc.consensus.uvMax + ')' : '') : ''}${rc.air && rc.air.aqi != null ? ' ｜ AQI ' + rc.air.aqi : ''}`
     : '';
   const disc = (rc.discrepancies && rc.discrepancies.length)
     ? `<div style="margin-top:6px;color:#d29922;font-size:12px">⚠ ${rc.discrepancies.map(d => d.message).join('；')}</div>` : '';
+  const reg = state.data && state.data.regionalWeather;
+  const regHtml = (reg && reg.ok) ? `<div style="margin-top:6px;font-size:12px;color:var(--muted)">北海区域（${reg.count}点）：气温 ${reg.tempMin}~${reg.tempMax}℃ ｜ 主导 <b style="color:var(--accent)">${catLabelZh(reg.dominantCat)}</b> ｜ 最大风 ${reg.windMax}m/s${reg.precipAny ? ' ｜ ⚠有降水' : ''}<div style="margin-top:3px;line-height:1.6">${reg.points.map(p => p.name + ' ' + p.temp.toFixed(1) + '℃·' + p.text).join('　｜　')}</div></div>` : '';
   const badgeColor = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
   el.innerHTML = `<div style="font-size:13px">${srcRows}</div>
     <div style="margin-top:6px;font-size:12px;color:var(--muted)">${cons}</div>
     ${disc}
+    ${regHtml}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
       <span style="font-size:11px;color:var(--muted)">校核于 ${new Date(rc.checkedAt).toLocaleTimeString('zh-CN')} ｜ 主值采用 ${rc.recommended ? rc.recommended.source : '—'}</span>
       <span style="font-size:12px;color:#06121f;background:${badgeColor};padding:2px 8px;border-radius:10px">${agrTxt} · 置信 ${confPct}%</span>
@@ -425,6 +430,7 @@ function renderAir() {
       </div></div>`;
 }
 function aqiColor(v){ return v>=300?'#bc1a1a':v>=200?'#e5484d':v>=150?'#fb8500':v>=100?'#d29922':'#3fb950'; }
+function uvBadge(uv){ if(uv==null) return '—'; const lv = uv<=2?'低':uv<=5?'中等':uv<=7?'高':uv<=10?'很高':'极高'; return uv.toFixed(0)+' · '+lv; }
 
 function renderMarine() {
   const m = selStation().marine;
