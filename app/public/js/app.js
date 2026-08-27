@@ -308,7 +308,14 @@ function renderRealtime() {
   if (!w || !w.ok) { $('realtimeBody').innerHTML = '<div class="muted">气象数据暂不可用</div>'; return; }
   const c = w.current;
   const trend = buildWeatherTrend(w);
+  // 预警优先：在「实时天气」模块顶部以淡红色字体标注（北海暴雨/强对流预警生效时即显示，不覆盖实况值）
+  const warnBanner = (c.warningOverride)
+    ? `<div style="margin:0 0 10px;padding:8px 12px;border-radius:8px;background:rgba(239,154,154,0.12);border:1px solid rgba(239,154,154,0.40);border-left:4px solid #ef9a9a;color:#ef9a9a;font-size:13px;font-weight:600;line-height:1.5;">
+        ⚠️ 预警优先 · 实况以气象台预警为准${c.warningOverride ? `<div style="font-weight:400;font-size:12px;color:#ffab91;margin-top:3px;">${c.warningOverride.title}${c.warningOverride.time ? ' · ' + c.warningOverride.time : ''}</div>` : ''}
+      </div>`
+    : '';
   $('realtimeBody').innerHTML = `
+    ${warnBanner}
     <div class="rt-head">
       <div class="rt-icon">${ICON[c.icon]||'❓'}</div>
       <div class="rt-main">
@@ -316,7 +323,7 @@ function renderRealtime() {
         <div class="rt-cond">${c.text}</div>
       </div>
       <div class="rt-feels"><span class="l">体感</span><b>${c.feels.toFixed(1)}℃</b></div>
-      ${c.realtimeSource ? `<div class="rt-src">📡 ${c.realtimeSource}</div>` : ''}
+      ${c.source !== 'warning-override' && c.realtimeSource ? `<div class="rt-src">📡 ${c.realtimeSource}</div>` : ''}
     </div>
     <div class="rt-band">
       <div class="rt-grp rt-grp-weather">
