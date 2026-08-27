@@ -1,0 +1,12 @@
+{
+  "version": "8.1.0",
+  "name": "江河水文表格化 · 版本自升级 · 黄历日历",
+  "date": "2026-08-28",
+  "notes": [
+    "江河水文/水库水情：改为美观可滚动表格，新增长度/流域面积/兴利库容等字段",
+    "新增版本自检与一键升级：Web/PWA 点击「立即升级」即刷新；Android 点击下载最新 APK",
+    "「农历日历」升级为「日历」，融合黄历（宜忌/冲煞/星宿/彭祖百忌）与干支历（年/月/日/时柱），点日期看详情"
+  ],
+  "page": "https://net2net2net.github.io/alphasun-beihai-climate/",
+  "apk": "https://net2net2net.github.io/alphasun-beihai-climate/downloads/alphasun-beihai-climate-debug.apk"
+}

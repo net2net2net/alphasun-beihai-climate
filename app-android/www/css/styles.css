@@ -419,3 +419,43 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .cal-badge.rest{background:rgba(229,72,77,.18);color:#ff7b82;}
 .cal-badge.work{background:rgba(210,153,34,.22);color:#ffce5a;}
 .cal-hname{font-size:9px;color:var(--muted);margin-top:1px;}
+
+/* ===== 江河水文 / 水库水情 表格 ===== */
+.rr-meta{ font-size:11px; color:var(--muted); margin-bottom:6px; }
+.rr-scroll{ max-height:260px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+.rr-table{ width:100%; border-collapse:collapse; font-size:12px; }
+.rr-table th{ position:sticky; top:0; background:#16202c; color:#c9d6e3; text-align:left; padding:5px 7px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.rr-table td{ padding:5px 7px; border-bottom:1px solid #1d2a38; vertical-align:top; line-height:1.35; }
+.rr-table tbody tr:nth-child(even){ background:rgba(255,255,255,.025); }
+.rr-table tbody tr:hover{ background:rgba(88,166,255,.10); }
+.rr-table .rr-b{ color:#e6edf3; font-weight:600; white-space:nowrap; }
+.rr-table .rr-m{ color:var(--muted); }
+
+/* ===== 更新横幅 / Toast ===== */
+.update-banner{ margin:0 12px 10px; padding:10px 12px; border:1px solid #2ea043; background:linear-gradient(180deg,#10261a,#0d1b14); border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,.35); }
+.update-banner.hidden{ display:none; }
+.ub-head{ display:flex; align-items:center; gap:8px; }
+.ub-name{ font-weight:700; color:#56d364; font-size:13px; }
+.ub-date{ margin-left:auto; font-size:11px; }
+.ub-x{ margin-left:6px; background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; }
+.ub-notes{ margin:6px 0 8px; padding-left:18px; font-size:12px; color:#c9d6e3; }
+.ub-notes li{ margin:2px 0; }
+.ub-actions{ display:flex; gap:8px; }
+.ub-go{ background:#238636; border-color:#2ea043; color:#fff; }
+.app-toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px); background:#1f2937; color:#e6edf3; border:1px solid var(--line); padding:9px 16px; border-radius:10px; font-size:13px; opacity:0; pointer-events:none; transition:.25s; z-index:999; box-shadow:0 6px 24px rgba(0,0,0,.4); }
+.app-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ===== 日历：单元格宜忌小标 ===== */
+.cal-cell{ min-height:46px; }
+.cal-yi{ font-size:9px; color:#7ee787; line-height:1.15; margin-top:1px; }
+
+/* ===== 黄历详情弹窗 ===== */
+.hl-modal .modal-card{ max-width:420px; }
+.hl-title{ font-size:15px; font-weight:700; color:#e6edf3; margin-bottom:8px; }
+.hl-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.hl-table td{ padding:6px 8px; border-bottom:1px solid #1d2a38; vertical-align:top; }
+.hl-k{ width:62px; color:#8b98a5; white-space:nowrap; font-weight:600; }
+.hl-v{ color:#c9d6e3; }
+.hl-yi{ color:#56d364; }
+.hl-ji{ color:#f0883e; }
+.hl-foot{ margin-top:8px; font-size:11px; }

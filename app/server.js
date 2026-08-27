@@ -285,6 +285,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/warnings') { const r = await src.fetchWarnings().catch(() => ({ ok: false })); return send(res, 200, r); }
     if (p === '/api/alerts') { const r = await intel.fetchAndBuildIntel(src).catch(() => ({ ok: false })); return send(res, 200, r); }
     if (p === '/api/astronomy') return send(res, 200, astro.astronomicalEvents());
+    if (p === '/api/version') { let pv='0'; try { pv = require('./package.json').version; } catch(e){} return send(res, 200, { version: pv, name: 'AlphaSun·北海极端气候全景系统', updated: new Date().toISOString() }); }
     if (p === '/api/time') return send(res, 200, { now: Date.now(), iso: new Date().toISOString() });
     if (p.startsWith('/api/climate/')) {
       const id = p.split('/').pop(); const s = STATIONS.find(x => x.id === id);

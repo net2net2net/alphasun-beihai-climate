@@ -271,7 +271,51 @@ const HOLIDAYS = {};
 })();
 function getHoliday(y,m,d){ return HOLIDAYS[y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')] || null; }
 
-// ===== 农历日历模块（右侧底部，可翻看） =====
+// ===== 日历模块（右侧底部，可翻看）· 农历 / 节气 / 法定假日 / 黄历 / 干支历 =====
+// —— 黄历 / 干支历 推算（传统规则，文化参考）——
+const TIANGAN = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+const DIZHI   = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+const ZODIAC  = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
+const XIU = ['角','亢','氐','房','心','尾','箕','斗','牛','女','虚','危','室','壁','奎','娄','胃','昴','毕','觜','参','井','鬼','柳','星','张','翼','轸'];
+const XIU_JX = ['吉','凶','凶','吉','凶','吉','吉','吉','凶','凶','凶','凶','吉','吉','凶','吉','吉','凶','吉','凶','吉','吉','凶','凶','凶','吉','凶','吉'];
+const JIANCHU = ['建','除','满','平','定','执','破','危','成','收','开','闭'];
+const JIANCHU_YJ = {
+  '建':[['出行','会亲友','上官','嫁娶','求财'],['动土','开仓','掘井','破土']],
+  '除':[['祭祀','祈福','解除','疗病','出行','移徙'],['求官','上任','远行','嫁娶']],
+  '满':[['祭祀','祈福','开市','交易','立券','牧养'],['动土','安葬','修造','栽种']],
+  '平':[['修造','嫁娶','安葬','安床','出行'],['词讼','争斗','栽种']],
+  '定':[['祭祀','祈福','嫁娶','造屋','入学','纳财'],['词讼','出行','医疗']],
+  '执':[['造屋','修造','嫁娶','收购','纳财'],['开市','移徙','出行','入宅']],
+  '破':[['破屋','坏垣','求医','解除'],['嫁娶','出行','签约','动土','安葬']],
+  '危':[['安床','祭祀','祈福'],['登高','出行','移徙','嫁娶','营造']],
+  '成':[['嫁娶','开市','入学','动土','出行','交易','立券'],['词讼','诉讼','安葬']],
+  '收':[['收购','纳财','嫁娶','入仓','捕捉'],['放债','出行','安葬','开市']],
+  '开':[['祭祀','祈福','入学','开市','出行','求医'],['安葬','动土','栽种']],
+  '闭':[['筑堤','埋穴','安葬','补垣'],['开市','出行','求医','穿刺']],
+};
+const PENGZU_GAN = ['甲不开仓财物耗散','乙不栽植千株不长','丙不修灶必见灾殃','丁不剃头头必生疮','戊不受田田主不祥','己不破券二比并亡','庚不经络织机虚张','辛不合酱主人不尝','壬不汲水更难提防','癸不词讼理弱敌强'];
+const PENGZU_ZHI = ['子不问卜自惹祸殃','丑不冠带主不还乡','寅不祭祀神鬼不尝','卯不穿井水泉不香','辰不哭泣必主重丧','巳不远行财物伏藏','午不苫盖屋主更张','未不服药毒气入肠','申不安床鬼祟入房','酉不会客醉坐颠狂','戌不吃犬作怪上床','亥不嫁娶不利新郎'];
+function gzYear(y){ const g=((y-4)%10+10)%10,z=((y-4)%12+12)%12; return TIANGAN[g]+DIZHI[z]; }
+function gzDay(y,m,d){ const base=new Date(1900,0,1),date=new Date(y,m-1,d); const diff=Math.round((date-base)/86400000); const idx=((10+diff)%60+60)%60; return {idx,gan:TIANGAN[idx%10],zhi:DIZHI[idx%12]}; }
+function gzMonth(lunarY,lunarM){ const yg=((lunarY-4)%10+10)%10; const mb=(2+(lunarM-1))%12; const ms0=((yg%5)*2+2)%10; const ms=(ms0+(lunarM-1))%10; return TIANGAN[ms]+DIZHI[mb]; }
+function gzHour(dayGanIdx,h){ const hs=((dayGanIdx%5)*2+h)%10; return TIANGAN[hs]+DIZHI[h]; }
+function hourBranch(h){ return Math.floor((h+1)/2)%12; }
+function chongSha(db){ const chong=(db+6)%12; const map={'申子辰':'南','寅午戌':'北','亥卯未':'西','巳酉丑':'东'}; let dir=''; for(const k in map){ if(k.indexOf(DIZHI[db])>=0) dir=map[k]; } return { chong:ZODIAC[chong], dir }; }
+function xiuOf(y,m,d){ const base=new Date(2000,0,7),date=new Date(y,m-1,d); const diff=Math.round((date-base)/86400000); const idx=((diff%28)+28)%28; return { name:XIU[idx], jx:XIU_JX[idx] }; }
+function huangli(y,m,d){
+  const s=solar2lunar(y,m,d);
+  const dg=gzDay(y,m,d); const db=dg.idx%12;
+  const yg=gzYear(s.lYear);
+  const mg=gzMonth(s.lYear,s.lMonth);
+  const hb=hourBranch(new Date().getHours());
+  const hg=gzHour(dg.idx%10,hb);
+  const mb=(2+(s.lMonth-1))%12;
+  const jc=JIANCHU[((db-mb)%12+12)%12];
+  const yj=JIANCHU_YJ[jc];
+  const cs=chongSha(db);
+  const xu=xiuOf(y,m,d);
+  return { s, dg, db, yg, mg, hg, jc, yi:yj[0], ji:yj[1], chong:cs.chong, sha:cs.dir, xiu:xu, pg:PENGZU_GAN[dg.idx%10], pz:PENGZU_ZHI[db] };
+}
 let calView = null;
 function renderCalendar(){
   const el = $('calendarBody'); if(!el) return;
@@ -292,21 +336,52 @@ function renderCalendar(){
   for(let i=0;i<startW;i++) html += '<div class="cal-cell cal-empty"></div>';
   for(let d=1; d<=daysInMonth; d++){
     const lu = lunarDate(y,m,d), term = getTerm(y,m,d), hol = getHoliday(y,m,d);
+    const hl = huangli(y,m,d);
     const isToday = (y===now.getFullYear() && m===now.getMonth()+1 && d===now.getDate());
     const dow = new Date(y,m-1,d).getDay();
     const isWeekend = (dow===0||dow===6) && !(hol && hol.t==='work');
     let cls = 'cal-cell'; if(isToday) cls += ' cal-today'; if(isWeekend) cls += ' cal-weekend';
     const sub = term || ((lu.leap?'闰':'')+lu.monthCn+lu.dayCn);
-    html += '<div class="'+cls+'"><div class="cal-d">'+d+'</div><div class="cal-sub">'+sub+'</div>';
+    const yi1 = (hl.yi && hl.yi[0]) ? hl.yi[0] : '';
+    html += '<div class="'+cls+'" data-date="'+y+'-'+m+'-'+d+'"><div class="cal-d">'+d+'</div><div class="cal-sub">'+sub+'</div>';
+    if(yi1) html += '<div class="cal-yi" title="今日宜：'+hl.yi.join('、')+'">宜'+yi1+'</div>';
     if(hol) html += '<span class="cal-badge '+(hol.t==='rest'?'rest':'work')+'">'+(hol.t==='rest'?'休':'班')+'</span><div class="cal-hname">'+hol.n+'</div>';
     html += '</div>';
   }
   html += '</div>';
   el.innerHTML = html;
 }
+function renderHuangliDetail(y,m,d){
+  const lu = lunarDate(y,m,d), term = getTerm(y,m,d), hol = getHoliday(y,m,d);
+  const hl = huangli(y,m,d);
+  const wk=['日','一','二','三','四','五','六'];
+  const dow = new Date(y,m-1,d).getDay();
+  const lunarMD = (hl.s.isLeap?'闰':'')+CN_MONTH[hl.s.lMonth-1]+'月'+CN_DAY[hl.s.lDay-1];
+  const hb = hourBranch(new Date().getHours());
+  const hLabel = ['子时','丑时','寅时','卯时','辰时','巳时','午时','未时','申时','酉时','戌时','亥时'][hb];
+  const rows = [
+    ['公历', y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')+' 周'+wk[dow]],
+    ['农历', '（'+hl.yg+'年）'+lunarMD+(term?' ｜ '+term:'')],
+    ['干支历', '年柱 '+hl.yg+' ｜ 月柱 '+hl.mg+' ｜ 日柱 '+hl.dg.gan+hl.dg.zhi+' ｜ 时柱 '+hl.hg+'（'+hLabel+'）'],
+    ['建除', hl.jc+'日'],
+    ['宜', '<span class="hl-yi">'+hl.yi.join('、')+'</span>'],
+    ['忌', '<span class="hl-ji">'+hl.ji.join('、')+'</span>'],
+    ['冲煞', '冲'+hl.chong+' ｜ 煞'+hl.sha],
+    ['星宿', hl.xiu.name+'宿（'+hl.xiu.jx+'）'],
+    ['彭祖百忌', hl.pg+'；'+hl.pz],
+  ];
+  if(hol) rows.push(['法定', (hol.t==='rest'?'休息日':'补班')+' ｜ '+hol.n]);
+  let html = '<div class="hl-title">'+y+'年'+m+'月'+d+'日 · 黄历</div><table class="hl-table">';
+  html += rows.map(r=>'<tr><td class="hl-k">'+r[0]+'</td><td class="hl-v">'+r[1]+'</td></tr>').join('');
+  html += '</table><div class="hl-foot muted">干支历/黄历为传统推算，仅供文化参考；重大事项请以官方发布为准。</div>';
+  const body=document.getElementById('hlBody'); if(body) body.innerHTML=html;
+  const mdl=document.getElementById('hlModal'); if(mdl) mdl.classList.remove('hidden');
+}
 function startCalendar(){
   const el = $('calendarBody'); if(!el) return;
   el.addEventListener('click', e => {
+    const dbg = e.target.closest('[data-date]');
+    if(dbg){ const p=dbg.getAttribute('data-date').split('-').map(Number); renderHuangliDetail(p[0],p[1],p[2]); return; }
     const b = e.target.closest('[data-cal]'); if(!b) return;
     const act = b.getAttribute('data-cal');
     if(act==='prev'){ calView.m--; if(calView.m<1){ calView.m=12; calView.y--; } }
@@ -331,7 +406,7 @@ function startTopClock() {
     if (key !== lastKey) {
       lastKey = key;
       const lu = lunarDate(d.getFullYear(), d.getMonth()+1, d.getDate());
-      dEl.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 周'+wk[d.getDay()]+' · 农历'+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn;
+      dEl.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 周'+wk[d.getDay()]+' · 农历'+lu.ganzhi+'年'+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn;
     }
     tEl.textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0');
     requestAnimationFrame(frame);
@@ -922,6 +997,16 @@ const SITES = [
   ] },
 ];
 
+const APP_VERSION = '8.1.0';
+const UPDATE_MANIFEST = ['https://net2net2net.github.io/alphasun-beihai-climate/data/version.json','https://raw.githubusercontent.com/net2net2net/alphasun-beihai-climate/main/app/public/data/version.json'];
+const APK_URL = 'https://net2net2net.github.io/alphasun-beihai-climate/downloads/alphasun-beihai-climate-debug.apk';
+function appToast(msg){ let t=document.getElementById('appToast'); if(!t){ t=document.createElement('div'); t.id='appToast'; t.className='app-toast'; document.body.appendChild(t); } t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2800); }
+function platformInfo(){ const ua=navigator.userAgent||''; const isAndroid=/Android/i.test(ua)||!!window.cordova||!!(window.Capacitor&&window.Capacitor.getPlatform&&window.Capacitor.getPlatform()==='android'); const isPWA=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; return { isAndroid, isPWA, isWeb:!isAndroid }; }
+function cmpVer(a,b){ const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number); for(let i=0;i<3;i++){ if((y[i]||0)>(x[i]||0))return 1; if((y[i]||0)<(x[i]||0))return -1; } return 0; }
+async function checkUpdate(silent){ try{ let man=null; for(const u of UPDATE_MANIFEST){ try{ const r=await fetch(u,{cache:'no-store'}); if(r.ok){ man=await r.json(); break; } }catch(e){} } if(!man){ if(!silent) appToast('更新检查失败：无法连接更新源'); return; } window.__latestVer=man; const r=cmpVer(APP_VERSION, man.version||'0'); if(r>0){ showUpdateBanner(man); } else if(!silent){ appToast('已是最新版本 v'+APP_VERSION); } }catch(e){ if(!silent) appToast('更新检查失败'); } }
+function showUpdateBanner(man){ const b=document.getElementById('updateBanner'); if(!b) return; const nm=man.name||''; b.querySelector('.ub-name').textContent='发现新版本 '+(man.version||'?')+(nm&&nm.indexOf(man.version)<0?('（'+nm+'）'):''); const notes=(man.notes||[]).map(n=>'<li>'+n+'</li>').join(''); b.querySelector('.ub-notes').innerHTML=notes||'<li>暂无说明</li>'; b.querySelector('.ub-date').textContent='发布：'+(man.date||'—'); b.classList.remove('hidden'); }
+function doUpgrade(){ const man=window.__latestVer||{}; const p=platformInfo(); if(p.isAndroid){ const url=man.apk||APK_URL; if(window.__alphasunInstall){ try{ window.__alphasunInstall(url); appToast('正在安装更新…'); return; }catch(e){} } try{ window.open(url,'_blank'); }catch(e){ location.href=url; } appToast('正在打开 APK 下载（下载后允许“未知来源”安装）'); } else { if(navigator.serviceWorker){ navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.update())).catch(()=>{}); } appToast('正在刷新升级…'); setTimeout(()=>location.reload(),400); } }
+
 function renderRiverReservoir() {
   var rr = state.data && state.data.riverReservoir;
   var rb = $('riverBody'), sb = $('reservoirBody');
@@ -931,17 +1016,18 @@ function renderRiverReservoir() {
     return;
   }
   var statusTxt = rr.realtime ? '实时' : ('档案（' + (rr.realtimeStatus === 'unreachable' ? '实时源不可达' : rr.realtimeStatus) + '）');
-  var tbl = 'width:100%;border-collapse:collapse;border:1px solid #2a3b4d';
-  var th = '<th style="padding:3px 6px;text-align:left">';
+  var capFmt = function(v){ return v != null ? (v/1e8).toFixed(2)+' 亿m³' : '待核实'; };
+  var effFmt = function(v){ return v != null ? (v/1e8).toFixed(2)+' 亿m³' : '—'; };
+  var cell = function(t, c){ return '<td class="'+(c||'')+'">'+t+'</td>'; };
   var riverRows = (rr.rivers || []).map(function(r){
-    return '<tr><td style="padding:3px 6px"><b>'+(r.name||'')+'</b></td><td style="padding:3px 6px">'+(r.type||'')+'</td><td style="padding:3px 6px">'+(r.outfall||'—')+'</td><td class="muted" style="font-size:11px;padding:3px 6px">'+(r.note||'')+'</td></tr>';
+    return '<tr>'+cell('<b>'+(r.name||'')+'</b>','rr-b')+cell(r.type||'—')+cell(r.lenKm!=null?r.lenKm+' km':'—','rr-m')+cell(r.basinKm2!=null?r.basinKm2.toLocaleString()+' km²':'—','rr-m')+cell(r.outfall||'—')+cell(r.basin||'—')+cell(r.note||'—','rr-m')+'</tr>';
   }).join('');
   var resRows = (rr.reservoirs || []).map(function(r){
-    var cap = r.totalCapM3 != null ? (r.totalCapM3/1e8).toFixed(2)+'亿m³' : '待核实';
-    return '<tr><td style="padding:3px 6px"><b>'+(r.name||'')+'</b></td><td style="padding:3px 6px">'+(r.scale||'')+'</td><td style="padding:3px 6px">'+(r.county||'—')+'</td><td style="padding:3px 6px">'+cap+'</td><td style="padding:3px 6px">'+(r.drinking?'🚰饮用水源':'—')+'</td><td class="muted" style="font-size:11px;padding:3px 6px">'+(r.note||'')+'</td></tr>';
+    return '<tr>'+cell('<b>'+(r.name||'')+'</b>','rr-b')+cell(r.scale||'—')+cell(r.county||'—')+cell(capFmt(r.totalCapM3),'rr-m')+cell(effFmt(r.effectiveCapM3),'rr-m')+cell((r.drinking?'🚰':'')+(r.func||'—'))+cell(r.note||'—','rr-m')+'</tr>';
   }).join('');
-  if (rb) rb.innerHTML = '<div class="muted" style="font-size:11px;margin-bottom:6px">数据性质：'+statusTxt+' ｜ 来源：'+rr.source+'</div><table style="'+tbl+'"><thead><tr style="background:#16202c">'+th+'江河</th>'+th+'类型</th>'+th+'入海口/归属</th>'+th+'说明</th></tr></thead><tbody>'+riverRows+'</tbody></table>';
-  if (sb) sb.innerHTML = '<div class="muted" style="font-size:11px;margin-bottom:6px">数据性质：'+statusTxt+' ｜ 来源：'+rr.source+'</div><table style="'+tbl+'"><thead><tr style="background:#16202c">'+th+'水库</th>'+th+'规模</th>'+th+'位置</th>'+th+'总库容</th>'+th+'功能</th>'+th+'说明</th></tr></thead><tbody>'+resRows+'</tbody></table>';
+  var meta = '<div class="rr-meta">数据性质：'+statusTxt+' ｜ 来源：'+rr.source+' ｜ 更新：'+(rr.updated||'—')+'</div>';
+  if (rb) rb.innerHTML = meta + '<div class="rr-scroll"><table class="rr-table"><thead><tr><th>江河</th><th>类型</th><th>长度</th><th>流域面积</th><th>入海口/归属</th><th>所属流域</th><th>说明</th></tr></thead><tbody>'+riverRows+'</tbody></table></div>';
+  if (sb) sb.innerHTML = meta + '<div class="rr-scroll"><table class="rr-table"><thead><tr><th>水库</th><th>规模</th><th>位置</th><th>总库容</th><th>兴利库容</th><th>功能</th><th>说明</th></tr></thead><tbody>'+resRows+'</tbody></table></div>';
 }
 function renderLinks() {
   $('linksBody').innerHTML = SITES.map(g => `
@@ -1278,4 +1364,17 @@ AlphaMap.buildOverlayUI($('overlayPanel'));
 startWorldClock();
 startTopClock();
 startCalendar();
+// 版本自检与一键升级
+const updChk = document.getElementById('updateCheckBtn');
+if (updChk) updChk.onclick = () => checkUpdate(false);
+const updNow = document.getElementById('updateNowBtn');
+if (updNow) updNow.onclick = () => doUpgrade();
+const updLater = document.getElementById('updateLaterBtn');
+if (updLater) updLater.onclick = () => document.getElementById('updateBanner').classList.add('hidden');
+const hlClose = document.getElementById('hlClose');
+if (hlClose) hlClose.onclick = () => document.getElementById('hlModal').classList.add('hidden');
+const hlModal = document.getElementById('hlModal');
+if (hlModal) hlModal.onclick = (e) => { if (e.target === hlModal) hlModal.classList.add('hidden'); };
+checkUpdate(true);
+setInterval(() => checkUpdate(true), 30*60*1000);
 load().then(() => renderChartOn('hourlyChart'));

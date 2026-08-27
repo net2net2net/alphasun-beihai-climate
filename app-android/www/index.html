@@ -12,7 +12,7 @@
   <div class="brand">
     <span class="logo">☀</span>
     <div>
-      <h1>AlphaSun · 北海极端气候全景系统 <span class="ver">v8.0.5</span></h1>
+      <h1>AlphaSun · 北海极端气候全景系统 <span class="ver">v8.1.0</span></h1>
       <div class="sub">陆 · 海 · 空 · 天 · 水文 五位一体实时全景 ｜ 作者：阳光 net2net2net（ Vx: net2net ）</div>
     </div>
   </div>
@@ -27,6 +27,7 @@
     <span id="globalLevel" class="badge" title="涉及/可能涉及北海的告警，点击查看详情">—</span>
     <button id="themeBtn" class="btn" title="切换深色 / 浅色背景（默认深色）">🌙 浅色</button>
     <button id="refreshBtn" class="btn">刷新</button>
+    <button id="updateCheckBtn" class="btn" title="检查新版本并升级">🔄 更新</button>
   </div>
 </header>
 
@@ -194,12 +195,23 @@
 
     <!-- 右侧底部：农历日历（农历·节气·法定假日，可翻看）-->
     <div class="panel calendar-panel" id="calendarCard">
-      <div class="panel-h">📅 农历日历 <span class="muted" style="font-weight:400;font-size:11px;margin-left:6px">农历·节气·假日 · 可翻看</span></div>
+      <div class="panel-h">📅 日历 <span class="muted" style="font-weight:400;font-size:11px;margin-left:6px">农历·节气·假日·黄历·干支历 · 可翻看（点日期看黄历）</span></div>
       <div id="calendarBody" class="calendar-body">…</div>
     </div>
   </section>
 </main>
 
+<div id="updateBanner" class="update-banner hidden">
+  <div class="ub-head"><span class="ub-name">发现新版本</span><span class="ub-date muted"></span><button id="updateLaterBtn" class="ub-x" title="稍后">×</button></div>
+  <ul class="ub-notes"></ul>
+  <div class="ub-actions"><button id="updateNowBtn" class="btn ub-go">立即升级</button><button id="updateLaterBtn2" class="btn" onclick="document.getElementById('updateBanner').classList.add('hidden')">稍后</button></div>
+</div>
+<div id="hlModal" class="modal hl-modal hidden">
+  <div class="modal-card">
+    <button id="hlClose" class="modal-close" aria-label="关闭">×</button>
+    <div id="hlBody"></div>
+  </div>
+</div>
 <footer class="foot">
   数据源：Open-Meteo（气象/空气/海洋/洪水/气候）· USGS（地震）· NASA FIRMS（火点，需KEY）· 国家海洋信息中心（潮汐，需凭证）｜ 演示底图 高德(Amap, GCJ-02 纠偏)｜ 作者：阳光 net2net2net（ Vx: net2net ）
 </footer>
