@@ -14,6 +14,7 @@
 - **实现**：config.js 新增 RIVER_PROFILE / RESERVOIR_PROFILE 档案常量；sources.js 新增 fetchRiverReservoir() 接入 buildOverview 顶层 riverReservoir 字段；前端 index.html 新增两面板容器、app.js 新增 renderRiverReservoir() 渲染。
 - **数据性质（重要）**：北海本地江河实测站与水库的实时源（广西水文中心、水利部）当前网络不可程序化对接，fetchRiverReservoir 内置 5s 实时可用性探测（实测 unreachable）；界面明确标注“数据性质：档案（实时源不可达）”，依据广西水文中心/北海市政府/北海新闻网等公开资料整理，非实时站测，绝不冒充实时。
 - 鲤鱼地/石康/闸口水库精确参数待核实（条目已标注待核实）。
+- **Android APK 自动发布**：CI（`build-android.yml`）增强为构建后自动将 APK 发布回 `downloads/alphasun-beihai-climate-debug.apk`（v8.0.5，含江河/水库模块）；工作流改动经 GitHub Actions 重建并写回仓库，无需本地 Android SDK。
 ## v8.0.3 — 世界时钟模块
 - 在「推荐天气 / 数据源网站」面板下方新增**世界时钟**模块：
   - 精美圆形传统**机械钟**（SVG 表盘 / 60 刻度 / 阿拉伯数字 / 时分秒三针 + 毫秒平滑扫秒）。
