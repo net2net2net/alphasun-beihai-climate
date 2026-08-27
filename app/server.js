@@ -125,11 +125,14 @@ function parseAlertTime(t) {
   if (!m) return 0;
   return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
 }
-// 实况修正：优先用中国天气网站测(CMA 官方)；不可达时若北海暴雨/强对流预警生效则以预警兜底，
-// 避免 Open-Meteo 在局地强对流暴雨时漏报导致主卡片与预警自相矛盾。
-function applyRealtimeOverride(stations, alertIntel, cmaRes) {
+// 实况修正：优先采用可达的权威实况源（CMA 官方 > wttr.in 独立第三方），如实反映当前强度
+// （如暴雨减弱为零星小雨）；预警仍生效时在「实时天气」顶部以淡红标注，但不强行覆盖实况强度。
+// 仅当所有实况源均不可达、且北海暴雨/强对流预警生效时，才以预警类别预估实况（标注「预估」）。
+function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes) {
   const cma = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : null;
   const cmaOk = !!(cma && cma.ok && cma.current);
+  const wttr = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : null;
+  const wttrOk = !!(wttr && wttr.ok && wttr.current);
   const items = (alertIntel && alertIntel.items) || [];
   const now = Date.now();
   const storm = items.find(a =>
@@ -141,20 +144,29 @@ function applyRealtimeOverride(stations, alertIntel, cmaRes) {
   for (const st of stations) {
     if (!st.weather || !st.weather.ok || !st.weather.current) continue;
     const cur = st.weather.current;
-    if (cmaOk) {
-      const cc = cma.current;
+    // 优先取可达实况源（CMA > wttr.in），如实反映当前强度
+    let live = null, liveSrc = '';
+    if (cmaOk) { live = cma.current; liveSrc = '中国天气网实况'; }
+    else if (wttrOk) { live = wttr.current; liveSrc = 'wttr.in 实况'; }
+    if (live) {
       Object.assign(cur, {
-        temp: cc.temp, feels: cc.feels, rh: cc.rh, precip: cc.precip,
-        code: cc.code, text: cc.text, icon: cc.icon, wind: cc.wind, windDir: cc.windDir,
-        source: 'cma', realtimeSource: '中国天气网实况',
+        temp: live.temp, feels: live.feels, rh: live.rh, precip: live.precip,
+        code: live.code, text: live.text, icon: live.icon, wind: live.wind, windDir: live.windDir,
+        source: cmaOk ? 'cma' : 'wttr', realtimeSource: liveSrc,
       });
-    } else if (storm) {
-      cur.code = 95;
-      cur.text = (storm.category || '暴雨').replace('·汛情', '');
-      cur.icon = 'storm';
-      cur.source = 'warning-override';
-      cur.realtimeSource = '预警优先·实况以气象台预警为准';
-      cur.warningOverride = { title: storm.title, level: storm.levelName, time: storm.time };
+    }
+    // 预警仍生效：顶部淡红标注（见前端）；有实况源则保留实况值仅附预警提示，无实况源才以预警预估
+    if (storm) {
+      cur.warningOverride = { title: storm.title, level: storm.levelName, time: storm.time, active: true };
+      if (!live) {
+        cur.code = 95;
+        cur.text = (storm.category || '暴雨').replace('·汛情', '');
+        cur.icon = 'storm';
+        cur.source = 'warning-override';
+        cur.realtimeSource = '预警优先·实况以气象台预警为准(预估)';
+      } else {
+        cur.realtimeSource = liveSrc + '（预警生效中）';
+      }
     }
   }
 }
@@ -216,7 +228,7 @@ async function buildOverview() {
   }).sort((a, b) => b.level - a.level);
   const maxLevel = globalAlerts.reduce((m, x) => Math.max(m, x.level), 0);
   const alertIntel = intel.buildAlertIntel({ typhoons, warnings: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value : { all: [] }, quakes });
-  applyRealtimeOverride(stations, alertIntel, cmaRes);
+  applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes);
   return {
     updated: new Date().toISOString(),
     center: { name: '北海', lat: 21.48, lon: 109.11 },
