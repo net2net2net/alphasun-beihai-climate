@@ -252,7 +252,7 @@ function render() {
     });
   } else banner.classList.add('hidden');
 
-  renderStations(); renderRealtime(); renderAir(); renderMarine(); renderRiverReservoir();
+  renderStations(); renderRealtime(); renderRealtimeCheck(); renderAir(); renderMarine(); renderRiverReservoir();
   renderAstro(); renderGlow(); renderMorningGlow(); renderTides();
   renderForecast7(); renderForecast15();
   renderAlerts(); renderEvents(); renderChartDims();
@@ -322,13 +322,13 @@ function renderRealtime() {
         <div class="rt-temp">${c.temp.toFixed(1)}<span class="rt-deg">°</span></div>
         <div class="rt-cond">${c.text}</div>
       </div>
-      <div class="rt-feels"><span class="l">体感</span><b>${c.feels.toFixed(1)}℃</b></div>
       ${c.source !== 'warning-override' && c.realtimeSource ? `<div class="rt-src">📡 ${c.realtimeSource}</div>` : ''}
     </div>
     <div class="rt-band">
       <div class="rt-grp rt-grp-weather">
         <div class="rt-grp-h">实时天气</div>
         <div class="rt-metrics">
+          <div class="rt-metric"><span class="l">体感</span><b>${c.feels.toFixed(1)}℃</b></div>
           <div class="rt-metric"><span class="l">风</span><b>${c.wind.toFixed(1)}<i>m/s</i></b></div>
           <div class="rt-metric"><span class="l">阵风</span><b>${c.gust.toFixed(1)}</b></div>
           <div class="rt-metric"><span class="l">湿度</span><b>${c.rh}%</b></div>
@@ -339,16 +339,18 @@ function renderRealtime() {
       </div>
       ${regionBlock(s)}
     </div>
-    <div class="rt-trend">${trend}</div>
-    ${renderRealtimeCheck(state.data && state.data.realtimeCheck)}`;
+    <div class="rt-trend">${trend}</div>`;
 }
 
 // 多源实况校核面板：展示 CMA / Open-Meteo / wttr.in 三源读数与综合判定（inline 样式自包含）
 function catLabelZh(cat) {
   return ({ rain: '降雨', storm: '雷暴', snow: '降雪', fog: '雾', clear: '晴', cloud: '多云', other: '其他' })[cat] || '其他';
 }
-function renderRealtimeCheck(rc) {
-  if (!rc) return '';
+function renderRealtimeCheck() {
+  const el = $('realtimeCheckBody');
+  if (!el) return;
+  const rc = state.data && state.data.realtimeCheck;
+  if (!rc) { el.innerHTML = '<div class="muted">校核数据暂不可用</div>'; return; }
   const agrTxt = { high: '高度一致', medium: '部分分歧', low: '显著分歧', unknown: '源不可达' }[rc.agreement] || rc.agreement;
   const confPct = Math.round((rc.confidence || 0) * 100);
   const srcRows = (rc.sources || []).map(s => `
@@ -365,16 +367,13 @@ function renderRealtimeCheck(rc) {
   const disc = (rc.discrepancies && rc.discrepancies.length)
     ? `<div style="margin-top:6px;color:#d29922;font-size:12px">⚠ ${rc.discrepancies.map(d => d.message).join('；')}</div>` : '';
   const badgeColor = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
-  return `<div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--line);border-radius:10px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <span style="font-weight:700">🛰 多源实况校核</span>
-      <span style="font-size:12px;color:#06121f;background:${badgeColor};padding:2px 8px;border-radius:10px">${agrTxt} · 置信 ${confPct}%</span>
-    </div>
-    <div style="font-size:13px">${srcRows}</div>
+  el.innerHTML = `<div style="font-size:13px">${srcRows}</div>
     <div style="margin-top:6px;font-size:12px;color:var(--muted)">${cons}</div>
     ${disc}
-    <div style="margin-top:4px;font-size:11px;color:var(--muted)">校核于 ${new Date(rc.checkedAt).toLocaleTimeString('zh-CN')} ｜ 主值采用 ${rc.recommended ? rc.recommended.source : '—'}</div>
-  </div>`;
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <span style="font-size:11px;color:var(--muted)">校核于 ${new Date(rc.checkedAt).toLocaleTimeString('zh-CN')} ｜ 主值采用 ${rc.recommended ? rc.recommended.source : '—'}</span>
+      <span style="font-size:12px;color:#06121f;background:${badgeColor};padding:2px 8px;border-radius:10px">${agrTxt} · 置信 ${confPct}%</span>
+    </div>`;
 }
 
 // 实时天气变化趋势：基于未来逐时数据给出降水/气温/风力预报（需求5）

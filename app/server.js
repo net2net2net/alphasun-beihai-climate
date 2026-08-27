@@ -225,7 +225,13 @@ async function buildOverview() {
       rel = intel.beihaiRelationFor(a.lat, a.lon, reg.region, { kind: a.type });
     }
     return { ...a, region, beihaiRelation: rel, relLabel: REL_TXT[rel] || '' };
-  }).sort((a, b) => b.level - a.level);
+  }).sort((a, b) => {
+    // 优先 北海(涉北海) -> 广西 -> 其他（广西之外）；同级按级别、再时间
+    const RANK = { '北海': 0, '广西': 1, '其他': 2 };
+    const ra = RANK[a.region] != null ? RANK[a.region] : 2;
+    const rb = RANK[b.region] != null ? RANK[b.region] : 2;
+    return (ra - rb) || (b.level - a.level) || String(b.time || '').localeCompare(String(a.time || ''));
+  });
   const maxLevel = globalAlerts.reduce((m, x) => Math.max(m, x.level), 0);
   const alertIntel = intel.buildAlertIntel({ typhoons, warnings: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value : { all: [] }, quakes });
   applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes);
