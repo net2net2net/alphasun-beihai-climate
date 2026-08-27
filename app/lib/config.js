@@ -57,6 +57,25 @@ const API = {
   alarm: 'https://www.nmc.cn/rest/findAlarm',
 };
 
+
+// ===== 北海江河 · 水库 权威档案（依据广西水文中心/北海市政府/北海新闻网等公开资料整理；实时接口当前不可达，降级为档案）=====
+const RIVER_PROFILE = [
+  { name: '南流江', type: '独流入海河流', lenKm: 287, basinKm2: 8635, outfall: '合浦县廉州湾(北部湾)', basin: '玉林·博白·合浦', stations: ['博白','合浦'], note: '广西最大独流入海河，北海最重要江河', verified: true, src: '广西水文中心' },
+  { name: '洪潮江', type: '南流江支流', outfall: '注入洪潮江水库', basin: '合浦县西北部', note: '南流江支流，上建洪潮江水库', verified: true, src: '北海新闻网' },
+  { name: '西门江', type: '独流入海河流', outfall: '合浦县廉州湾', basin: '合浦县城(廉州镇)', note: '合浦县城主要河流', verified: false, src: '北海市水利局' },
+  { name: '白沙河', type: '独流入海河流', outfall: '合浦县白沙镇入海', basin: '合浦县', note: '', verified: false, src: '待核实' },
+  { name: '公馆河', type: '独流入海河流', outfall: '合浦县公馆镇入海', basin: '合浦县', note: '', verified: false, src: '待核实' },
+  { name: '南康江', type: '独流入海河流', outfall: '铁山港区铁山港', basin: '铁山港区', note: '', verified: false, src: '待核实' },
+  { name: '福成河', type: '独流入海河流', outfall: '银海区福成镇入海', basin: '银海区', note: '', verified: false, src: '待核实' },
+  { name: '三合口江', type: '独流入海河流', outfall: '银海区', basin: '银海区平阳镇', note: '牛尾岭水库所在河流', verified: true, src: '北海市政府' },
+];
+const RESERVOIR_PROFILE = [
+  { name: '洪潮江水库', scale: '大(2)型', county: '合浦县星岛湖镇', river: '南流江支流洪潮江', totalCapM3: 7.03e8, effectiveCapM3: 2.93e8, basinKm2: 402, built: 1964, func: '灌溉/供水/防洪/发电/旅游', drinking: true, note: '北海重要饮用水源地、合浦县城主要供水源；别名星岛湖，国家级水利风景区；2025-12除险加固投运', verified: true, src: '北海新闻网/快懂百科' },
+  { name: '牛尾岭水库', scale: '中型', county: '银海区平阳镇孙东村', river: '三合口江上游', totalCapM3: 2550e4, effectiveCapM3: 1755e4, basinKm2: 24.28, built: 1964, func: '灌溉/防洪/供水/发电/养殖', drinking: true, note: '北海市区唯一在用湖库型饮用水水源地(供北郊水厂，约20万人)', verified: true, src: '北海市政府' },
+  { name: '鲤鱼地水库', scale: '中型', county: '北海市郊', river: '', totalCapM3: null, note: '城区重要水库(参数待核实)', verified: false, src: '待核实' },
+  { name: '石康水库', scale: '中型', county: '合浦县石康镇', river: '', totalCapM3: null, note: '参数待核实', verified: false, src: '待核实' },
+  { name: '闸口水库', scale: '中型', county: '合浦县闸口镇', river: '', totalCapM3: null, note: '参数待核实', verified: false, src: '待核实' },
+];
 // ===== 地名 → 经纬度 坐标表（用于把气象预警标题中的城市解析为地图坐标）=====
 // 以北海/广西为中心，覆盖广西全境 + 华南邻省 + 全国省会。匹配时取标题中最长命中的地名。
 const GEO = {
@@ -243,5 +262,5 @@ module.exports = {
   FIRMS_MAP_KEY, NMDIS_APPID, NMDIS_APPSECRET,
   THRESHOLDS, WMO, wmo, moonPhaseDesc,
   GEO, PROV_GEO, tyIntensity, TY_INTENSITY, WARN_CAT, WARN_LEVEL,
-  BEIHAI_BOUNDARY, BEIHAI_NAMES, GUANGXI_CITIES,
+  BEIHAI_BOUNDARY, BEIHAI_NAMES, GUANGXI_CITIES, RIVER_PROFILE, RESERVOIR_PROFILE,
 };
