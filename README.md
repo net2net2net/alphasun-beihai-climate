@@ -11,13 +11,13 @@
 下载 / 安装（稳定最新版，由 CI 自动发布到 GitHub Release）：
 
 - **Windows exe**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe
-- 
+ 
 - **Linux**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux
-- 
+  
 - **macOS**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos
-- 
+  
 - **安卓 Android APK**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.apk
-- 
+  
 - **iOS ipa（未签名 IPA测试版）**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa
 （ 用 Sideloadly + 免费 Apple ID 自签装 iPad/iPhone；详见下方「移动端 APP」）
 
@@ -118,7 +118,7 @@ npm run build:exe              # 输出 app/dist/alphasun-beihai-climate.exe（�
 - **使用说明 / 校验方法**：[docs/EXE使用说明.md](docs/EXE使用说明.md)
 - **系统运行效果图**：
 
-![AlphaSun 北海极端气候全景系统](docs/screenshot.jpg)
+<img width="2530" height="1326" alt="AlphaSun 北海极端气候全景系统1" src="https://github.com/user-attachments/assets/0c01f97d-7db2-47a5-aa38-93cfc03f30e0" />
 
 > 运行：双击 exe → 浏览器自动打开 http://localhost:8765（Linux / macOS 赋予可执行权限后 `./alphasun-beihai-climate-linux`）。需联网获取实时数据；如被杀软误报，加入白名单即可。详细见使用说明文档。
 
@@ -134,6 +134,8 @@ npm run build:exe              # 输出 app/dist/alphasun-beihai-climate.exe（�
 - **iOS（无需 Mac，推荐）**：仓库内置 `build-ios.yml` 工作流在 GitHub 云端构建并**发布到 GitHub Release**（永久留存，资产名 `alphasun-beihai-climate-ios.ipa`）。拿到后（[最新版](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa) 或 Actions → **Build iOS** → Run workflow 下载 Artifact `alphasun-ios-unsigned-ipa`）用 **Sideloadly + 免费 Apple ID** 自签装 iPad/iPhone（详见 [app-android/docs/iOS-Sideload-Guide.md](app-android/docs/iOS-Sideload-Guide.md)）。若仓库配置了 `APPLE_CERT_P12` 等 Secrets，则产出已签名 IPA（可 AltStore/企业/App Store 分发）。
 - **本机构建（iOS，需 Mac + Xcode）**：`cd app-android && npm install && npx cap add ios && npx cap open ios`，Xcode 中 Run / Archive（详见 [app-android/README.md](app-android/README.md)）。
 
+  <img width="2538" height="1330" alt="AlphaSun 北海极端气候全景系统2" src="https://github.com/user-attachments/assets/1db36713-1bd1-4bf2-ac61-1ae414cf3168" />
+
 ## 自动更新（多端）
 系统内置版本检查，覆盖所有分发形态：
 
@@ -144,6 +146,8 @@ npm run build:exe              # 输出 app/dist/alphasun-beihai-climate.exe（�
 - **网页 / PWA**：服务端资源更新后刷新页面即生效；自托管用户拉取最新代码后重启服务。
 
 检测机制：前端周期性（每 30 分钟）请求服务端 `/api/latest`（服务端代理 GitHub raw 的 `version.json`），与当前版本号比较；页脚「检查更新」可手动触发。无外网时静默跳过。
+
+<img width="2540" height="1330" alt="AlphaSun 北海极端气候全景系统3" src="https://github.com/user-attachments/assets/f1a6eb90-94bd-4aeb-b288-853af4d9d338" />
 
 ## 说明
 - 部分中央气象台产品页为 JS 动态渲染，叠加失败时保留官方原图链接（不伪造坏图）。
