@@ -7,13 +7,20 @@
 ## 适用设备及方式
 智能体（技能）、Windows（exe 单文件）、Linux / macOS、安卓 Android（APK）、iOS（ipa 测试版）。各端均内置**自动更新检查**：启动后比对 GitHub 最新版本，发现新版本按当前平台给出下载或重载指引（页脚「检查更新」可手动触发）。
 
+特别注明：强烈建议安装和更新2026年8月28日之后的版本
 下载 / 安装（稳定最新版，由 CI 自动发布到 GitHub Release）：
 
 - **Windows exe**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe
+- 
 - **Linux**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux
+- 
 - **macOS**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos
+- 
 - **安卓 Android APK**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.apk
-- **iOS ipa（测试版）**：[未签名 IPA（GitHub Release，需自签）](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa) — 用 Sideloadly + 免费 Apple ID 自签装 iPad/iPhone（证书 7 天有效，到期重签）；详见下方「移动端 APP」。
+- 
+- **iOS ipa（未签名 IPA测试版）**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa
+（ 用 Sideloadly + 免费 Apple ID 自签装 iPad/iPhone；详见下方「移动端 APP」）
+
 - **全部平台 / 源码**：https://github.com/net2net2net/alphasun-beihai-climate/releases
 
 ## 建设目标
