@@ -9,7 +9,7 @@
     "start:win": "start.bat",
     "start:unix": "bash start.sh",
     "build:assets": "node build-assets.js",
-    "build:exe": "@yao-pkg/pkg . --config package.json"
+    "build:exe": "@yao-pkg/pkg ."
   },
   "engines": {
     "node": ">=16"
