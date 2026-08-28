@@ -622,7 +622,7 @@ function renderRealtimeCheck() {
   const total = (rc.sources || []).length;
   el.innerHTML = `<div style="font-size:13px">${srcRows}</div>
     ${tableHtml}
-    <div style="margin-top:6px;font-size:12px;color:var(--muted)">${cons}</div>
+    <div class="rc-cons"><span class="rc-cons-tag">综合判定</span>${cons}</div>
     ${disc}
     ${regHtml}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
@@ -1004,15 +1004,17 @@ function buildClimateDynamic(d) {
     const lv = Math.max(...arr.map(a => a.level));
     return `<li><b style="color:${LCOL[lv]}">${t}</b> ×${arr.length}（最高等级 ${LNAME[lv]}）</li>`;
   }).join('');
-  const items = bh.map(a => `
+  window.__climateAlerts = bh;
+  const items = bh.map((a, i) => `
     <div class="cl-al">
       <div class="cl-al-h">
         <span class="${a.beihaiRelation === 'direct' ? 'rel-badge direct' : 'rel-badge possible'}">${a.beihaiRelation === 'direct' ? '涉及北海' : '可能涉及北海'}</span>
         <b>${a.type} · ${a.station || a.region}</b>
         <span style="color:${LCOL[a.level]}">${a.levelName}</span>
       </div>
+      ${a.url ? `<div class="cl-al-src"><a href="${a.url}" target="_blank" rel="noopener">🔗 官方发布来源 ↗</a></div>` : ''}
       <div class="cl-al-d">${a.detail || ''}</div>
-      ${a.advice ? `<div class="cl-al-ad">▶ ${a.advice}</div>` : ''}
+      ${a.advice ? `<div class="cl-al-ad"><span class="cl-ad-link" onclick="openAdviceDetail(window.__climateAlerts[${i}])">建议处置：${a.advice} ▸ 查看详细</span></div>` : ''}
     </div>`).join('');
   const directN = bh.filter(a => a.beihaiRelation === 'direct').length;
   const possibleN = bh.filter(a => a.beihaiRelation === 'possible').length;
@@ -1244,6 +1246,7 @@ function locateAlert(a) {
 
 // 活跃告警（globalAlerts）详情弹窗：与情报弹窗共用容器
 function openAlertModal(a) {
+  window.__curAlert = a;
   const body = $('modalBody');
   const regTag = REGION_TAG[a.region] || a.region;
   const rel = a.beihaiRelation === 'direct' ? '<span class="rel-badge direct">涉及北海</span>'
@@ -1267,8 +1270,36 @@ function openAlertModal(a) {
       <div><span class="muted">坐标</span><b>${coordTxt}</b></div>
     </div>
     ${a.advice ? `<div class="m-advice"><b>处置建议：</b>${a.advice}</div>` : ''}
+    ${a.adviceDetail ? `<div style="margin-top:8px"><span class="m-link m-link-btn" onclick="openAdviceDetail(window.__curAlert)">查看详细处置建议 ▸</span></div>` : ''}
+    ${a.url ? `<div style="margin-top:8px"><a class="m-link" href="${a.url}" target="_blank" rel="noopener">查看官方发布详情 ↗</a></div>` : ''}
     <div style="margin-top:10px"><button id="locAlertBtn" class="m-link" style="cursor:pointer;border:1px solid var(--accent);border-radius:8px;padding:6px 12px;background:rgba(88,166,255,.10)">📍 在实时天气 / 地图中定位</button></div>`;
   const lb = document.getElementById('locAlertBtn'); if (lb) lb.onclick = () => locateAlert(a);
+  $('intelModal').classList.remove('hidden');
+}
+// 详细处置建议弹窗（点击"简要处置建议"链接展开更完整处置指引）
+function openAdviceDetail(a) {
+  if (!a) a = window.__curAlert;
+  if (!a) return;
+  const body = $('modalBody');
+  const regTag = REGION_TAG[a.region] || a.region;
+  const rel = a.beihaiRelation === 'direct' ? '<span class="rel-badge direct">涉及北海</span>'
+    : a.beihaiRelation === 'possible' ? '<span class="rel-badge possible">可能涉及北海</span>' : '';
+  const detailLines = (a.adviceDetail || '暂无更详细建议，请以官方发布为准。')
+    .split(/[；;。.\n]/).map(s => s.trim()).filter(Boolean);
+  body.innerHTML = `
+    <div class="m-head">
+      <span class="tk-region ${a.region}">${regTag}</span>
+      <span class="tk-lv" style="background:${a.color};color:#06121f">${a.levelName}</span>
+      ${rel}
+      <span class="m-cat">${a.type}</span>
+    </div>
+    <div class="m-title">${a.type}${a.station ? ' · ' + a.station : ''} · 处置建议详情</div>
+    <div class="m-summary">${a.detail || ''}</div>
+    ${a.advice ? `<div class="m-advice"><b>简要处置建议：</b>${a.advice}</div>` : ''}
+    <div class="m-advice-detail"><b>详细处置建议：</b>
+      <div style="margin-top:6px;line-height:1.8">${detailLines.map(s => `<div class="m-dt-item">${s}</div>`).join('')}</div>
+    </div>
+    ${a.url ? `<div style="margin-top:10px"><a class="m-link" href="${a.url}" target="_blank" rel="noopener">查看官方发布详情 ↗</a></div>` : ''}`;
   $('intelModal').classList.remove('hidden');
 }
 // 顶部"极端气候告警情报"标签 → 全部情报弹窗（需求3）

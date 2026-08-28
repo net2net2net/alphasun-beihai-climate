@@ -137,11 +137,12 @@ function buildMock() {
   };
   const globalAlerts = [
     {
-      type: '暴雨', station: '北海', region: '北海', level: 3, levelName: '预警',
+      type: '暴雨', station: '北海', region: '北海', level: 3, levelName: '警报',
       detail: '北海市气象台发布暴雨蓝色预警', advice: '注意防范城市内涝',
+      adviceDetail: '1. 预置排水设备，巡视易涝站所；2. 地下空间入口封堵，停运低洼线路；3. 果断停运避险，确保人身安全。',
       beihaiRelation: 'direct', dist: 0, lat: 21.48, lon: 109.11, color: '#fb8500',
       id: 'a1', time: '2026-08-27 09:00', summary: '...', source: '北海气象台',
-      category: 'rain', minDistBH: 0, relLabel: '涉及北海', url: '', icon: '',
+      category: 'rain', minDistBH: 0, relLabel: '涉及北海', url: 'https://www.12379.cn/', icon: '',
     },
   ];
   const alertIntel = {
@@ -273,7 +274,9 @@ const testSrc = `
     };
   } catch (e) { globalThis.__algo = { err: String(e) }; }
   try {
-    if (state.data.globalAlerts[0]) openAlertModal(state.data.globalAlerts[0]);
+    globalThis.__alertModalHtml = '';
+    if (state.data.globalAlerts[0]) { openAlertModal(state.data.globalAlerts[0]); globalThis.__alertModalHtml = document.getElementById('modalBody').innerHTML; }
+    openAdviceDetail(state.data.globalAlerts[0]);
     openBeihaiModal();
     openAllIntelModal();
     var lb3 = document.getElementById('locAlertBtn'); if (lb3 && lb3.onclick) lb3.onclick();
@@ -322,6 +325,17 @@ function runAssertions() {
   const cal = (els['calendarBody'] && els['calendarBody'].innerHTML) || '';
   ok(cal.indexOf('cal-grid') >= 0, '日历模块已渲染（农历·节气·假日）');
   ok(cal.indexOf('data-date') >= 0, '日历每格可点击查看黄历·干支历（data-date）');
+  // 需求①：活跃告警弹窗含原始链接
+  const amHtml = ctx.__alertModalHtml || '';
+  ok(amHtml.indexOf('查看官方发布详情') >= 0, '活跃告警弹窗含原始链接（需求①）');
+  ok(amHtml.indexOf(ctx.__MOCK.globalAlerts[0].url) >= 0, '活跃告警弹窗链接指向官方源');
+  // 需求②：实时气候态势与建议模块重排
+  ok(cl.indexOf('cl-al-src') >= 0, '实时气候态势模块含告警原始链接（需求②）');
+  ok(cl.indexOf('cl-ad-link') >= 0, '实时气候态势模块简要建议可点击查看详情（需求②）');
+  ok(cl.indexOf('▶') < 0, '实时气候态势模块已取消"▶ "前缀（需求②）');
+  // 需求③：多源校核综合判定突出
+  ok(rc.indexOf('rc-cons') >= 0, '多源校核综合判定已突出显示（需求③）');
+  ok(rc.indexOf('综合判定') >= 0, '多源校核综合判定含标签（需求③）');
   const alertStatus = (els['alertStatus'] && els['alertStatus'].textContent) || '';
   ok(alertStatus.length > 0, '顶部告警指示器已渲染（' + alertStatus + '）');
 
@@ -329,6 +343,7 @@ function runAssertions() {
   const idxHtml = fs.readFileSync(path.join(ROOT, 'app/public/index.html'), 'utf8');
   ok(idxHtml.indexOf('农历日历') < 0 && idxHtml.indexOf('📅 日历') >= 0, '面板已由「农历日历」改名为「日历」');
   ok(idxHtml.indexOf('vendor/lunar.js') >= 0, '已引入 vendor/lunar.js（黄历/干支数据源）');
+  ok(idxHtml.indexOf('多源气候数据校核') >= 0 && idxHtml.indexOf('多源实况校核') < 0, '多源校核模块已改名「多源气候数据校核」（需求③）');
   // 黄历库（vendor/lunar.js）独立校验：2026-08-28 应为 丙午年 丙申月 甲戌日
   try {
     const LL = require(path.join(ROOT, 'app/public/vendor/lunar.js'));

@@ -200,7 +200,12 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .m-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px;margin-bottom:10px}
 .m-grid .muted{display:block;font-size:11px}
 .m-advice{font-size:12px;background:var(--bg3);border-left:3px solid var(--accent);padding:6px 10px;border-radius:0 6px 6px 0;margin-bottom:10px;line-height:1.6}
-.m-link{color:var(--accent);font-size:12px}
+.m-advice-detail{font-size:12px;background:var(--bg3);border-left:3px solid var(--info);padding:8px 10px;border-radius:0 6px 6px 0;margin-bottom:10px;line-height:1.6}
+.m-dt-item{padding:3px 0 3px 14px;position:relative;color:var(--text)}
+.m-dt-item::before{content:"•";position:absolute;left:2px;color:var(--accent)}
+.m-link{color:var(--accent);font-size:12px;text-decoration:none}
+.m-link:hover{text-decoration:underline}
+.m-link-btn{cursor:pointer;font-weight:600}
 
 /* 地图：北海边界标签 */
 .bd-label{background:rgba(13,17,23,.7);border:1px solid #58a6ff;color:#9fd3ff;font-size:11px;
@@ -277,7 +282,12 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .cl-al{border-left:4px solid var(--line);padding:6px 10px;background:var(--bg3);border-radius:0 6px 6px 0}
 .cl-al-h{display:flex;align-items:center;gap:8px;font-size:12px}
 .cl-al-d{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
-.cl-al-ad{font-size:11px;color:var(--info);margin-top:2px;line-height:1.5}
+.cl-al-ad{font-size:11px;margin-top:3px;line-height:1.5}
+.cl-al-src{margin-top:3px;font-size:11px}
+.cl-al-src a{color:var(--accent);text-decoration:none;font-weight:600}
+.cl-al-src a:hover{text-decoration:underline}
+.cl-ad-link{cursor:pointer;display:inline-block;font-size:11px;color:var(--accent);font-weight:600}
+.cl-ad-link:hover{text-decoration:underline}
 .cl-dyn-tip{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6;background:var(--bg3);padding:6px 10px;border-radius:6px}
 
 /* 模态框：情报/告警列表（需求3 / 需求6） */
@@ -423,6 +433,10 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 /* 实况多源校验徽标（实时天气模块顶部，体现校验结果→实况展示联动，v8.1.1） */
 .rc-badge{display:inline-flex;align-items:center;gap:5px;margin:0 0 8px;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;
   border:1px solid var(--line);background:var(--bg3);color:var(--muted);white-space:nowrap}
+/* 多源气候数据校核·综合判定（显著卡片，v8.1.3） */
+.rc-cons{margin-top:8px;padding:8px 12px;border-radius:8px;background:linear-gradient(180deg,rgba(88,166,255,.14),rgba(88,166,255,.06));border:1px solid var(--accent);font-size:13px;font-weight:600;color:var(--text);line-height:1.7;box-shadow:0 1px 6px rgba(0,0,0,.25)}
+.rc-cons b{color:var(--accent)}
+.rc-cons-tag{display:inline-block;margin-right:8px;padding:2px 8px;border-radius:6px;background:var(--accent);color:#06121f;font-size:11px;font-weight:700;letter-spacing:.5px}
 /* 预测置信提示（基于多源实况一致度，体现校验结果→预测天气联动） */
 .fc-note{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5}
 /* 气候距平（实况 vs 气候月均态，体现校验结果→气候数据联动） */
