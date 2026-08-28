@@ -1,6 +1,9 @@
 name: Build EXE (Windows/Linux/macOS)
 
-# 在 GitHub 云端把前端+服务打包为单文件可执行程序（pkg/Node SEA），免去本机装 Node。
+# 用 Node.js 官方 Single Executable Application (SEA) 方案把聚合服务打包为单文件可执行程序，
+# 彻底绕开 pkg / @yao-pkg-pkg 上游基础二进制已下线（404）导致构建失败的问题，免去本机装 Node。
+# 流程：每个 OS runner 用 esbuild 把 server.js（+lib/* + embedded-assets）打成单文件，
+#       再用 node --experimental-sea-config 生成 blob，复制对应平台 Node 二进制并 postject 注入。
 # 触发：推送到 main（含 app/ 或本文件改动），或手动 Run workflow。
 # 构建完成后自动把三个平台的 exe 提交回仓库 downloads/ 目录（与 APK 机制一致：CI 自动写 downloads）。
 on:
@@ -16,49 +19,95 @@ permissions:
   contents: write
 
 jobs:
-  build-exe:
-    name: Build standalone executables
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: app
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: alphasun-beihai-climate.exe
+          - os: ubuntu-latest
+            artifact: alphasun-beihai-climate-linux
+          - os: macos-latest
+            artifact: alphasun-beihai-climate-macos
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install build deps (pkg)
-        run: npm install
+      - name: Install SEA build deps
+        working-directory: app
+        run: npm install esbuild postject
 
       - name: Regenerate embedded assets (inline public/ into exe)
-        run: npm run build:assets
+        working-directory: app
+        run: node build-assets.js
 
-      - name: Build exe — Windows
-        run: npx @yao-pkg/pkg . --targets node22-win-x64 --output dist/alphasun-beihai-climate.exe
+      - name: Bundle server.js (esbuild → single file)
+        working-directory: app
+        run: npx esbuild server.js --bundle --platform=node --target=node22 --format=cjs --outfile=dist/bundle.js
 
-      - name: Build exe — Linux
-        run: npx @yao-pkg/pkg . --targets node22-linux-x64 --output dist/alphasun-beihai-climate-linux
+      - name: Generate SEA preparation blob
+        working-directory: app
+        run: node --experimental-sea-config sea-config.json
 
-      - name: Build exe — macOS
-        run: npx @yao-pkg/pkg . --targets node22-macos-x64 --output dist/alphasun-beihai-climate-macos
+      - name: Copy Node binary + inject SEA blob
+        working-directory: app
+        shell: bash
+        run: |
+          NODE_BIN="$(command -v node)"
+          cp "$NODE_BIN" "dist/${{ matrix.artifact }}"
+          npx postject "dist/${{ matrix.artifact }}" NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
 
-      - name: Publish to downloads/
+      - name: Ad-hoc codesign (macOS, bypass Gatekeeper)
+        if: matrix.os == 'macos-latest'
+        working-directory: app
+        run: codesign --force --sign - "dist/${{ matrix.artifact }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: app/dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish to downloads/
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage into downloads/
+        run: |
+          mkdir -p downloads
+          for f in alphasun-beihai-climate.exe alphasun-beihai-climate-linux alphasun-beihai-climate-macos; do
+            if [ -f "artifacts/$f/$f" ]; then cp "artifacts/$f/$f" "downloads/$f"; else echo "missing $f"; fi
+          done
+          ls -la downloads/
+
+      - name: Commit & push
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp dist/alphasun-beihai-climate.exe "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate.exe"
-          cp dist/alphasun-beihai-climate-linux "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate-linux"
-          cp dist/alphasun-beihai-climate-macos "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate-macos"
-          cd "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main 2>/dev/null || true
           git add downloads/alphasun-beihai-climate.exe downloads/alphasun-beihai-climate-linux downloads/alphasun-beihai-climate-macos
-          git commit -m "ci: 自动发布 EXE v$(node -p "require('./app/package.json').version") 至 downloads（win/linux/macos）" || echo "no changes"
+          git commit -m "ci: 自动发布 EXE v$(node -p "require('./app/package.json').version") 至 downloads（win/linux/macos，SEA）" || echo "no changes"
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git push origin HEAD:refs/heads/main
