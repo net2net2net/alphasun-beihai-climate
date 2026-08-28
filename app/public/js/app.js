@@ -429,10 +429,37 @@ const DIMS = {
 function fmt(t){ return t ? t.slice(11,16) : '—'; }
 function $(id){ return document.getElementById(id); }
 
+// ===== 原生端（Capacitor）判定：Android/iOS 壳内运行 =====
+// 原生端没有 Node 后端，/api/overview 走本地静态服务器会 404 → 全屏无数据。
+// 因此原生端改用 window.AlphaData.buildOverview()（浏览器版聚合层，js/data.js 已挂载）。
+function isNative() {
+  try {
+    return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  } catch (e) { return false; }
+}
+// 仅在原生端动态注入 js/data.js（Web/PWA 不加载这份 ~56KB 文件，保持双端单源一致）。
+// js/data.js 是 Android 专属、不参与双端同步；用动态注入避免破坏 index.html 逐字节一致护栏。
+function ensureAlphaData() {
+  if (window.AlphaData) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'js/data.js';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('AlphaData 数据层加载失败（js/data.js）'));
+    document.head.appendChild(s);
+  });
+}
 async function load() {
   try {
-    const r = await fetch('/api/overview');
-    state.data = await r.json();
+    let data;
+    if (isNative()) {
+      await ensureAlphaData();
+      data = await window.AlphaData.buildOverview();
+    } else {
+      const r = await fetch('/api/overview');
+      data = await r.json();
+    }
+    state.data = data;
     if (!state.sel) state.sel = state.data.stations[0].id;
     render();
   } catch (e) {
@@ -1520,20 +1547,35 @@ function showUpdateBanner(cur, latest) {
 }
 function checkUpdate(manual) {
   if (typeof fetch !== 'function') return; // 门禁桩环境无 fetch → 直接跳过
-  let cur = null;
-  try {
-    fetch('/api/version').then(r => r.json()).then(j => {
-      if (j && j.version) {
-        cur = j.version;
-        populateFooterVersion(cur);
-        if (j.github) { const g = document.getElementById('footGithub'); if (g) g.href = j.github; }
-        if (j.gitee) { const ge = document.getElementById('footGitee'); if (ge) ge.href = j.gitee; }
-      }
-    }).catch(() => {});
-  } catch (e) {}
-  if (!cur) cur = appVersion();
-  fetch('/api/latest').then(r => r.json()).then(j2 => {
-    if (j2 && j2.ok && j2.version && cmpVer(j2.version, cur) > 0) { showUpdateBanner(cur, j2); return; }
+  const native = isNative();
+  if (!native) {
+    // Web / PWA：仍走 Node 后端接口（有后端、同源无 CORS 问题）
+    let cur = null;
+    try {
+      fetch('/api/version').then(r => r.json()).then(j => {
+        if (j && j.version) {
+          cur = j.version;
+          populateFooterVersion(cur);
+          if (j.github) { const g = document.getElementById('footGithub'); if (g) g.href = j.github; }
+          if (j.gitee) { const ge = document.getElementById('footGitee'); if (ge) ge.href = j.gitee; }
+        }
+      }).catch(() => {});
+    } catch (e) {}
+    if (!cur) cur = appVersion();
+    fetch('/api/latest').then(r => r.json()).then(j2 => {
+      if (j2 && j2.ok && j2.version && cmpVer(j2.version, cur) > 0) { showUpdateBanner(cur, j2); return; }
+      if (manual) showNoUpdate(cur);
+    }).catch(() => { if (manual) showNoUpdate(cur); });
+    return;
+  }
+  // 原生端（Android/iOS）：无 Node 后端，/api/version 与 /api/latest 走本地静态服务器会 404 →
+  // 页脚版本不刷新、更新横幅不出来。当前版本从页头 .ver 解析（始终可用）；
+  // 最新版直接拉 GitHub raw 的 version.json，CapacitorHttp 原生 HTTP 绕过 CORS。
+  const cur = appVersion();
+  populateFooterVersion(cur);
+  const url = 'https://raw.githubusercontent.com/net2net2net/alphasun-beihai-climate/main/app/public/data/version.json';
+  fetch(url).then(r => r.json()).then(j2 => {
+    if (j2 && j2.version && cmpVer(j2.version, cur) > 0) { showUpdateBanner(cur, j2); return; }
     if (manual) showNoUpdate(cur);
   }).catch(() => { if (manual) showNoUpdate(cur); });
 }

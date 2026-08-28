@@ -747,8 +747,17 @@
       fetchFires().catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchTyphoon().catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchWarnings().catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchRiverReservoir().catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchRegionalBeihai().catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchClimate(STATIONS[0]).catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchCmaLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchWttrLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchCaiyunLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchMetNoLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchWeatherCnLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
+      fetchCmaGovLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     ]);
-    const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes] = results;
+    const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, regionalRes, climateRes, cmaRes, wttrRes, caiyunRes, metnoRes, weathercnRes, cmagovRes] = results;
     const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
     const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
       const ev = evaluateStation(st);
@@ -785,6 +794,26 @@
       warnings: (warnRes.status === 'fulfilled' && warnRes.value.ok) ? warnRes.value : { all: [] },
       quakes,
     });
+    // ===== 对齐 server.js：多源实况交叉校核 + 静默应用覆盖 + 江河水库 / 区域天气 / 气候常年值 =====
+    const primaryAgg = (stationsAgg.status === 'fulfilled') ? stationsAgg.value[0] : null;
+    const cmaVal = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : cmaRes;
+    const wttrVal = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : wttrRes;
+    const caiyunVal = (caiyunRes && caiyunRes.status === 'fulfilled') ? caiyunRes.value : caiyunRes;
+    const metnoVal = (metnoRes && metnoRes.status === 'fulfilled') ? metnoRes.value : metnoRes;
+    const weathercnVal = (weathercnRes && weathercnRes.status === 'fulfilled') ? weathercnRes.value : weathercnRes;
+    const cmagovVal = (cmagovRes && cmagovRes.status === 'fulfilled') ? cmagovRes.value : cmagovRes;
+    const warnCtx = [
+      ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.rainstorm) ? warnRes.value.rainstorm : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
+      ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.convective) ? warnRes.value.convective : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
+    ];
+    const realtimeCheck = verifyRealtime({
+      openMeteo: primaryAgg ? primaryAgg.weather : null,
+      weathercn: weathercnVal, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal, cmagov: cmagovVal, metno: metnoVal,
+    }, warnCtx, primaryAgg ? primaryAgg.air : null);
+    const regionalWeather = (regionalRes && regionalRes.status === 'fulfilled') ? regionalRes.value : { ok: false, error: (regionalRes && regionalRes.reason) ? String(regionalRes.reason) : '区域天气采集失败' };
+    const primaryClimate = (climateRes && climateRes.status === 'fulfilled') ? climateRes.value : null;
+    const riverReservoir = (rrRes && rrRes.status === 'fulfilled') ? rrRes.value : { ok: false, error: 'unavailable' };
+    applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes);
     // ===================== 数据自检（diagnostics）=====================
     // 供屏上「数据自检」面板展示每个数据源的成功/失败，便于在 iOS 设备上确认
     // CapacitorHttp 原生 HTTP 修复是否生效，以及快速定位残留问题。
@@ -845,10 +874,475 @@
       earthquakes: { ok: quakeRes.status === 'fulfilled' && quakeRes.value.ok, count: quakes.length, events: quakes.slice(0, 12) },
       fires: { ok: fireRes.status === 'fulfilled' && fireRes.value.ok, configured: !!(fireRes.status === 'fulfilled' && fireRes.value.configured), count: fires.length, fires: fires.slice(0, 50) },
       typhoon: { ok: tyRes.status === 'fulfilled' && tyRes.value.ok, count: typhoons.length, typhoons },
-      warnings: { ok: warnRes.status === 'fulfilled' && warnRes.value.ok, count: warningsAll.length, all: warningsAll, typhoon: [], rainstorm: [], geological: [], convective: [] },
+      warnings: {
+        ok: warnRes.status === 'fulfilled' && warnRes.value.ok, count: warningsAll.length, all: warningsAll,
+        typhoon: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.typhoon : [],
+        rainstorm: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.rainstorm : [],
+        geological: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.geological : [],
+        convective: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value.convective : [],
+      },
+      riverReservoir,
       astronomy: astronomicalEvents(),
       alertIntel,
+      realtimeCheck,
+      regionalWeather,
+      primaryClimate,
       globalAlerts,
+    };
+  }
+
+  // ===================== 浏览器版补齐：对齐 server.js 最新聚合（多源实况校核 / 江河水库 / 区域天气 / 气候常年值）=====================
+  // 以下函数移植自 app/lib/sources.js 与 app/server.js，改为浏览器原生 HTTP（CapHttp）实现，
+  // 与 web 端 server.js 保持字段级一致，使安卓/iOS 端 buildOverview() 返回结构完全对齐。
+
+  // ---- 文本 → WMO 代码 映射 ----
+  function zhWeatherToWmo(text) {
+    if (!text) return 3;
+    if (/雷阵雨|雷雨|雷电|暴雨|大暴雨|特大暴雨/.test(text)) return 95;
+    if (/暴雨/.test(text)) return 65;
+    if (/大雨/.test(text)) return 65;
+    if (/中雨/.test(text)) return 63;
+    if (/小雨|阵雨|零星小雨|小阵雨/.test(text)) return 80;
+    if (/雨夹雪/.test(text)) return 85;
+    if (/雪/.test(text)) return 73;
+    if (/雾|霾|沙尘/.test(text)) return 45;
+    if (/晴/.test(text)) return 0;
+    if (/多云|阴/.test(text)) return 3;
+    return 3;
+  }
+  function dirToDeg(d) {
+    const M = { 北: 0, 东北: 45, 东: 90, 东南: 135, 南: 180, 西南: 225, 西: 270, 西北: 315 };
+    if (!d) return 0;
+    for (const k of Object.keys(M)) if (String(d).includes(k)) return M[k];
+    return 0;
+  }
+  function enToWmo(text) {
+    const t = String(text || '').toLowerCase();
+    if (/thunder|lightning|storm/.test(t)) return { code: 95, zh: '雷阵雨' };
+    if (/rain|drizzle|shower/.test(t)) return { code: 61, zh: '雨' };
+    if (/snow|sleet/.test(t)) return { code: 71, zh: '雪' };
+    if (/fog|mist|haze/.test(t)) return { code: 45, zh: '雾' };
+    if (/clear|sunny/.test(t)) return { code: 0, zh: '晴' };
+    if (/cloud|overcast/.test(t)) return { code: 3, zh: '多云' };
+    return { code: 3, zh: '多云' };
+  }
+  // 和风天气 QWeather 实况（CMA 官方分发，需 QWEATHER_KEY；浏览器端取自 window.ALPHASUN_CONFIG）
+  async function qweatherNow(s) {
+    const key = RAW.QWEATHER_KEY || '';
+    if (!key) return null;
+    const host = RAW.QWEATHER_HOST || 'devapi.qweather.com';
+    const loc = `${s.lon.toFixed(3)},${s.lat.toFixed(3)}`;
+    const url = `https://${host}/v7/weather/now?location=${loc}&key=${encodeURIComponent(key)}`;
+    const d = await httpGetParsed(url, 12000);
+    if (!d || String(d.code) !== '200' || !d.now) throw new Error('qweather: ' + (d && d.code) + ' ' + (d && d.message || ''));
+    const n = d.now;
+    let uvIdx = null;
+    try {
+      const uj = await httpGetParsed(`https://${host}/v7/indices/uv?location=${loc}&key=${encodeURIComponent(key)}`, 12000);
+      if (uj && String(uj.code) === '200' && uj.now) uvIdx = parseFloat(uj.now.index);
+    } catch (e) { /* uv 可选 */ }
+    const zh = String(n.text || '').trim();
+    const code = zhWeatherToWmo(zh);
+    const wind = (parseFloat(n.windSpeed) || 0) / 3.6; // km/h -> m/s
+    return {
+      ok: true, source: 'cma', label: '和风天气(QWeather)', time: n.obsTime || null,
+      current: {
+        time: new Date().toISOString().slice(0, 16),
+        temp: parseFloat(n.temp), feels: parseFloat(n.feelsLike),
+        rh: parseInt(n.humidity, 10) || 0, precip: parseFloat(n.precip) || 0,
+        code, text: zh || wmo(code)[0], icon: wmo(code)[1],
+        wind, gust: 0, windDir: dirToDeg(n.windDir),
+        pressure: parseFloat(n.pressure) || 0, cloud: parseInt(n.cloud, 10) || 100, isDay: 1,
+        uv: (typeof uvIdx === 'number' && !isNaN(uvIdx)) ? +uvIdx.toFixed(1) : null,
+        vis: (n.vis != null ? parseFloat(n.vis) : null),
+      },
+    };
+  }
+
+  // ===== 多源实况（国内权威源，参与交叉校核；免 key 源失败则优雅跳过）=====
+  async function fetchCmaLive(s) {
+    const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
+    const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
+    const qw = await qweatherNow({ lat, lon }).catch(() => null);
+    if (qw) return qw;
+    const CITY = '101301301';
+    try {
+      const text = await httpGetText(`http://d1.weather.com.cn/sk_${CITY}.html`, 12000);
+      const m = text.match(/var\s+dataSK\s*=\s*(\{[\s\S]*?\})\s*;?/);
+      if (!m) return { ok: false, error: 'cma: 公开接口已停用(需配置 QWEATHER_KEY)', skipped: !RAW.QWEATHER_KEY };
+      const j = JSON.parse(m[1]);
+      const zh = String(j.weather || '').trim();
+      const code = zhWeatherToWmo(zh);
+      const wmoPair = wmo(code);
+      const rh = parseInt(j.SD, 10);
+      const precip = parseFloat(j.rain);
+      const wind = parseFloat(String(j.WS || '0').replace(/[^0-9.]/g, ''));
+      return {
+        ok: true, source: 'cma', city: CITY, time: j.time,
+        current: { time: new Date().toISOString().slice(0, 16), temp: parseFloat(j.temp), feels: parseFloat(j.temp), rh: isNaN(rh) ? null : rh, precip: isNaN(precip) ? 0 : precip, code, text: zh || wmoPair[0], icon: wmoPair[1], wind: isNaN(wind) ? 0 : wind, gust: 0, windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1 },
+      };
+    } catch (e) { return { ok: false, error: 'cma fetch failed: ' + (e.message || e), skipped: !RAW.QWEATHER_KEY }; }
+  }
+  async function fetchWeatherCnLive(s) {
+    const CITY = '101301301';
+    try {
+      const text = await httpGetText(`https://d1.weather.com.cn/sk_2d/${CITY}.html`, 12000);
+      const m = text.match(/var\s+dataSK\s*=\s*(\{[\s\S]*?\})\s*;?/);
+      if (!m) return { ok: false, error: 'weathercn: 无 dataSK（接口不可用）' };
+      const j = JSON.parse(m[1]);
+      const zh = String(j.weather || '').trim();
+      const code = zhWeatherToWmo(zh);
+      const wmoPair = wmo(code);
+      const rh = parseInt(j.SD, 10);
+      const precip = parseFloat(j.rain);
+      const scale = parseFloat(String(j.WS || '0').replace(/[^0-9.]/g, '')) || 0;
+      const wind = windScaleToMs(scale);
+      const pressure = parseFloat(j.qy) || 0;
+      return {
+        ok: true, source: 'weathercn', label: '中国天气网(国家气象中心)', time: j.time,
+        current: { time: new Date().toISOString().slice(0, 16), temp: parseFloat(j.temp), feels: parseFloat(j.temp), rh: isNaN(rh) ? null : rh, precip: isNaN(precip) ? 0 : precip, code, text: zh || wmoPair[0], icon: wmoPair[1], wind, gust: 0, windDir: dirToDeg(j.WD), pressure: pressure > 0 ? pressure : 0, cloud: 100, isDay: 1, uv: null, vis: null },
+      };
+    } catch (e) { return { ok: false, error: 'weathercn fetch: ' + (e.message || e) }; }
+  }
+  async function fetchCmaGovLive(s) {
+    const STATION = '59644';
+    try {
+      const j = await httpGetParsed(`https://weather.cma.cn/api/weather/view?stationid=${STATION}`, 12000);
+      const now = j && j.data && j.data.now;
+      if (!now || typeof now.temperature !== 'number') return { ok: false, error: 'cmagov: 无实况 now 字段' };
+      const temp = +now.temperature;
+      const rh = (typeof now.humidity === 'number') ? Math.round(now.humidity) : null;
+      const pressure = (typeof now.pressure === 'number') ? Math.round(now.pressure) : 0;
+      const precip = (typeof now.precipitation === 'number') ? now.precipitation : 0;
+      const wind = (typeof now.windSpeed === 'number') ? now.windSpeed : 0;
+      const windDir = (typeof now.windDirectionDegree === 'number' && now.windDirectionDegree < 900) ? now.windDirectionDegree : 0;
+      const code = (precip > 0.1) ? 61 : 3;
+      return {
+        ok: true, source: 'cmagov', label: '中国气象局(CMA)', time: null,
+        current: { time: new Date().toISOString().slice(0, 16), temp, feels: temp, rh, precip: isNaN(precip) ? 0 : precip, code, text: code === 61 ? '雨' : '多云', icon: wmo(code)[1], wind, gust: 0, windDir, pressure: pressure > 0 ? pressure : 0, cloud: 100, isDay: 1, uv: null, vis: null },
+      };
+    } catch (e) { return { ok: false, error: 'cmagov fetch: ' + (e.message || e) }; }
+  }
+  async function fetchWttrLive(s) {
+    try {
+      const text = await httpGetText(`https://wttr.in/${s.lat.toFixed(2)},${s.lon.toFixed(2)}?format=j1`, 12000);
+      const d = JSON.parse(text);
+      const c = d.current_condition && d.current_condition[0];
+      if (!c) return { ok: false, error: 'wttr: no current_condition' };
+      const desc = (c.weatherDesc && c.weatherDesc[0] && c.weatherDesc[0].value) || '';
+      const m = enToWmo(desc);
+      return {
+        ok: true, source: 'wttr', label: 'wttr.in', time: c.localObsDateTime || null,
+        current: { temp: parseFloat(c.temp_C), feels: parseFloat(c.FeelsLikeC), rh: parseInt(c.humidity, 10) || 0, precip: parseFloat(c.precipMM) || 0, code: m.code, text: m.zh, icon: wmo(m.code)[1], wind: (parseFloat(c.windspeedKmph) || 0) / 3.6, gust: 0, windDir: parseFloat(c.winddirDegree) || 0, pressure: 0, cloud: parseInt(c.cloudcover, 10) || 0, isDay: 1, uv: (c.uvIndex != null ? parseFloat(c.uvIndex) : null), vis: (c.visibility != null ? parseFloat(c.visibility) : null) },
+      };
+    } catch (e) { return { ok: false, error: 'wttr fetch: ' + (e.message || e) }; }
+  }
+  async function fetchCaiyunLive(s) {
+    const token = RAW.CAIYUN_TOKEN || '';
+    if (!token) return { ok: false, error: '未配置 CAIYUN_TOKEN（可选中国源）', skipped: true };
+    const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
+    const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
+    const url = `https://api.caiyunapp.com/v2.6/${token}/${lon.toFixed(4)},${lat.toFixed(4)}/realtime.json`;
+    const d = await httpGetParsed(url, 12000);
+    const rt = (d && d.result && d.result.realtime) || {};
+    const sky = caiyunSkyconToWmo(rt.skycon);
+    const rh = (typeof rt.humidity === 'number') ? Math.round(rt.humidity * 100) : 0;
+    const cloud = (typeof rt.cloudrate === 'number') ? Math.round(rt.cloudrate * 100) : 100;
+    const windObj = (rt.wind && typeof rt.wind === 'object') ? rt.wind : null;
+    const wind = windObj ? (parseFloat(windObj.speed) || 0) : 0;
+    const windDir = windObj ? (parseFloat(windObj.direction) || 0) : 0;
+    let precip = 0;
+    if (rt.precipitation && typeof rt.precipitation === 'object') precip = parseFloat(rt.precipitation.local) || 0;
+    else if (typeof rt.precipitation === 'number') precip = rt.precipitation;
+    return {
+      ok: true, source: 'caiyun', label: '彩云天气(Caiyun)', time: null,
+      current: { time: new Date().toISOString().slice(0, 16), temp: parseFloat(rt.temperature), feels: parseFloat(rt.apparent_temperature != null ? rt.apparent_temperature : rt.temperature), rh, precip: isNaN(precip) ? 0 : precip, code: sky.code, text: sky.zh, icon: wmo(sky.code)[1], wind, gust: 0, windDir, pressure: 0, cloud, isDay: 1 },
+    };
+  }
+  async function fetchMetNoLive(s) {
+    const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
+    const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
+    const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
+    const d = await httpGetParsed(url, 12000);
+    const ts = (d && d.properties && d.properties.timeseries && d.properties.timeseries[0]);
+    if (!ts) return { ok: false, error: 'metno: 无 timeseries' };
+    const ins = ts.data.instant.details;
+    const temp = ins.air_temperature;
+    const wind = (ins.wind_speed != null) ? ins.wind_speed : 0;
+    const windDir = (ins.wind_from_direction != null) ? ins.wind_from_direction : 0;
+    const rh = (ins.relative_humidity != null) ? Math.round(ins.relative_humidity) : null;
+    const pressure = (ins.air_pressure_at_sea_level != null) ? +ins.air_pressure_at_sea_level.toFixed(0) : 0;
+    const cloud = (ins.cloud_area_fraction != null) ? Math.round(ins.cloud_area_fraction) : 100;
+    const gust = (ins.wind_speed_of_gust != null) ? ins.wind_speed_of_gust : 0;
+    let code = 3, text = '多云';
+    if (cloud < 20) { code = 0; text = '晴'; }
+    else if (cloud < 50) { code = 2; text = '局部多云'; }
+    else if (cloud >= 85) { code = 3; text = '阴'; }
+    const n1 = (ts.data.next_1_hours && ts.data.next_1_hours.details && ts.data.next_1_hours.details.precipitation_amount);
+    if (typeof n1 === 'number' && n1 > 0.1) { code = 61; text = '雨'; }
+    return {
+      ok: true, source: 'metno', label: '挪威气象局(yr.no)', time: ts.time || null,
+      current: { time: new Date().toISOString().slice(0, 16), temp, feels: temp, rh, precip: (typeof n1 === 'number' ? n1 : 0), code, text, icon: wmo(code)[1], wind, gust, windDir, pressure, cloud, isDay: 1, uv: null, vis: null, realtimeSource: 'MET Norway (yr.no)' },
+    };
+  }
+  function caiyunSkyconToWmo(sky) {
+    const t = String(sky || '').toUpperCase();
+    if (/THUNDER|LIGHTNING|HAIL/.test(t)) return { code: 95, zh: '雷阵雨' };
+    if (/RAIN|DRIZZLE/.test(t)) return { code: 61, zh: '雨' };
+    if (/SNOW|SLEET/.test(t)) return { code: 71, zh: '雪' };
+    if (/FOG|HAZE/.test(t)) return { code: 45, zh: '雾' };
+    if (/CLOUDY|OVERCAST/.test(t)) return { code: 3, zh: '多云' };
+    if (/CLEAR|PARTLY/.test(t)) return { code: 0, zh: '晴' };
+    return { code: 3, zh: '多云' };
+  }
+  function windScaleToMs(scale) {
+    const T = [0, 0.9, 2.45, 4.35, 6.7, 9.35, 12.3, 15.5, 19.0, 22.6, 26.5, 29.5, 32.5];
+    if (!(scale > 0)) return 0;
+    if (scale >= T.length) return 35;
+    return T[scale];
+  }
+  // 归一化天气大类，用于源间一致性判定
+  function wxCategory(code, zh) {
+    const t = String(zh || '');
+    if (/雷|暴|雨|阵雨|降水|降雨/.test(t) || [61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return 'rain';
+    if (/雪|霰|冰/.test(t) || [71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
+    if (/雾|霾|沙尘/.test(t) || [45, 48].includes(code)) return 'fog';
+    if (/晴/.test(t) && code <= 1) return 'clear';
+    if (/多云|阴|云/.test(t) || [2, 3].includes(code)) return 'cloud';
+    return 'other';
+  }
+  function snapOf(result, label, key) {
+    let v = null;
+    if (result && result.status === 'fulfilled') v = result.value;
+    else if (result && typeof result.ok === 'boolean') v = result;
+    if (!v || !v.ok || !v.current) {
+      const err = (result && result.reason) ? String(result.reason) : (v && v.error ? v.error : (v ? '无实况数据' : '源不可达'));
+      return { ok: false, label, source: key, error: err, skipped: !!(v && v.skipped) };
+    }
+    const c = v.current;
+    return {
+      ok: true, source: v.source || key, label: v.label || label,
+      temp: c.temp, feels: c.feels, rh: c.rh, precip: c.precip,
+      code: c.code, text: c.text, icon: c.icon, wind: c.wind,
+      uv: (typeof c.uv === 'number' && !isNaN(c.uv)) ? c.uv : null,
+      fetchedAt: v.time || null, category: wxCategory(c.code, c.text),
+    };
+  }
+  // 多数据源实况交叉校核（与 server.js verifyRealtime 字段级一致）
+  function verifyRealtime(results, warnings, air) {
+    const srcs = [
+      snapOf(results.openMeteo, 'Open-Meteo', 'openmeteo'),
+      snapOf(results.weathercn, '中国天气网(国家气象中心)', 'weathercn'),
+      snapOf(results.cma, '和风天气(QWeather)', 'cma'),
+      snapOf(results.wttr, 'wttr.in', 'wttr'),
+      snapOf(results.caiyun, '彩云天气(Caiyun)', 'caiyun'),
+      snapOf(results.cmagov, '中国气象局(CMA)', 'cmagov'),
+      snapOf(results.metno, '挪威气象局(yr.no)', 'metno'),
+    ];
+    const valid = srcs.filter(s => s.ok);
+    const uvs = valid.map(s => s.uv).filter(x => typeof x === 'number' && !isNaN(x));
+    const uvMean = uvs.length ? +(uvs.reduce((a, b) => a + b, 0) / uvs.length).toFixed(1) : null;
+    const uvMin = uvs.length ? +Math.min.apply(null, uvs).toFixed(1) : null;
+    const uvMax = uvs.length ? +Math.max.apply(null, uvs).toFixed(1) : null;
+    const checkedAt = new Date().toISOString();
+    if (valid.length === 0) {
+      return { ok: false, checkedAt, city: '北海', sources: srcs, agreement: 'unknown', confidence: 0, consensus: null, discrepancies: [{ field: 'availability', message: '全部实况数据源不可达', severity: 'high' }], recommended: null };
+    }
+    const catCount = {};
+    valid.forEach(s => { catCount[s.category] = (catCount[s.category] || 0) + 1; });
+    const cats = Object.keys(catCount).sort((a, b) => catCount[b] - catCount[a]);
+    let consensusCat = cats[0];
+    const temps = valid.map(s => s.temp).filter(x => typeof x === 'number' && !isNaN(x));
+    const tmin = Math.min.apply(null, temps), tmax = Math.max.apply(null, temps);
+    const tmean = temps.reduce((a, b) => a + b, 0) / temps.length;
+    const spread = tmax - tmin;
+    const rhs = valid.map(s => s.rh).filter(x => typeof x === 'number' && !isNaN(x) && x > 0);
+    const rhMean = rhs.length ? Math.round(rhs.reduce((a, b) => a + b, 0) / rhs.length) : null;
+    const rhSpread = rhs.length > 1 ? Math.max.apply(null, rhs) - Math.min.apply(null, rhs) : 0;
+    const winds = valid.map(s => s.wind).filter(x => typeof x === 'number' && !isNaN(x));
+    const windSpread = winds.length > 1 ? Math.max.apply(null, winds) - Math.min.apply(null, winds) : 0;
+    const presses = valid.map(s => s.pressure).filter(x => typeof x === 'number' && !isNaN(x) && x > 0);
+    const presSpread = presses.length > 1 ? Math.max.apply(null, presses) - Math.min.apply(null, presses) : 0;
+    const precipMax = Math.max.apply(null, [0].concat(valid.map(s => s.precip || 0)));
+    const precipAny = precipMax > 0.3;
+    const discrepancies = [];
+    let conf = 1, agreement = 'high';
+    if (valid.length >= 2 && cats.length > 1) {
+      const minority = valid.length - catCount[consensusCat];
+      if (consensusCat === 'rain' || consensusCat === 'storm') {
+        discrepancies.push({ field: 'condition', message: '部分源未报降雨（综合判定：' + (consensusCat === 'storm' ? '雷暴' : '降雨') + '）', severity: minority >= 2 ? 'medium' : 'low' });
+        if (minority >= 2) conf -= 0.1;
+      } else {
+        discrepancies.push({ field: 'condition', message: '天气现象源间不一致（' + cats.join(' / ') + '）', severity: minority >= 2 ? 'high' : 'medium' });
+        conf -= minority >= 2 ? 0.35 : 0.18;
+        agreement = minority >= 2 ? 'low' : 'medium';
+      }
+    }
+    if (spread > 3) {
+      discrepancies.push({ field: 'temp', message: '气温源间差异较大（' + tmin.toFixed(1) + '~' + tmax.toFixed(1) + '℃，差 ' + spread.toFixed(1) + '℃）', severity: spread > 5 ? 'high' : 'medium' });
+      conf -= 0.2; if (agreement === 'high') agreement = 'medium';
+    }
+    if (precipAny && valid.some(s => (s.precip || 0) < 0.1 && consensusCat === 'rain')) {
+      discrepancies.push({ field: 'precip', message: '部分源实况无降水，但综合有降雨', severity: 'low' });
+    }
+    if (presSpread > 4) {
+      discrepancies.push({ field: 'pressure', message: '气压源间差异较大（' + Math.min.apply(null, presses).toFixed(0) + '~' + Math.max.apply(null, presses).toFixed(0) + 'hPa）', severity: 'low' });
+      if (agreement === 'high') agreement = 'medium';
+    }
+    if (uvs.length >= 2) {
+      const uspread = uvMax - uvMin;
+      if (uspread > 3) { discrepancies.push({ field: 'uv', message: '紫外线指数源间差异较大（' + uvMin.toFixed(1) + '~' + uvMax.toFixed(1) + '）', severity: 'low' }); if (agreement === 'high') agreement = 'medium'; }
+    }
+    if (warnings && warnings.length) {
+      const storm = warnings.find(a => /暴雨|雷雨|强对流|大风/.test(a.category || '') && (a.level || 0) >= 2);
+      if (storm && consensusCat !== 'rain' && consensusCat !== 'storm') {
+        discrepancies.push({ field: 'warning', message: '官方预警佐证降雨（' + (storm.levelName || '') + '），综合判定上调为降雨', severity: 'low' });
+        consensusCat = 'rain'; conf = Math.min(1, conf + 0.1);
+        if (agreement === 'low') agreement = 'medium';
+      }
+    }
+    conf = Math.max(0, Math.min(1, +conf.toFixed(2)));
+    const fields = [
+      { key: 'temp', label: '气温', unit: '℃', vals: valid.map(s => ({ label: s.label, v: (s.temp != null ? +s.temp.toFixed(1) : null) })), spread: +spread.toFixed(1), consistent: spread <= 1.5 },
+      { key: 'rh', label: '湿度', unit: '%', vals: valid.map(s => ({ label: s.label, v: (s.rh != null ? s.rh : null) })), spread: +rhSpread.toFixed(0), consistent: rhSpread <= 12 },
+      { key: 'wind', label: '风速', unit: 'm/s', vals: valid.map(s => ({ label: s.label, v: (s.wind != null ? +s.wind.toFixed(1) : null) })), spread: +windSpread.toFixed(1), consistent: windSpread <= 2.5 },
+      { key: 'pressure', label: '气压', unit: 'hPa', vals: valid.map(s => ({ label: s.label, v: (s.pressure > 0 ? s.pressure : null) })), spread: +presSpread.toFixed(0), consistent: presSpread <= 4 },
+      { key: 'precip', label: '降水', unit: 'mm', vals: valid.map(s => ({ label: s.label, v: (s.precip != null ? +s.precip.toFixed(1) : null) })), spread: 0, consistent: true },
+    ];
+    const rec = valid.find(s => s.source === 'cma') || valid.find(s => s.category === consensusCat) || valid[0];
+    const recommended = { temp: +tmean.toFixed(1), rh: rhMean, precip: +precipMax.toFixed(1), code: rec.code, text: rec.text, icon: rec.icon, source: rec.label };
+    return {
+      ok: true, checkedAt, city: '北海', sources: srcs, fields,
+      consensus: { category: consensusCat, tempMin: +tmin.toFixed(1), tempMax: +tmax.toFixed(1), tempMean: +tmean.toFixed(1), tempSpread: +spread.toFixed(1), rhMean, precipAny, precipMax: +precipMax.toFixed(1), uvMean, uvMin, uvMax },
+      agreement, confidence: conf, discrepancies, recommended,
+      air: (air && air.ok) ? { aqi: air.aqi, primary: air.primary, pm25: air.pm25, pm10: air.pm10, o3: air.o3 } : null,
+    };
+  }
+  function parseAlertTime(t) {
+    if (!t) return 0;
+    const m = String(t).match(/(\d{4})\D(\d{2})\D(\d{2})\D(\d{2})\D(\d{2})/);
+    if (!m) return 0;
+    return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+  }
+  // 将多源实况校验结果静默应用到实时天气（不改变展示样式）；与 server.js applyRealtimeOverride 一致
+  function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes) {
+    const cma = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : null;
+    const cmaOk = !!(cma && cma.ok && cma.current);
+    const wttr = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : null;
+    const wttrOk = !!(wttr && wttr.ok && wttr.current);
+    const cmagov = (cmagovRes && cmagovRes.status === 'fulfilled') ? cmagovRes.value : null;
+    const cmagovOk = !!(cmagov && cmagov.ok && cmagov.current);
+    const weathercn = (weathercnRes && weathercnRes.status === 'fulfilled') ? weathercnRes.value : null;
+    const weathercnOk = !!(weathercn && weathercn.ok && weathercn.current);
+    const items = (alertIntel && alertIntel.items) || [];
+    const now = Date.now();
+    const storm = items.find(a =>
+      a.beihaiRelation === 'direct' &&
+      /暴雨|雷雨|强对流|大风/.test(a.category || '') &&
+      (a.level || 0) >= 2 &&
+      parseAlertTime(a.time) && (now - parseAlertTime(a.time)) < 6 * 3600e3
+    );
+    for (const st of stations) {
+      if (!st.weather || !st.weather.ok || !st.weather.current) continue;
+      const cur = st.weather.current;
+      let live = null, liveSrc = '', liveKey = '';
+      if (cmagovOk) { live = cmagov.current; liveSrc = '中国气象局实况'; liveKey = 'cmagov'; }
+      else if (weathercnOk) { live = weathercn.current; liveSrc = '中国天气网实况'; liveKey = 'weathercn'; }
+      else if (cmaOk) { live = cma.current; liveSrc = '和风天气实况'; liveKey = 'cma'; }
+      else if (wttrOk) { live = wttr.current; liveSrc = 'wttr.in 实况'; liveKey = 'wttr'; }
+      if (live) {
+        Object.assign(cur, {
+          temp: live.temp, feels: live.feels, rh: live.rh, precip: live.precip,
+          code: live.code, text: live.text, icon: live.icon, wind: live.wind, windDir: live.windDir,
+          uv: (live.uv != null ? live.uv : cur.uv), vis: (live.vis != null ? live.vis : cur.vis),
+          source: liveKey, realtimeSource: liveSrc,
+        });
+      }
+      if (storm) {
+        cur.warningOverride = { title: storm.title, level: storm.levelName, time: storm.time, active: true };
+        if (!live) {
+          cur.code = 95;
+          cur.text = (storm.category || '暴雨').replace('·汛情', '');
+          cur.icon = 'storm';
+          cur.source = 'warning-override';
+          cur.realtimeSource = '预警优先·实况以气象台预警为准(预估)';
+        } else {
+          cur.realtimeSource = liveSrc + '（预警生效中）';
+        }
+      }
+    }
+  }
+
+  // ===== 江河 · 水库 权威档案（与 lib/config.js 一致；实时站测不可达则降级为档案）=====
+  const RIVER_PROFILE = [
+    { name: '南流江', type: '独流入海河流', lenKm: 287, basinKm2: 8635, outfall: '合浦县廉州湾(北部湾)', basin: '玉林·博白·合浦', stations: ['博白', '合浦'], note: '广西最大独流入海河，北海最重要江河', verified: true, src: '广西水文中心' },
+    { name: '洪潮江', type: '南流江支流', outfall: '注入洪潮江水库', basin: '合浦县西北部', note: '南流江支流，上建洪潮江水库', verified: true, src: '北海新闻网' },
+    { name: '西门江', type: '独流入海河流', outfall: '合浦县廉州湾', basin: '合浦县城(廉州镇)', note: '合浦县城主要河流', verified: false, src: '北海市水利局' },
+    { name: '白沙河', type: '独流入海河流', outfall: '合浦县白沙镇入海', basin: '合浦县', note: '', verified: false, src: '待核实' },
+    { name: '公馆河', type: '独流入海河流', outfall: '合浦县公馆镇入海', basin: '合浦县', note: '', verified: false, src: '待核实' },
+    { name: '南康江', type: '独流入海河流', outfall: '铁山港区铁山港', basin: '铁山港区', note: '', verified: false, src: '待核实' },
+    { name: '福成河', type: '独流入海河流', outfall: '银海区福成镇入海', basin: '银海区', note: '', verified: false, src: '待核实' },
+    { name: '三合口江', type: '独流入海河流', outfall: '银海区', basin: '银海区平阳镇', note: '牛尾岭水库所在河流', verified: true, src: '北海市政府' },
+  ];
+  const RESERVOIR_PROFILE = [
+    { name: '洪潮江水库', scale: '大(2)型', county: '合浦县星岛湖镇', river: '南流江支流洪潮江', totalCapM3: 7.03e8, effectiveCapM3: 2.93e8, basinKm2: 402, built: 1964, func: '灌溉/供水/防洪/发电/旅游', drinking: true, note: '北海重要饮用水源地、合浦县城主要供水源；别名星岛湖，国家级水利风景区；2025-12除险加固投运', verified: true, src: '北海新闻网/快懂百科' },
+    { name: '牛尾岭水库', scale: '中型', county: '银海区平阳镇孙东村', river: '三合口江上游', totalCapM3: 2550e4, effectiveCapM3: 1755e4, basinKm2: 24.28, built: 1964, func: '灌溉/防洪/供水/发电/养殖', drinking: true, note: '北海市区唯一在用湖库型饮用水水源地(供北郊水厂，约20万人)', verified: true, src: '北海市政府' },
+    { name: '鲤鱼地水库', scale: '中型', county: '北海市郊', river: '', totalCapM3: null, note: '城区重要水库(参数待核实)', verified: false, src: '待核实' },
+    { name: '石康水库', scale: '中型', county: '合浦县石康镇', river: '', totalCapM3: null, note: '参数待核实', verified: false, src: '待核实' },
+    { name: '闸口水库', scale: '中型', county: '合浦县闸口镇', river: '', totalCapM3: null, note: '参数待核实', verified: false, src: '待核实' },
+  ];
+  async function fetchRiverReservoir() {
+    let realtimeStatus = 'unreachable';
+    try {
+      const r = await httpGetText('http://swzx.gxzf.gov.cn/swfw/sqfw/sssq/', 5000);
+      realtimeStatus = (r && r.length) ? 'reachable' : 'blocked';
+    } catch (e) { realtimeStatus = 'unreachable'; }
+    return {
+      ok: true, realtime: false, realtimeStatus,
+      source: '广西水文中心 / 北海市政府 / 北海新闻网 等公开资料整理（非实时站测）',
+      updated: '2026-08-27',
+      rivers: RIVER_PROFILE, reservoirs: RESERVOIR_PROFILE,
+    };
+  }
+
+  // ===== 北海区域天气（多区县点聚合；与 lib/sources.js fetchRegionalBeihai 一致）=====
+  const BEIHAI_REGION = [
+    { name: '海城区(市区)', lat: 21.48, lon: 109.11 },
+    { name: '银海区', lat: 21.43, lon: 109.07 },
+    { name: '铁山港区', lat: 21.58, lon: 109.45 },
+    { name: '合浦县', lat: 21.66, lon: 109.20 },
+    { name: '涠洲岛', lat: 21.04, lon: 109.10 },
+  ];
+  async function fetchOneRegionPoint(p) {
+    const url = qs(API.forecast, {
+      latitude: p.lat, longitude: p.lon,
+      current: 'temperature_2m,weather_code,precipitation,wind_speed_10m,relative_humidity_2m',
+      timezone: 'Asia/Shanghai',
+    });
+    const d = await fetchJSON(url);
+    const cur = d.current;
+    return {
+      name: p.name, lat: p.lat, lon: p.lon,
+      temp: cur.temperature_2m, code: cur.weather_code,
+      text: wmo(cur.weather_code)[0], icon: wmo(cur.weather_code)[1],
+      precip: cur.precipitation || 0, wind: cur.wind_speed_10m || 0, rh: cur.relative_humidity_2m,
+    };
+  }
+  async function fetchRegionalBeihai() {
+    const pts = await Promise.allSettled(BEIHAI_REGION.map(fetchOneRegionPoint));
+    const points = pts.filter(r => r.status === 'fulfilled').map(r => r.value);
+    if (!points.length) return { ok: false, error: '北海区域天气采集失败（全部点不可达）' };
+    const temps = points.map(p => p.temp).filter(x => typeof x === 'number');
+    const tmin = Math.min.apply(null, temps), tmax = Math.max.apply(null, temps);
+    const catCount = {};
+    points.forEach(p => { const cat = wxCategory(p.code, p.text); catCount[cat] = (catCount[cat] || 0) + 1; });
+    const dominantCat = Object.keys(catCount).sort((a, b) => catCount[b] - catCount[a])[0];
+    const precipAny = points.some(p => (p.precip || 0) > 0.3);
+    const windMax = Math.max.apply(null, [0].concat(points.map(p => p.wind || 0)));
+    return {
+      ok: true, count: points.length, points,
+      tempMin: +tmin.toFixed(1), tempMax: +tmax.toFixed(1), tempMean: +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1),
+      dominantCat, precipAny, windMax: +windMax.toFixed(1),
     };
   }
 
@@ -857,7 +1351,7 @@
 
   // 暴露全局接口
   window.AlphaData = {
-    buildOverview, now, getClimate,
+    buildOverview, now, getClimate, getJson: (url, timeout) => httpGetParsed(url, timeout),
     STATIONS, TIDE_STATIONS, CENTER, API, GEO, PROV_GEO, WARN_CAT, WARN_LEVEL,
     THRESHOLDS, WMO, wmo, moonPhaseDesc, BEIHAI_BOUNDARY, BEIHAI_NAMES, GUANGXI_CITIES,
     tyIntensity, tyLevel, regionOf, beihaiRelationFor, buildAlertIntel, levelName, levelColor,

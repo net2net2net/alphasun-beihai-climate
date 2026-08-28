@@ -37,6 +37,7 @@ const SYNTAX_FILES = [
   'app/public/js/map.js',
   'app-android/www/js/map.js',
   'app/server.js',
+  'app-android/www/js/data.js',
 ];
 for (const f of SYNTAX_FILES) {
   const p = path.join(ROOT, f);
