@@ -386,6 +386,35 @@ function runAssertions() {
   // 前端 huangli() 在库未加载（沙箱无 Solar）时安全降级
   ok(ctx.__hl === null || ctx.__hl === 'NO_FN', '前端 huangli() 库未加载时安全降级（沙箱 __hl=' + (ctx.__hl === null ? 'null' : ctx.__hl) + '）');
 
+  // 4) data.js 运行时加载（安卓专属浏览器聚合层，替代 Node 后端 buildOverview）
+  // 安卓端无后端，data.js 是数据唯一来源；IIFE 执行或导出缺失会直接导致白屏，故加运行时护栏。
+  try {
+    const dCtx = vm.createContext({
+      window: {}, console, Date, Math, JSON, RegExp, Object, Array, String, Number, Boolean, Promise, Error,
+      parseInt, parseFloat, isNaN, encodeURIComponent, decodeURIComponent, Set, Map, Symbol, Proxy,
+      navigator: { userAgent: '' },
+      document: { createElement: () => ({}), getElementById: () => null },
+      fetch: async () => ({ ok: true, json: async () => ({}), text: async () => '' }),
+      AbortController: class { abort() {} }, setTimeout: () => 0, clearTimeout: () => {},
+    });
+    const dSrc = fs.readFileSync(path.join(ROOT, 'app-android/www/js/data.js'), 'utf8');
+    vm.runInContext(dSrc, dCtx, { filename: 'data.js' });
+    const A = dCtx.window && dCtx.window.AlphaData;
+    ok(A && typeof A === 'object', 'data.js IIFE 执行后挂载 window.AlphaData（安卓数据层可用）');
+    ok(A && typeof A.buildOverview === 'function', 'AlphaData.buildOverview 是可调用函数（安卓端数据入口）');
+    ok(A && typeof A.getJson === 'function', 'AlphaData.getJson 已导出（CapHttp 优先 HTTP 封装）');
+    ok(A && Array.isArray(A.STATIONS) && A.STATIONS.length >= 5, 'AlphaData.STATIONS 已导出（' + (A ? A.STATIONS.length : 0) + ' 站）');
+    ok(A && typeof A.buildAlertIntel === 'function', 'AlphaData.buildAlertIntel 已导出（告警情报）');
+    // verifyRealtime / fetchRiverReservoir / fetchRegionalBeihai 由 buildOverview 经闭包内部调用，
+    // 无需公开导出；此处校验其在 data.js 中已定义，防止未来重构误删导致安卓取数失败。
+    ok(/function\s+verifyRealtime\s*\(/.test(dSrc), 'data.js 含 verifyRealtime 实现（buildOverview 内部依赖·多源校核）');
+    ok(/function\s+fetchRiverReservoir\s*\(/.test(dSrc) && /function\s+fetchRegionalBeihai\s*\(/.test(dSrc),
+      'data.js 含江河水库/区域天气采集（buildOverview 内部依赖，对齐 server.js）');
+    ok(A && typeof A.getClimate === 'function', 'AlphaData.getClimate 已导出（气候常年值）');
+  } catch (e) {
+    ok(false, 'data.js 运行时加载未抛错: ' + (e.stack || e.message));
+  }
+
   finish();
 }
 
