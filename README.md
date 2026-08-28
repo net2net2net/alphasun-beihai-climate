@@ -13,7 +13,7 @@
 - **Linux**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux
 - **macOS**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos
 - **安卓 Android APK**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-debug.apk
-- **iOS ipa（测试版）**：TestFlight / Sideloadly 自签安装，详见下方「移动端 APP」；未签名 IPA 由 `build-ios.yml` 云端产出。
+- **iOS ipa（测试版）**：[未签名 IPA（GitHub Release，需自签）](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa) — 用 Sideloadly + 免费 Apple ID 自签装 iPad/iPhone（证书 7 天有效，到期重签）；详见下方「移动端 APP」。
 - **全部平台 / 源码**：https://github.com/net2net2net/alphasun-beihai-climate/releases
 
 ## 建设目标
@@ -108,7 +108,7 @@ npm run build:exe              # 输出 app/dist/alphasun-beihai-climate.exe（�
 - **降级项**：中央气象台卫星/雷达产品图在手机端无法跨域抓取，地图叠加层提示「点 ↗ 看官方原图」；野火 / 潮汐缺省降级（可在 `www/index.html` 填 key 增强）
 - **获取安卓 APK（无需本机装 Android Studio）**：仓库内置 GitHub Actions 工作流，推送到 `main` 后自动在云端编译出 APK 并作为构建产物提供下载。步骤：进入 [Actions](https://github.com/net2net2net/alphasun-beihai-climate/actions) → 找 **Build Android APK** 运行 → 下载 Artifact `alphasun-beihai-apk` → 解压 `app-debug.apk` 安装。未自动触发时可手动 **Run workflow**。
 - **本机构建（安卓）**：装 Android Studio + Node 18+ 后，`cd app-android && npm install && npx cap add android && npx cap build android` 生成 APK（详见 [app-android/README.md](app-android/README.md)）。
-- **iOS（无需 Mac，推荐）**：仓库内置 `build-ios.yml` 工作流在 GitHub 云端产出**未签名 IPA**，拿到后用 **Sideloadly + 免费 Apple ID** 自签装 iPad/iPhone。步骤：Actions → **Build iOS** → Run workflow → 下载 Artifact `alphasun-ios-unsigned-ipa` → Sideloadly 重签安装（详见 [app-android/docs/iOS-Sideload-Guide.md](app-android/docs/iOS-Sideload-Guide.md)）。
+- **iOS（无需 Mac，推荐）**：仓库内置 `build-ios.yml` 工作流在 GitHub 云端构建并**发布到 GitHub Release**（永久留存，资产名 `alphasun-beihai-climate-ios.ipa`）。拿到后（[最新版](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa) 或 Actions → **Build iOS** → Run workflow 下载 Artifact `alphasun-ios-unsigned-ipa`）用 **Sideloadly + 免费 Apple ID** 自签装 iPad/iPhone（详见 [app-android/docs/iOS-Sideload-Guide.md](app-android/docs/iOS-Sideload-Guide.md)）。若仓库配置了 `APPLE_CERT_P12` 等 Secrets，则产出已签名 IPA（可 AltStore/企业/App Store 分发）。
 - **本机构建（iOS，需 Mac + Xcode）**：`cd app-android && npm install && npx cap add ios && npx cap open ios`，Xcode 中 Run / Archive（详见 [app-android/README.md](app-android/README.md)）。
 
 ## 自动更新（多端）
@@ -117,7 +117,7 @@ npm run build:exe              # 输出 app/dist/alphasun-beihai-climate.exe（�
 - **智能体（技能）**：git 拉取最新仓库（`git pull` 或重新安装技能）即更新。
 - **Windows / Linux / macOS（exe）**：页脚检测到新版本 → 点击「下载 X 版」获取最新 exe → 覆盖原文件即可；也可由服务端 `/api/latest` 比对。
 - **安卓 Android（APK）**：页脚提示 → 下载最新 APK → 安装覆盖（版本号自增，无需卸载）。
-- **iOS（ipa）**：TestFlight 推送或 Sideloadly 重签安装。
+- **iOS（ipa）**：Sideloadly + 免费 Apple ID 自签安装（证书 7 天有效，到期前重签续期）；配置 Apple 开发者密钥后为已签名版（AltStore / 企业 / App Store 分发）。
 - **网页 / PWA**：服务端资源更新后刷新页面即生效；自托管用户拉取最新代码后重启服务。
 
 检测机制：前端周期性（每 30 分钟）请求服务端 `/api/latest`（服务端代理 GitHub raw 的 `version.json`），与当前版本号比较；页脚「检查更新」可手动触发。无外网时静默跳过。

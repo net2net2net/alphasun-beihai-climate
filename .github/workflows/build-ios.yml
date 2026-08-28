@@ -9,7 +9,7 @@ on:
   #   branches: [ main ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-ios:
@@ -168,3 +168,25 @@ jobs:
           name: alphasun-ios-ipa
           path: app-android/ios/App/build/ipa/*.ipa
           retention-days: 30
+
+      # ===== 发布到 GitHub Release（永久留存，与 EXE 一致）=====
+      # 优先发布签名 IPA；无密钥时发布免签 IPA（用户用 Sideloadly + 免费 Apple ID 自签装机）。
+      # 资产统一命名为 alphasun-beihai-climate-ios.ipa，使 version.json 下载链接稳定。
+      - name: Publish IPA to GitHub Release
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="v$(node -p "require('./app-android/package.json').version")"
+          SIGNED=$(ls app-android/ios/App/build/ipa/*.ipa 2>/dev/null | head -1 || true)
+          UNSIGNED="app-android/ios/App/build/App.ipa"
+          if [ -n "$SIGNED" ]; then SRC="$SIGNED"; else SRC="$UNSIGNED"; fi
+          if [ ! -f "$SRC" ]; then echo "no IPA produced, skip publish"; exit 0; fi
+          ASSET="app-android/ios/App/build/alphasun-beihai-climate-ios.ipa"
+          cp "$SRC" "$ASSET"
+          echo "Publishing $ASSET to $TAG"
+          gh release upload "$TAG" --clobber "$ASSET" 2>/dev/null || \
+            gh release create "$TAG" --title "AlphaSun $TAG" \
+              --notes "iOS IPA（CI 自动发布）：未签名版需用 Sideloadly + 免费 Apple ID 自签装机（证书 7 天有效，到期前重签续期）；若仓库配置了 APPLE_CERT_P12 等 Secrets 则为已签名版（可用 AltStore/企业/App Store 分发）。" "$ASSET"
+          echo "done"

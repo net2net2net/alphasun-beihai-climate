@@ -56,7 +56,7 @@ PORT=8765 node server.js      # 直接运行，实时改 public/ 刷新即生效
 - **智能体（技能）**：`git pull` 或重新安装技能即更新。
 - **Windows / Linux / macOS（exe）**：页脚检测到新版本 → 点「下载 X 版」→ 覆盖原 exe 文件。
 - **安卓 Android（APK）**：页脚提示 → 下载最新 APK → 安装覆盖（版本号自增，无需卸载）。
-- **iOS（ipa）**：TestFlight 推送或 Sideloadly 重签安装。
+- **iOS（ipa）**：Sideloadly + 免费 Apple ID 自签安装（证书 7 天有效，到期重签）；已签名版（需配置 Apple 开发者密钥）可 AltStore/企业/App Store 分发。
 - **网页 / PWA**：服务端资源更新后刷新即生效。
 - 检测机制：前端每 30 分钟请求服务端 `/api/latest`（代理 GitHub raw 的 `version.json`）比对版本；页脚「检查更新」可手动触发；无外网静默跳过。
 
