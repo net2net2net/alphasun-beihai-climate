@@ -87,6 +87,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -107,7 +112,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull --rebase origin main 2>/dev/null || true
-          git add downloads/alphasun-beihai-climate.exe downloads/alphasun-beihai-climate-linux downloads/alphasun-beihai-climate-macos
+          git add -f downloads/alphasun-beihai-climate.exe downloads/alphasun-beihai-climate-linux downloads/alphasun-beihai-climate-macos
           git commit -m "ci: 自动发布 EXE v$(node -p "require('./app/package.json').version") 至 downloads（win/linux/macos，SEA）" || echo "no changes"
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git push origin HEAD:refs/heads/main
