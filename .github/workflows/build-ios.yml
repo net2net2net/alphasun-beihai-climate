@@ -41,6 +41,19 @@ jobs:
         working-directory: app-android
         run: npx cap sync ios
 
+      # ===== 数据层护栏（对齐安卓修复方案，防打出「无数据」的 IPA）=====
+      # iOS 直接复用 app-android/www，本步确认浏览器版聚合层 data.js 与 app.js 原生分支存在，
+      # 否则 iOS 会重演安卓「无数据获取/展示」的故障。
+      - name: Assert data layer present (no data-less IPA)
+        working-directory: app-android
+        run: |
+          set -e
+          test -f www/js/data.js || { echo "::error::www/js/data.js 缺失（浏览器版聚合层），iOS 将无数据"; exit 1; }
+          test -f www/js/app.js || { echo "::error::www/js/app.js 缺失"; exit 1; }
+          grep -q "AlphaData.buildOverview" www/js/app.js || { echo "::error::app.js 缺少原生数据分支（ensureAlphaData / AlphaData.buildOverview），iOS 将无数据"; exit 1; }
+          grep -q "CapacitorHttp" www/js/data.js || { echo "::error::data.js 未启用 CapacitorHttp，iOS 跨域取数将失败"; exit 1; }
+          echo "data layer OK: data.js + 原生 app.js 分支已就位"
+
       # 注入 ATS 放行（双保险）：所有数据源均为 HTTPS，ATS 本不应拦截；
       # 此为边缘情况保险，避免任何非预期明文/重定向被 WKWebView 拒绝导致模块无数据。
       # 同时确保所有 fetch 走 CapacitorHttp 原生 HTTP（见 capacitor.config.ts plugins.CapacitorHttp）。
