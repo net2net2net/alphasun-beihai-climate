@@ -16,8 +16,8 @@ alphasun-beihai-climate/
 
 ## 方式一：作为独立软件（人类用户）
 ### 方式 A：单文件 exe（最简单）
-1. 取 `app/dist/AlphaSun.exe`（单个文件，约 87MB，内置 Node 运行时与全部前端资源）。
-2. **双击运行** → 浏览器自动打开 http://localhost:8765。
+1. 取最新单文件 exe：Windows / Linux / macOS 由 CI 在推送 `main` 后自动发布到仓库 `downloads/`（见 README「下载 / 安装」段），或本地 `npm run build:exe` 生成（输出 `app/dist/`，三平台）。单文件约 87MB，内置 Node 运行时与全部前端资源。
+2. **双击运行**（Linux / macOS 赋可执行权限后 `./alphasun-beihai-climate-linux`）→ 浏览器自动打开 http://localhost:8765。
 3. 关闭弹出的黑色控制台窗口即停止服务。
 > 无需安装 Node.js、无需任何外部文件；可直接拷贝到任意 Windows 机器运行。
 > 可选环境变量：`PORT=9000` 修改端口；`OPEN=0` 禁止自动打开浏览器。
@@ -51,6 +51,14 @@ PORT=8765 node server.js      # 直接运行，实时改 public/ 刷新即生效
 - 独立运行：**零依赖**（内置 Node 运行时；或单文件 exe）。
 - 作为技能由智能体运行：智能体侧具备 Node.js 16+（或使用包内 `app/node/node.exe`）。
 - 可选密钥（非必需）：`FIRMS_MAP_KEY`（火点）、`NMDIS_APPID` / `NMDIS_APPSECRET`（权威潮汐）。
+
+## 自动更新（多端）
+- **智能体（技能）**：`git pull` 或重新安装技能即更新。
+- **Windows / Linux / macOS（exe）**：页脚检测到新版本 → 点「下载 X 版」→ 覆盖原 exe 文件。
+- **安卓 Android（APK）**：页脚提示 → 下载最新 APK → 安装覆盖（版本号自增，无需卸载）。
+- **iOS（ipa）**：TestFlight 推送或 Sideloadly 重签安装。
+- **网页 / PWA**：服务端资源更新后刷新即生效。
+- 检测机制：前端每 30 分钟请求服务端 `/api/latest`（代理 GitHub raw 的 `version.json`）比对版本；页脚「检查更新」可手动触发；无外网静默跳过。
 
 ## 自然语言调用
 按 SKILL.md 的 `description` / `When to Use` 触发，例如：

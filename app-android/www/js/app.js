@@ -1449,6 +1449,102 @@ document.querySelectorAll('.panel').forEach(p => {
   });
 });
 
+// ===== 版本 / 多端自动更新 =====
+function appVersion() {
+  const v = document.querySelector && document.querySelector('.ver');
+  const t = v && v.textContent;
+  return t ? String(t).replace(/^v/i, '').trim() : '0.0.0';
+}
+function cmpVer(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  const n = Math.max(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+function detectPlatform() {
+  try {
+    if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+      const p = window.Capacitor.getPlatform();
+      if (p === 'android' || p === 'ios' || p === 'web') return p;
+    }
+  } catch (e) {}
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  if (/Android/i.test(ua)) return 'android';
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+  if (/Win/i.test(ua)) return 'windows';
+  if (/Mac/i.test(ua)) return 'macos';
+  if (/Linux/i.test(ua)) return 'linux';
+  return 'web';
+}
+function platformLabel(p) {
+  return { windows: 'Windows', linux: 'Linux', macos: 'macOS', android: 'Android', ios: 'iOS', web: '网页', agent: '智能体(技能)' }[p] || p;
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+function openUpdateUrl(url) {
+  if (!url || url === '#') return;
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+      window.Capacitor.Plugins.Browser.openUrl({ url });
+      return;
+    }
+  } catch (e) {}
+  try { window.open(url, '_blank', 'noopener'); } catch (e) {}
+}
+function showUpdateBanner(cur, latest) {
+  const banner = document.getElementById('updateBanner');
+  if (!banner) return;
+  const platform = detectPlatform();
+  const dl = (latest.downloads && (latest.downloads[platform] || latest.downloads.windows))
+    || latest.releases || latest.github || '#';
+  const all = latest.releases || latest.github || '#';
+  banner.innerHTML = '';
+  const icon = document.createElement('div'); icon.className = 'ub-icon'; icon.textContent = '🚀';
+  const body = document.createElement('div'); body.className = 'ub-body';
+  body.innerHTML = '<div class="ub-title">发现新版本 v' + latest.version + '（当前 v' + cur + '）'
+    + (latest.released ? ' · ' + latest.released + ' 发布' : '') + '</div>'
+    + '<div class="ub-notes">' + escapeHtml(latest.notes || '') + '</div>';
+  const actions = document.createElement('div'); actions.className = 'ub-actions';
+  const b1 = document.createElement('button'); b1.className = 'ub-btn ub-primary'; b1.textContent = '下载 ' + platformLabel(platform) + ' 版'; b1.onclick = () => openUpdateUrl(dl);
+  const b2 = document.createElement('button'); b2.className = 'ub-btn'; b2.textContent = '全部平台'; b2.onclick = () => openUpdateUrl(all);
+  const b3 = document.createElement('button'); b3.className = 'ub-btn ub-ghost'; b3.textContent = '稍后'; b3.onclick = () => { banner.hidden = true; };
+  actions.append(b1, b2, b3);
+  banner.append(icon, body, actions);
+  banner.hidden = false;
+}
+function checkUpdate(manual) {
+  if (typeof fetch !== 'function') return; // 门禁桩环境无 fetch → 直接跳过
+  let cur = null;
+  try {
+    fetch('/api/version').then(r => r.json()).then(j => {
+      if (j && j.version) {
+        cur = j.version;
+        populateFooterVersion(cur);
+        if (j.github) { const g = document.getElementById('footGithub'); if (g) g.href = j.github; }
+        if (j.gitee) { const ge = document.getElementById('footGitee'); if (ge) ge.href = j.gitee; }
+      }
+    }).catch(() => {});
+  } catch (e) {}
+  if (!cur) cur = appVersion();
+  fetch('/api/latest').then(r => r.json()).then(j2 => {
+    if (j2 && j2.ok && j2.version && cmpVer(j2.version, cur) > 0) { showUpdateBanner(cur, j2); return; }
+    if (manual) showNoUpdate(cur);
+  }).catch(() => { if (manual) showNoUpdate(cur); });
+}
+function populateFooterVersion(v) { const el = document.getElementById('footVer'); if (el && v) el.textContent = 'v' + v; }
+function showNoUpdate(cur) {
+  const b = document.getElementById('updateBanner');
+  if (!b) return;
+  b.innerHTML = '<div class="ub-body"><div class="ub-title">已是最新版本 v' + (cur || appVersion()) + ' ✅</div></div>'
+    + '<div class="ub-actions"><button class="ub-btn ub-ghost" onclick="this.closest(\'.update-banner\').hidden=true">关闭</button></div>';
+  b.hidden = false;
+}
+
 $('themeBtn').onclick = toggleTheme;
 $('soundBtn').onclick = () => setSound(!soundOn);
 setSound(false);
@@ -1459,3 +1555,10 @@ startWorldClock();
 startTopClock();
 startCalendar();
 load().then(() => renderChartOn('hourlyChart'));
+// 页脚版本/开源地址 + 多端自动更新
+const _fc = $('footCheckUpdate'); if (_fc) _fc.onclick = () => checkUpdate(true);
+populateFooterVersion(appVersion());
+if (typeof fetch === 'function') {
+  checkUpdate(false);
+  if (typeof setInterval === 'function') setInterval(() => checkUpdate(false), 30 * 60 * 1000);
+}

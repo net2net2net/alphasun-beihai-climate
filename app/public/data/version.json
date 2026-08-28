@@ -1,6 +1,17 @@
 {
-  "version": "8.1.4",
+  "version": "8.2.0",
   "released": "2026-08-28",
-  "notes": "实时气候态势与建议三项合并单行（官方源·简要·建议处置）；世界时钟对时区右移；顶部电子时钟毫秒弱化+3D立体外框；推荐天气/数据源网站面板移至日历模块之后。",
-  "minAndroid": "8.0.0"
+  "notes": "新增页脚版本信息与开源地址（GitHub/Gitee）；新增多端自动更新检查（智能体/Windows/Linux/macOS/Android/iOS 按平台给出下载或重载指引）；EXE 构建纳入 CI 自动发布；梳理设计/使用/分发文档。",
+  "minAndroid": "8.0.0",
+  "github": "https://github.com/net2net2net/alphasun-beihai-climate",
+  "gitee": "https://gitee.com/net2net2net/alphasun-beihai-climate",
+  "releases": "https://github.com/net2net2net/alphasun-beihai-climate/releases",
+  "downloads": {
+    "windows": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe",
+    "linux": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-linux",
+    "macos": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-macos",
+    "android": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-debug.apk",
+    "ios": "https://testflight.apple.com/join/XXXX",
+    "agent": "https://github.com/net2net2net/alphasun-beihai-climate"
+  }
 }

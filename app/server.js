@@ -1,5 +1,6 @@
 // AlphaSun · 北海极端气候全景系统 — 聚合服务（纯 Node，无第三方依赖）
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
@@ -46,6 +47,40 @@ function serveStatic(res, urlPath) {
     return res.end(buf);
   }
   res.writeHead(404); return res.end('not found');
+}
+
+// ===== 版本 / 自动更新 =====
+// 读取当前运行版本的 version.json：磁盘优先，兜底内联资源（单文件 exe 场景）
+function readVersionJson() {
+  const rel = 'data/version.json';
+  try {
+    const fp = path.join(PUBLIC, rel);
+    const data = fs.readFileSync(fp, 'utf8');
+    return JSON.parse(data);
+  } catch (e) {}
+  if (ASSETS['/' + rel]) {
+    try { return JSON.parse(Buffer.from(ASSETS['/' + rel], 'base64').toString('utf8')); } catch (e) {}
+  }
+  return null;
+}
+// 服务端代理「上游最新版本清单」：从 GitHub raw 拉取 main 分支的 version.json。
+// 这样浏览器端无需直连 GitHub（绕开 CORS），且本机无外网时优雅降级（返回 {ok:false}）。
+function fetchLatestVersion() {
+  return new Promise((resolve) => {
+    const url = 'https://raw.githubusercontent.com/net2net2net/alphasun-beihai-climate/main/app/public/data/version.json';
+    const req = https.get(url, { timeout: 6000, headers: { 'User-Agent': 'alphasun-update-check' } }, (r) => {
+      if (r.statusCode !== 200) { r.resume(); return resolve({ ok: false, status: r.statusCode }); }
+      let d = '';
+      r.setEncoding('utf8');
+      r.on('data', (c) => { d += c; });
+      r.on('end', () => {
+        try { resolve({ ok: true, data: JSON.parse(d) }); }
+        catch (e) { resolve({ ok: false, error: 'json' }); }
+      });
+    });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.on('error', () => resolve({ ok: false, error: 'net' }));
+  });
 }
 
 // ===== 中央气象台(nmc) 产品图代理：抓取官方页面→提取产品图→服务端重发（绕开防盗链/CORS）=====
@@ -308,6 +343,11 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/alerts') { const r = await intel.fetchAndBuildIntel(src).catch(() => ({ ok: false })); return send(res, 200, r); }
     if (p === '/api/astronomy') return send(res, 200, astro.astronomicalEvents());
     if (p === '/api/time') return send(res, 200, { now: Date.now(), iso: new Date().toISOString() });
+    if (p === '/api/version') return send(res, 200, readVersionJson() || { version: 'unknown' });
+    if (p === '/api/latest') {
+      const lv = await fetchLatestVersion();
+      return send(res, 200, lv.ok ? Object.assign({ ok: true }, lv.data) : { ok: false });
+    }
     if (p.startsWith('/api/climate/')) {
       const id = p.split('/').pop(); const s = STATIONS.find(x => x.id === id);
       return send(res, 200, s ? await getClimate(s) : { ok: false, error: 'unknown station' });

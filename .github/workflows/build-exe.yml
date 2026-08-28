@@ -1,0 +1,64 @@
+name: Build EXE (Windows/Linux/macOS)
+
+# 在 GitHub 云端把前端+服务打包为单文件可执行程序（pkg/Node SEA），免去本机装 Node。
+# 触发：推送到 main（含 app/ 或本文件改动），或手动 Run workflow。
+# 构建完成后自动把三个平台的 exe 提交回仓库 downloads/ 目录（与 APK 机制一致：CI 自动写 downloads）。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/build-exe.yml'
+  workflow_dispatch:
+
+# 允许工作流把构建产物提交回仓库
+permissions:
+  contents: write
+
+jobs:
+  build-exe:
+    name: Build standalone executables
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install build deps (pkg)
+        run: npm install
+
+      - name: Regenerate embedded assets (inline public/ into exe)
+        run: npm run build:assets
+
+      - name: Build exe — Windows
+        run: npx pkg . -c package.json --targets node22-win-x64 --output dist/alphasun-beihai-climate.exe
+
+      - name: Build exe — Linux
+        run: npx pkg . -c package.json --targets node22-linux-x64 --output dist/alphasun-beihai-climate-linux
+
+      - name: Build exe — macOS
+        run: npx pkg . -c package.json --targets node22-macos-x64 --output dist/alphasun-beihai-climate-macos
+
+      - name: Publish to downloads/
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp dist/alphasun-beihai-climate.exe "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate.exe"
+          cp dist/alphasun-beihai-climate-linux "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate-linux"
+          cp dist/alphasun-beihai-climate-macos "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate-macos"
+          cd "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloads/alphasun-beihai-climate.exe downloads/alphasun-beihai-climate-linux downloads/alphasun-beihai-climate-macos
+          git commit -m "ci: 自动发布 EXE v$(node -p "require('./app/package.json').version") 至 downloads（win/linux/macos）" || echo "no changes"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          git push origin HEAD:refs/heads/main

@@ -1,20 +1,21 @@
 # AlphaSun · 北海极端气候全景系统
 
-**版本 v8.0.5 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
+**版本 v8.2.0 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
 
 一套以**北海为中心**的极端气候全景监测仪表盘：聚合互联网权威多个气候数据源，实现实时天气、周期预报、多灾种极端告警、全景地图、世界时钟与可叠加卫星 / 雷达图层。纯 Node.js、零第三方依赖、内置便携运行时，**开箱即运行**。
 
 ## 适用设备及方式
-智能体（技能）、Windows（含exe方式）、Linux/macOS、安卓Android（APK）、IOS（ipa测试版，新增）
+智能体（技能）、Windows（exe 单文件）、Linux / macOS、安卓 Android（APK）、iOS（ipa 测试版）。各端均内置**自动更新检查**：启动后比对 GitHub 最新版本，发现新版本按当前平台给出下载或重载指引（页脚「检查更新」可手动触发）。
 
-下载/安装：
+下载 / 安装（稳定最新版，由 CI 自动发布到 `downloads/`）：
 
-Windows exe： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/alphasun-exe-8.0.2/alphasun-beihai-climate8.0.2.exe
+- **Windows exe**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe
+- **Linux**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-linux
+- **macOS**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-macos
+- **安卓 Android APK**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-debug.apk
+- **iOS ipa（测试版）**：TestFlight / Sideloadly 自签安装，详见下方「移动端 APP」；未签名 IPA 由 `build-ios.yml` 云端产出。
+- **全部平台 / 源码**：https://github.com/net2net2net/alphasun-beihai-climate/releases
 
-安卓Android Apk（测试版本）： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/android-v8.0.5-debug/alphasun-beihai-climate-debug.apk
-
-IOS ipa（未签名测试版）： https://github.com/net2net2net/alphasun-beihai-climate/releases/download/ios-v1.0.0/alphasun-ios-good.ipa
-   
 ## 建设目标
 构建覆盖北海全域（海城 / 银海 / 铁山港 / 合浦 / 涠洲岛）的极端气候全景系统，实现：
 1. **全方位权威实时天气**：陆地气象 + 空气质量（AQI/六项污染物）+ 海洋（潮汐/水位/海浪/风暴潮）+ 卫星（云图/红外）+ 天文（日出日落/月出月落/月相/晚霞概率/天文景观）。
@@ -24,12 +25,12 @@ IOS ipa（未签名测试版）： https://github.com/net2net2net/alphasun-beiha
 5. **世界时钟**：机械钟 + 数字钟（毫秒精度）+ 多时区 + 对时，支撑跨时区应急协同。
 
 ## 快速开始
-- **单文件 exe（推荐，最简单）**：从 [Release `alphasun-exe-8.0.2`](https://github.com/net2net2net/alphasun-beihai-climate/releases/tag/alphasun-exe-8.0.2) 下载 `alphasun-beihai-climate8.0.2.exe` → 双击运行 → 浏览器自动打开 http://localhost:8765。无需安装 Node.js、零外部文件。
+- **单文件 exe（推荐，最简单）**：从 [Windows exe（稳定最新版）](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe) 下载 → 双击运行 → 浏览器自动打开 http://localhost:8765。无需安装 Node.js、零外部文件（Linux / macOS 版本见上方链接）。
 - **独立运行（完整目录）**：双击 `app/start.bat`（Windows）或 `bash app/start.sh`（Linux / macOS）→ 打开 http://localhost:8765
 - **由智能体运行**：见 `INSTALL.md`；技能加载后执行 `node app/server.js`
 
 ## 包内容
-- **单文件 exe（Release 发布）**：Windows 64 位单文件 `alphasun-beihai-climate8.0.2.exe`（约 83 MB，内置 Node 运行时 + 全部前端资源），见下方「单文件 exe 下载」段落与 Release `alphasun-exe-8.0.2`。
+- **单文件 exe（CI 自动发布）**：Windows / Linux / macOS 三平台单文件可执行程序（内置 Node 运行时 + 全部前端资源），见「下载 / 安装」段落与 `downloads/` 目录。
 - `app/`：完整可运行系统源码（server.js + lib + public + 内置 node），用于二次开发或 `node app/server.js` 直接运行。
 - `app-android/`：移动端 APP 版（Capacitor 纯前端封装，一套 `www/` 同时生成 **iOS + Android**，直连数据源，可在手机独立运行；APK 可由 GitHub Actions 云端自动构建）
 - `SKILL.md`：技能定义（触发 + 运行流程）
@@ -65,19 +66,20 @@ npm run build:exe             # 输出 app/dist/AlphaSun.exe
 ```
 > 说明：`app/node/`（便携 Node 运行时，约 87MB）与 `app/dist/`（构建产物）均被 `.gitignore` 排除，故 git 仓库为**源码 + 文档**形态；本地运行也可直接 `node app/server.js`（无需 exe）。
 
-## 单文件 exe 下载（Release 发布）
+## 单文件 exe 下载（CI 自动发布）
 
-为方便直接使用，已发布 Windows 64 位**单文件 exe**（内置 Node 运行时 + 全部前端资源，双击即运行，零依赖）：
+为方便直接使用，三平台**单文件 exe** 由 GitHub Actions 在推送 `main` 后自动构建并发布到仓库 `downloads/`（始终为最新版，无需找特定 Release）：
 
-- **下载**：[alphasun-beihai-climate8.0.2.exe（Release `alphasun-exe-8.0.2`）](https://github.com/net2net2net/alphasun-beihai-climate/releases/download/alphasun-exe-8.0.2/alphasun-beihai-climate8.0.2.exe)
-- **大小**：87,420,928 字节（约 83.4 MB）
-- **MD5**：`c7f3433bb7d5675c59fc52dde34e8afe`（下载后请校验）
-- **使用说明 / MD5 校验方法**：[docs/EXE使用说明.md](docs/EXE使用说明.md)
+- **Windows**：[alphasun-beihai-climate.exe](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe)
+- **Linux**：[alphasun-beihai-climate-linux](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-linux)
+- **macOS**：[alphasun-beihai-climate-macos](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-macos)
+- **大小**：约 83–87 MB（内置 Node 运行时 + 全部前端资源）
+- **使用说明 / 校验方法**：[docs/EXE使用说明.md](docs/EXE使用说明.md)
 - **系统运行效果图**：
 
 ![AlphaSun 北海极端气候全景系统](docs/screenshot.jpg)
 
-> 运行：双击 exe → 浏览器自动打开 http://localhost:8765。需联网获取实时数据；如被杀软误报，校验 MD5 一致后可加入白名单。详细见使用说明文档。
+> 运行：双击 exe → 浏览器自动打开 http://localhost:8765（Linux / macOS 赋予可执行权限后 `./alphasun-beihai-climate-linux`）。需联网获取实时数据；如被杀软误报，加入白名单即可。详细见使用说明文档。
 
 ## 移动端 APP（iOS + Android）
 
@@ -90,6 +92,17 @@ npm run build:exe             # 输出 app/dist/AlphaSun.exe
 - **本机构建（安卓）**：装 Android Studio + Node 18+ 后，`cd app-android && npm install && npx cap add android && npx cap build android` 生成 APK（详见 [app-android/README.md](app-android/README.md)）。
 - **iOS（无需 Mac，推荐）**：仓库内置 `build-ios.yml` 工作流在 GitHub 云端产出**未签名 IPA**，拿到后用 **Sideloadly + 免费 Apple ID** 自签装 iPad/iPhone。步骤：Actions → **Build iOS** → Run workflow → 下载 Artifact `alphasun-ios-unsigned-ipa` → Sideloadly 重签安装（详见 [app-android/docs/iOS-Sideload-Guide.md](app-android/docs/iOS-Sideload-Guide.md)）。
 - **本机构建（iOS，需 Mac + Xcode）**：`cd app-android && npm install && npx cap add ios && npx cap open ios`，Xcode 中 Run / Archive（详见 [app-android/README.md](app-android/README.md)）。
+
+## 自动更新（多端）
+系统内置版本检查，覆盖所有分发形态：
+
+- **智能体（技能）**：git 拉取最新仓库（`git pull` 或重新安装技能）即更新。
+- **Windows / Linux / macOS（exe）**：页脚检测到新版本 → 点击「下载 X 版」获取最新 exe → 覆盖原文件即可；也可由服务端 `/api/latest` 比对。
+- **安卓 Android（APK）**：页脚提示 → 下载最新 APK → 安装覆盖（版本号自增，无需卸载）。
+- **iOS（ipa）**：TestFlight 推送或 Sideloadly 重签安装。
+- **网页 / PWA**：服务端资源更新后刷新页面即生效；自托管用户拉取最新代码后重启服务。
+
+检测机制：前端周期性（每 30 分钟）请求服务端 `/api/latest`（服务端代理 GitHub raw 的 `version.json`），与当前版本号比较；页脚「检查更新」可手动触发。无外网时静默跳过。
 
 ## 说明
 - 部分中央气象台产品页为 JS 动态渲染，叠加失败时保留官方原图链接（不伪造坏图）。

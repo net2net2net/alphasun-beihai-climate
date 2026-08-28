@@ -157,6 +157,34 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 
 /* 潮汐 */
 .tide-st{border-left:3px solid var(--accent);padding:4px 8px;background:var(--bg3);border-radius:0 6px 6px 0}
+
+/* 页脚：版本 + 开源地址 + 检查更新 */
+.foot a{color:var(--accent);text-decoration:none;font-weight:600}
+.foot a:hover{text-decoration:underline}
+.foot-update{cursor:pointer;color:var(--accent);font-weight:600}
+.foot-update:hover{text-decoration:underline}
+.foot-sep{margin:0 6px;opacity:.5}
+.foot-meta b{color:var(--fg)}
+.foot-links a{margin-left:3px}
+
+/* 多端自动更新横幅 */
+.update-banner{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:60;max-width:min(720px,92vw);
+  display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;
+  background:linear-gradient(135deg,var(--bg3),var(--panel));border:1px solid var(--accent);
+  box-shadow:0 8px 30px rgba(0,0,0,.35);color:var(--fg)}
+.update-banner[hidden]{display:none}
+.update-banner .ub-icon{font-size:22px;line-height:1}
+.update-banner .ub-body{flex:1;min-width:0}
+.update-banner .ub-title{font-size:13px;font-weight:700;color:var(--accent)}
+.update-banner .ub-notes{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5;max-height:44px;overflow:auto}
+.update-banner .ub-actions{display:flex;gap:8px;flex-shrink:0}
+.update-banner .ub-btn{font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);
+  background:var(--bg2);color:var(--fg);cursor:pointer;font-weight:600}
+.update-banner .ub-btn:hover{border-color:var(--accent)}
+.update-banner .ub-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.update-banner .ub-primary:hover{filter:brightness(1.08)}
+.update-banner .ub-ghost{background:transparent}
+@media (max-width:560px){.update-banner{flex-direction:column;align-items:stretch;text-align:center}.update-banner .ub-actions{justify-content:center}}
 .tide-st .nm{font-weight:600}
 .tide-ext{font-size:11px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
 .glow-meter{height:10px;border-radius:5px;background:var(--bg3);overflow:hidden}

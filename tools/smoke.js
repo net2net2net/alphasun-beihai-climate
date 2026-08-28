@@ -352,6 +352,18 @@ function runAssertions() {
   const css = fs.readFileSync(path.join(ROOT, 'app/public/css/styles.css'), 'utf8');
   ok(css.indexOf('.clk-ms') >= 0, '顶部时钟：毫秒已拆出 .clk-ms 独立样式（偏小/暗淡）');
   ok(css.indexOf('perspective') >= 0, '顶部时钟：整体已加 3D 外框（perspective + 立体阴影）');
+  // 需求①+②：页脚版本信息 + 开源地址（GitHub/Gitee）+ 自动更新入口
+  ok(idxHtml.indexOf('id="footGithub"') >= 0 && idxHtml.indexOf('github.com/net2net2net/alphasun-beihai-climate') >= 0,
+    '页脚含 GitHub 开源地址链接（需求①）');
+  ok(idxHtml.indexOf('id="footGitee"') >= 0 && idxHtml.indexOf('gitee.com/net2net2net/alphasun-beihai-climate') >= 0,
+    '页脚含 Gitee 开源地址链接（需求①）');
+  ok(idxHtml.indexOf('id="footCheckUpdate"') >= 0 && idxHtml.indexOf('检查更新') >= 0,
+    '页脚含「检查更新」入口（需求②）');
+  ok(idxHtml.indexOf('id="updateBanner"') >= 0, '页面含更新横幅容器 #updateBanner（需求②）');
+  // 需求②：服务端自动更新接口（前端代理比对 + 按平台给下载入口）
+  const srvSrc = fs.readFileSync(path.join(ROOT, 'app/server.js'), 'utf8');
+  ok(srvSrc.indexOf('/api/version') >= 0, '服务端暴露 /api/version（返回当前运行版本清单）');
+  ok(srvSrc.indexOf('/api/latest') >= 0, '服务端暴露 /api/latest（代理上游最新版本检测，绕开浏览器 CORS）');
   // 黄历库（vendor/lunar.js）独立校验：2026-08-28 应为 丙午年 丙申月 甲戌日
   try {
     const LL = require(path.join(ROOT, 'app/public/vendor/lunar.js'));

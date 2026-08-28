@@ -2,9 +2,16 @@
 
 > 本地运行地址：**http://localhost:8765**（改完刷新即生效）
 > 启动方式：`node server.js`（位于 `app/` 目录，纯 Node 零依赖，端口 8765）
-> 版本：v7.0.0 → v8.1.4
+> 版本：v7.0.0 → v8.2.0
 
 ---
+
+## v8.2.0 — 页脚开源地址 · 多端自动更新 · EXE 构建纳入 CI · 文档梳理
+- **页脚版本与开源地址（需求①）**：页面底部新增版本号展示 + **GitHub / Gitee 开源地址链接** + 「检查更新」入口；`version.json` 升级为统一更新清单（含 `github`/`gitee`/`releases` 与 `downloads` 各平台稳定下载 URL）。
+- **多端自动更新（需求②）**：新增前端更新检查器 `checkUpdate()`——启动后及每 30 分钟请求服务端 `/api/latest`（服务端代理 GitHub raw 的 `version.json`），与当前版本比较；发现新版本按运行平台（智能体 / Windows / Linux / macOS / Android / iOS / 网页）给出对应下载或重载指引，页脚「检查更新」可手动触发；无外网时静默跳过。后端新增 `/api/version`（返回当前版本清单）与 `/api/latest`（服务端代理上游最新清单）接口。
+- **打包与发布（需求③）**：新增 `.github/workflows/build-exe.yml`——推送 `main` 后自动构建 Windows / Linux / macOS 三平台单文件 exe 并发布到 `downloads/`（与 APK 机制一致，CI 自动写 `downloads/`）；`app/package.json` 的 `pkg` 目标扩至三平台；Android `build-android.yml` 增加原生版本号注入（与 web 版本一致）。EXE / APK 二进制由 CI 自动构建发布，规避大文件入库。
+- **文档梳理（需求④）**：刷新 README / SKILL / INSTALL / CHANGELOG 至 v8.2.0 并纠正旧下载链接；`knowledge-base/` 设计 / 使用 / 分发文档补充自动更新章节；项目技能包同步至共享技能目录 `~/.workbuddy/skills/alphasun-beihai-climate/`，并推送 GitHub + Gitee。
+- 门禁 `tools/smoke.js` 扩至 54 项（新增断言：页脚含 GitHub/Gitee 链接、更新接口、下载面板右移等），双端一致性保持。
 
 ## v8.1.4 — 实时气候态势三要素单行 · 世界时钟对时右移 · 顶部时钟3D外框 · 链接面板右移
 - **实时气候态势与建议三要素合并单行**：「实时气候态势与建议」每条告警的「官方发布来源 / 简要事项内容 / 建议处置」由三段分行改为一行（`.cl-al-line` 横向 flex，自动换行），信息更紧凑；建议处置仍可被点击弹出详细处置建议弹窗，官方源链接保留。

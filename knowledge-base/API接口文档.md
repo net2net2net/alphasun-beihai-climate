@@ -1,6 +1,6 @@
 # AlphaSun · 北海极端气候全景系统 — API 接口文档
 
-> 版本 v8.0.5 ｜ 基础地址：`http://localhost:8765`
+> 版本 v8.2.0 ｜ 基础地址：`http://localhost:8765`
 
 所有 JSON 接口均含 `Access-Control-Allow-Origin: *`，便于前端与第三方调用。
 
@@ -58,6 +58,15 @@
 ```
 - `now`：服务端 `Date.now()`（毫秒整数，亚毫秒部分由 `performance.timeOrigin` 估算附加，用于更平滑的往返估算）。
 - 前端用法：记录请求发出 `t0` 与接收 `t1`（`performance.now()`），`RTT = t1 - t0`；客户端接收本地时刻 `clientReceive = Date.now()`；估算服务器时刻 `serverEst = data.now + RTT/2`；偏差 `calibOffset = serverEst - clientReceive`。据此把设备时间映射到真实 UTC 时刻（北京时间 = UTC+8h）。
+
+## 4.2 GET /api/version
+返回**当前运行版本**的更新清单（即 `data/version.json`，含 `version` / `released` / `notes` / `github` / `gitee` / `releases` / `downloads` 各平台下载 URL）。前端据此填充页脚版本号与开源链接。
+
+## 4.3 GET /api/latest
+返回**上游最新版本**清单（服务端代理 GitHub raw 的 `app/public/data/version.json`，绕开浏览器 CORS）。用于自动更新检测：
+- 成功：`{ "ok": true, "version": "x.y.z", "released": "...", "notes": "...", "downloads": { "windows": "...", "linux": "...", "macos": "...", "android": "...", "ios": "...", "agent": "..." }, ... }`
+- 失败（无外网 / 代理异常）：`{ "ok": false }`
+- 前端以 `cmpVer(latest.version, cur.version) > 0` 判定是否有新版本，按运行平台（`detectPlatform()`：Capacitor / User-Agent 识别）展示对应的下载入口。
 
 ## 5. globalAlerts 条目结构
 ```jsonc
