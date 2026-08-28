@@ -333,6 +333,10 @@ function runAssertions() {
   ok(cl.indexOf('cl-al-src') >= 0, '实时气候态势模块含告警原始链接（需求②）');
   ok(cl.indexOf('cl-ad-link') >= 0, '实时气候态势模块简要建议可点击查看详情（需求②）');
   ok(cl.indexOf('▶') < 0, '实时气候态势模块已取消"▶ "前缀（需求②）');
+  ok(cl.indexOf('cl-al-line') >= 0, '实时气候态势：官方源/简要/建议已合并到单行（cl-al-line）');
+  const wc = (els['worldClockMount'] && els['worldClockMount'].innerHTML) || '';
+  ok(wc.indexOf('wc-top') >= 0, '世界时钟：机械钟/电子钟与对时区已用 wc-top 行布局包裹');
+  ok(wc.indexOf('wc-sync') >= 0 && wc.indexOf('wc-sync') > wc.indexOf('wc-analog'), '世界时钟：对时区位于机械钟/电子钟右侧');
   // 需求③：多源校核综合判定突出
   ok(rc.indexOf('rc-cons') >= 0, '多源校核综合判定已突出显示（需求③）');
   ok(rc.indexOf('综合判定') >= 0, '多源校核综合判定含标签（需求③）');
@@ -344,6 +348,10 @@ function runAssertions() {
   ok(idxHtml.indexOf('农历日历') < 0 && idxHtml.indexOf('📅 日历') >= 0, '面板已由「农历日历」改名为「日历」');
   ok(idxHtml.indexOf('vendor/lunar.js') >= 0, '已引入 vendor/lunar.js（黄历/干支数据源）');
   ok(idxHtml.indexOf('多源气候数据校核') >= 0 && idxHtml.indexOf('多源实况校核') < 0, '多源校核模块已改名「多源气候数据校核」（需求③）');
+  ok(idxHtml.indexOf('id="calendarCard"') >= 0 && idxHtml.indexOf('id="linksPanel"') > idxHtml.indexOf('id="calendarCard"'), '推荐网站面板已移至日历模块之后（右侧列）');
+  const css = fs.readFileSync(path.join(ROOT, 'app/public/css/styles.css'), 'utf8');
+  ok(css.indexOf('.clk-ms') >= 0, '顶部时钟：毫秒已拆出 .clk-ms 独立样式（偏小/暗淡）');
+  ok(css.indexOf('perspective') >= 0, '顶部时钟：整体已加 3D 外框（perspective + 立体阴影）');
   // 黄历库（vendor/lunar.js）独立校验：2026-08-28 应为 丙午年 丙申月 甲戌日
   try {
     const LL = require(path.join(ROOT, 'app/public/vendor/lunar.js'));

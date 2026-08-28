@@ -150,19 +150,21 @@ function renderWorldClock() {
       <div class="wc-z-date muted"></div>
     </div>`).join('');
   mount.innerHTML = `
-    <div class="wc-main">
-      <div class="wc-analog">${buildClockSVG()}</div>
-      <div class="wc-readout">
-        <div class="wc-big"><span class="wc-big-time">--:--:--</span><span class="wc-big-ms">.000</span></div>
-        <div class="wc-big-label">北京时间 · 数字钟</div>
-        <div class="wc-big-label2">与左侧机械钟同步</div>
+    <div class="wc-top">
+      <div class="wc-main">
+        <div class="wc-analog">${buildClockSVG()}</div>
+        <div class="wc-readout">
+          <div class="wc-big"><span class="wc-big-time">--:--:--</span><span class="wc-big-ms">.000</span></div>
+          <div class="wc-big-label">北京时间 · 数字钟</div>
+          <div class="wc-big-label2">与左侧机械钟同步</div>
+        </div>
+      </div>
+      <div class="wc-sync">
+        <button id="syncBtn" class="btn">🕒 对时</button>
+        <span id="syncStatus" class="wc-sync-status">未对时（使用设备时间）</span>
       </div>
     </div>
-    <div class="wc-zones">${zonesHtml}</div>
-    <div class="wc-sync">
-      <button id="syncBtn" class="btn">🕒 对时</button>
-      <span id="syncStatus" class="wc-sync-status">未对时（使用设备时间）</span>
-    </div>`;
+    <div class="wc-zones">${zonesHtml}</div>`;
 }
 function tickWorld() {
   const dev = devBase + (performance.now() - perfBase);   // 亚毫秒平滑的设备时刻
@@ -400,7 +402,8 @@ function startTopClock() {
       const hl0 = huangli(d.getFullYear(), d.getMonth()+1, d.getDate());
       dEl.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 周'+wk[d.getDay()]+' · '+(hl0?hl0.yearGZ+'年 · ':'')+'农历'+(lu.leap?'闰':'')+lu.monthCn+'月'+lu.dayCn;
     }
-    tEl.textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0');
+    const ms = String(d.getMilliseconds()).padStart(3,'0');
+    tEl.innerHTML = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+'<span class="clk-ms">.'+ms+'</span>';
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -1012,9 +1015,11 @@ function buildClimateDynamic(d) {
         <b>${a.type} · ${a.station || a.region}</b>
         <span style="color:${LCOL[a.level]}">${a.levelName}</span>
       </div>
-      ${a.url ? `<div class="cl-al-src"><a href="${a.url}" target="_blank" rel="noopener">🔗 官方发布来源 ↗</a></div>` : ''}
-      <div class="cl-al-d">${a.detail || ''}</div>
-      ${a.advice ? `<div class="cl-al-ad"><span class="cl-ad-link" onclick="openAdviceDetail(window.__climateAlerts[${i}])">建议处置：${a.advice} ▸ 查看详细</span></div>` : ''}
+      <div class="cl-al-line">
+        ${a.url ? `<a class="cl-al-src" href="${a.url}" target="_blank" rel="noopener">🔗 官方发布来源 ↗</a>` : ''}
+        <span class="cl-al-d">${a.detail || ''}</span>
+        ${a.advice ? `<span class="cl-ad-link" onclick="openAdviceDetail(window.__climateAlerts[${i}])">建议处置：${a.advice} ▸ 查看详细</span>` : ''}
+      </div>
     </div>`).join('');
   const directN = bh.filter(a => a.beihaiRelation === 'direct').length;
   const possibleN = bh.filter(a => a.beihaiRelation === 'possible').length;

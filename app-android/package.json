@@ -1,6 +1,6 @@
 {
   "name": "alphasun-beihai-mobile",
-  "version": "8.1.3",
+  "version": "8.1.4",
   "private": true,
   "description": "AlphaSun 北海极端气候全景系统 — 移动端 APP（Capacitor 纯前端封装，支持 iOS + Android，直连权威数据源）",
   "scripts": {

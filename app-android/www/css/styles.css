@@ -37,9 +37,15 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .brand h1{font-size:17px;margin:0}
 .sub{font-size:11px;color:var(--muted)}
 .status{display:flex;align-items:center;gap:12px}
-.clock{display:flex;flex-direction:column;align-items:center;line-height:1.2;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.clock{display:flex;flex-direction:column;align-items:center;line-height:1.2;font-variant-numeric:tabular-nums;letter-spacing:.5px;
+  padding:8px 18px;border-radius:14px;margin:0 4px;
+  background:linear-gradient(145deg,#1b2536,#0c121d);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 6px 14px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.10), inset 0 -3px 6px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.25);
+  transform:perspective(420px) translateZ(0)}
 .clock .clk-date{font-size:12px;color:var(--muted)}
-.clock .clk-time{font-size:19px;font-weight:700;color:var(--accent)}
+.clock .clk-time{font-size:19px;font-weight:700;color:var(--accent);letter-spacing:1px}
+.clock .clk-ms{font-size:11px;font-weight:600;color:var(--muted);opacity:.6;margin-left:1px}
 .badge{padding:3px 12px;border-radius:20px;font-weight:600;font-size:12px;background:var(--bg3);border:1px solid var(--line)}
 
 /* 顶部"警报 / 无警报"指示器（需求3） */
@@ -281,11 +287,11 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .cl-al-list{display:flex;flex-direction:column;gap:6px}
 .cl-al{border-left:4px solid var(--line);padding:6px 10px;background:var(--bg3);border-radius:0 6px 6px 0}
 .cl-al-h{display:flex;align-items:center;gap:8px;font-size:12px}
-.cl-al-d{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
-.cl-al-ad{font-size:11px;margin-top:3px;line-height:1.5}
-.cl-al-src{margin-top:3px;font-size:11px}
-.cl-al-src a{color:var(--accent);text-decoration:none;font-weight:600}
-.cl-al-src a:hover{text-decoration:underline}
+.cl-al-line{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:3px;font-size:11px;line-height:1.4}
+.cl-al-d{font-size:11px;color:var(--muted);line-height:1.5}
+.cl-al-ad{font-size:11px;line-height:1.5}
+.cl-al-src{font-size:11px;color:var(--accent);text-decoration:none;font-weight:600}
+.cl-al-src:hover{text-decoration:underline}
 .cl-ad-link{cursor:pointer;display:inline-block;font-size:11px;color:var(--accent);font-weight:600}
 .cl-ad-link:hover{text-decoration:underline}
 .cl-dyn-tip{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6;background:var(--bg3);padding:6px 10px;border-radius:6px}
@@ -371,6 +377,7 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .wc-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
 .wc-title{font-size:14px;font-weight:700;color:var(--accent)}
 .wc-sub{font-size:11px;color:var(--muted)}
+.wc-top{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
 .wc-main{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
 .wc-analog{flex:0 0 auto;width:200px;max-width:46%}
 .wc-svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 16px rgba(0,0,0,.45))}
@@ -397,7 +404,7 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .wc-z-accent .wc-z-name{color:var(--accent);font-weight:600}
 .wc-z-time{font-family:"SFMono-Regular",Consolas,"Roboto Mono",monospace;font-size:15px;font-weight:600;color:var(--txt);margin-top:2px;letter-spacing:.3px}
 .wc-z-date{font-size:10px;margin-top:1px}
-.wc-sync{display:flex;align-items:center;gap:12px;margin-top:14px}
+.wc-sync{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-left:auto;padding-left:20px;border-left:1px dashed var(--line)}
 .wc-sync-status{font-size:11px;color:var(--muted)}
 #syncBtn.on{border-color:var(--ok);color:var(--ok);background:rgba(63,185,80,.12)}
 /* 放大模态内世界时钟放大展示 */
