@@ -7,11 +7,11 @@
 ## 适用设备及方式
 智能体（技能）、Windows（exe 单文件）、Linux / macOS、安卓 Android（APK）、iOS（ipa 测试版）。各端均内置**自动更新检查**：启动后比对 GitHub 最新版本，发现新版本按当前平台给出下载或重载指引（页脚「检查更新」可手动触发）。
 
-下载 / 安装（稳定最新版，由 CI 自动发布到 `downloads/`）：
+下载 / 安装（稳定最新版，由 CI 自动发布到 GitHub Release）：
 
-- **Windows exe**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe
-- **Linux**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-linux
-- **macOS**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-macos
+- **Windows exe**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe
+- **Linux**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux
+- **macOS**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos
 - **安卓 Android APK**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-debug.apk
 - **iOS ipa（测试版）**：TestFlight / Sideloadly 自签安装，详见下方「移动端 APP」；未签名 IPA 由 `build-ios.yml` 云端产出。
 - **全部平台 / 源码**：https://github.com/net2net2net/alphasun-beihai-climate/releases
@@ -25,12 +25,12 @@
 5. **世界时钟**：机械钟 + 数字钟（毫秒精度）+ 多时区 + 对时，支撑跨时区应急协同。
 
 ## 快速开始
-- **单文件 exe（推荐，最简单）**：从 [Windows exe（稳定最新版）](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe) 下载 → 双击运行 → 浏览器自动打开 http://localhost:8765。无需安装 Node.js、零外部文件（Linux / macOS 版本见上方链接）。
+- **单文件 exe（推荐，最简单）**：从 [Windows exe（稳定最新版）](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe) 下载 → 双击运行 → 浏览器自动打开 http://localhost:8765。无需安装 Node.js、零外部文件（Linux / macOS 版本见上方链接）。
 - **独立运行（完整目录）**：双击 `app/start.bat`（Windows）或 `bash app/start.sh`（Linux / macOS）→ 打开 http://localhost:8765
 - **由智能体运行**：见 `INSTALL.md`；技能加载后执行 `node app/server.js`
 
 ## 包内容
-- **单文件 exe（CI 自动发布）**：Windows / Linux / macOS 三平台单文件可执行程序（内置 Node 运行时 + 全部前端资源），见「下载 / 安装」段落与 `downloads/` 目录。
+- **单文件 exe（CI 自动发布）**：Windows / Linux / macOS 三平台单文件可执行程序（内置 Node 运行时 + 全部前端资源），见「下载 / 安装」段落（GitHub Release）。
 - `app/`：完整可运行系统源码（server.js + lib + public + 内置 node），用于二次开发或 `node app/server.js` 直接运行。
 - `app-android/`：移动端 APP 版（Capacitor 纯前端封装，一套 `www/` 同时生成 **iOS + Android**，直连数据源，可在手机独立运行；APK 可由 GitHub Actions 云端自动构建）
 - `SKILL.md`：技能定义（触发 + 运行流程）
@@ -75,22 +75,22 @@ node app/server.js
 > 若调用和风返回 `403 Invalid Host`，说明该 KEY 的订阅计划未授权所填 Host（或 KEY 未激活/已过期），请到和风天气控制台核对订阅类型与授权 Host；修复后无需改代码即自动生效。未配置 KEY 时，CMA 实况校核源标记为「未配置·可选」，系统照常运行（回落公开接口兜底）。
 
 ## 重建单文件 exe（可选）
-exe 因体积未纳入 git，需要时可自行构建：
+exe 因体积（约 84–120MB 各平台）未纳入 git，需要时可自行构建（采用 **Node.js 单文件应用 SEA** 方案，无需 `pkg`）：
 ```bash
 cd app
-npm run build:assets          # 将 public/ 内联为 embedded-assets.js
-npm i -g pkg                  # 安装打包器（首次）
-npm run build:exe             # 输出 app/dist/AlphaSun.exe
+npm install esbuild postject   # 构建期依赖（仅打包用，运行时零依赖）
+npm run build:assets           # 将 public/ 内联为 embedded-assets.js
+npm run build:exe              # 输出 app/dist/alphasun-beihai-climate.exe（及 -linux / -macos）
 ```
-> 说明：`app/node/`（便携 Node 运行时，约 87MB）与 `app/dist/`（构建产物）均被 `.gitignore` 排除，故 git 仓库为**源码 + 文档**形态；本地运行也可直接 `node app/server.js`（无需 exe）。
+> 说明：`app/dist/`（构建产物）被 `.gitignore` 排除，故 git 仓库为**源码 + 文档**形态；本地运行也可直接 `node app/server.js`（无需 exe）。`build-exe.js` 使用官方 Node 二进制注入（`postject`），规避 `pkg` 上游基础二进制下线的风险。
 
 ## 单文件 exe 下载（CI 自动发布）
 
-为方便直接使用，三平台**单文件 exe** 由 GitHub Actions 在推送 `main` 后自动构建并发布到仓库 `downloads/`（始终为最新版，无需找特定 Release）：
+为方便直接使用，三平台**单文件 exe** 由 GitHub Actions 在推送 `main` 后自动构建并发布到 **GitHub Release**（始终为最新版，无需找特定 tag）：
 
-- **Windows**：[alphasun-beihai-climate.exe](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe)
-- **Linux**：[alphasun-beihai-climate-linux](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-linux)
-- **macOS**：[alphasun-beihai-climate-macos](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-macos)
+- **Windows**：[alphasun-beihai-climate.exe](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe)
+- **Linux**：[alphasun-beihai-climate-linux](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux)
+- **macOS**：[alphasun-beihai-climate-macos](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos)
 - **大小**：约 83–87 MB（内置 Node 运行时 + 全部前端资源）
 - **使用说明 / 校验方法**：[docs/EXE使用说明.md](docs/EXE使用说明.md)
 - **系统运行效果图**：

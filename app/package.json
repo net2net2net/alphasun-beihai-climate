@@ -9,20 +9,16 @@
     "start:win": "start.bat",
     "start:unix": "bash start.sh",
     "build:assets": "node build-assets.js",
-    "build:exe": "@yao-pkg/pkg ."
+    "build:exe": "node build-exe.js"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "bin": { "alphasun": "server.js" },
-  "pkg": {
-    "scripts": "server.js",
-    "targets": ["node22-win-x64", "node22-linux-x64", "node22-macos-x64"],
-    "outputPath": "dist"
-  },
   "author": "阳光 net2net2net（ Vx: net2net ）",
   "license": "MIT",
   "devDependencies": {
-    "@yao-pkg/pkg": "^6.22.0"
+    "esbuild": "^0.24.0",
+    "postject": "^1.0.0-alpha.6"
   }
 }

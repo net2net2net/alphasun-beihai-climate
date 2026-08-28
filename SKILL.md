@@ -3,7 +3,7 @@ name: alphasun-beihai-climate
 target_agent: any
 description: "AlphaSun · 北海极端气候全景系统 — 以北海为中心的极端气候/海洋/卫星/天文/空气质量全景监测仪表盘。当用户需要运行、部署、打包、分发或二次开发该气候全景系统，或需要北海实时天气/台风/预警/潮汐/卫星云图/地震等综合监测能力时触发。纯 Node.js 零依赖，已内置便携运行时，支持一键独立运行与跨智能体安装。"
 tags: [alphasun, beihai, climate, weather, dashboard, panorama, standalone]
-required_commands: ['node (或使用内置 node/node.exe)']
+required_commands: ['node（或下载单文件 exe）']
 version: 8.2.0
 author: 阳光 net2net2net（ Vx: net2net ）
 license: MIT
@@ -38,7 +38,7 @@ alphasun-beihai-climate/
 │   ├── build-assets.js   # 将 public/ 内联为 embedded-assets.js（用于单文件 exe）
 │   ├── sea-config.json   # Node SEA 构建配置
 │   ├── dist/             # 构建产物：三平台单文件 exe（win/linux/macos，CI 自动发布，git 忽略）
-│   ├── node/node.exe     # 内置便携式 Node 运行时（Windows，git 忽略）
+│   ├── build-exe.js      # Node SEA 单文件 exe 构建脚本（esbuild + postject）
 │   ├── start.bat         # Windows 一键启动（自动打开浏览器）
 │   └── start.sh          # Linux / macOS 启动
 └── knowledge-base/       # 完整文档（设计 / 使用 / API / 分发）
@@ -52,10 +52,10 @@ alphasun-beihai-climate/
 ## 运行方式
 
 ### A. 作为软件独立运行（人类用户 / 无 Node 环境）
-- **单文件 exe（最简单）**：从 [下载页](https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/) 取 Windows/Linux/macOS 单文件 exe → 双击（或 `./alphasun-beihai-climate-linux`）运行 → 浏览器自动打开 http://localhost:8765，关闭黑色控制台窗口即停止。无需 Node.js、无需任何外部文件。
+- **单文件 exe（最简单）**：从 [GitHub Release（最新版）](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe) 取 Windows/Linux/macOS 单文件 exe → 双击（或 `./alphasun-beihai-climate-linux`）运行 → 浏览器自动打开 http://localhost:8765，关闭黑色控制台窗口即停止。exe 已内置 Node 运行时，无需 Node.js、无需任何外部文件。
 - Windows：双击 `app/start.bat` → 自动启动服务并打开 http://localhost:8765
 - Linux / macOS：终端执行 `bash app/start.sh`
-- 内置 `node/node.exe`，**无需预装 Node**。
+- 单文件 exe 已内置 Node 运行时，**无需预装 Node**；完整目录运行需系统具备 Node.js。
 - exe 可选环境变量：`PORT=9000` 改端口；`OPEN=0` 禁止自动开浏览器。
 
 ### B. 由智能体运行（已安装本技能）
@@ -71,10 +71,10 @@ PORT=8765 node server.js          # 或：bash start.sh / 双击 start.bat
 
 - **开源地址**：[GitHub](https://github.com/net2net2net/alphasun-beihai-climate) ｜ [Gitee](https://gitee.com/net2net2net/alphasun-beihai-climate)
 - **智能体（技能）**：`git pull` 或重新安装技能即更新；页脚「检查更新」不直接作用于技能，请拉取仓库。
-- **Windows / Linux / macOS（exe）**：CI 在推送 `main` 后自动构建并发布到 `downloads/`：
-  - Windows：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe
-  - Linux：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-linux
-  - macOS：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-macos
+- **Windows / Linux / macOS（exe）**：CI 在推送 `main` 后自动构建并发布到 **GitHub Release（`releases/latest/download/`）**：
+  - Windows：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe
+  - Linux：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux
+  - macOS：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos
   - 页脚检测到新版本 → 点「下载 X 版」→ 覆盖原文件即可。
 - **安卓 Android（APK）**：`build-android.yml` 在推送 `main` 后自动构建并发布到 `downloads/alphasun-beihai-climate-debug.apk`；页脚提示 → 下载 → 安装覆盖（版本自增）。
 - **iOS（ipa）**：`build-ios.yml` 云端产出未签名 IPA → TestFlight / Sideloadly 自签安装。
@@ -96,8 +96,8 @@ NMDIS_APPID=xxxx NMDIS_APPSECRET=yyyy node server.js
 # 重新生成内联资源（改了 public/ 后重建 exe 前执行）
 npm run build:assets
 
-# 重建单文件 exe（需先 npm i -g pkg，输出 app/dist/AlphaSun.exe）
-npm run build:exe
+# 重建单文件 exe（Node SEA：esbuild + postject，输出 app/dist/alphasun-beihai-climate.exe 等）
+npm install esbuild postject && npm run build:exe
 ```
 
 ## 关键能力

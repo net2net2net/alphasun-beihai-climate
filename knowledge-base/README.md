@@ -28,7 +28,7 @@
 
 ## 关键位置
 - 可运行系统（技能包）：`app/`（入口 `app/server.js`）
-- 单文件 exe：Windows / Linux / macOS 由 CI 在推送 `main` 后自动构建并发布到仓库 `downloads/`（始终为最新版），或本地 `npm run build:exe` 生成（输出 `app/dist/`）
+- 单文件 exe：Windows / Linux / macOS 由 CI 在推送 `main` 后自动构建并发布到 **GitHub Release（`releases/latest/download/`，始终最新）**，或本地 `npm run build:exe` 生成（输出 `app/dist/`）
 - 技能定义：`SKILL.md`
 - 完整文档（本目录）：`knowledge-base/`
 - 运行入口：浏览器打开 `http://localhost:8765`（`node server.js`，默认端口 8765）

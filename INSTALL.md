@@ -16,7 +16,7 @@ alphasun-beihai-climate/
 
 ## 方式一：作为独立软件（人类用户）
 ### 方式 A：单文件 exe（最简单）
-1. 取最新单文件 exe：Windows / Linux / macOS 由 CI 在推送 `main` 后自动发布到仓库 `downloads/`（见 README「下载 / 安装」段），或本地 `npm run build:exe` 生成（输出 `app/dist/`，三平台）。单文件约 87MB，内置 Node 运行时与全部前端资源。
+1. 取最新单文件 exe：Windows / Linux / macOS 由 CI 在推送 `main` 后自动发布到 **GitHub Release（releases/latest/download/）**（见 README「下载 / 安装」段），或本地 `npm run build:exe` 生成（输出 `app/dist/`，三平台）。单文件约 84–120MB（各平台），内置 Node 运行时与全部前端资源。
 2. **双击运行**（Linux / macOS 赋可执行权限后 `./alphasun-beihai-climate-linux`）→ 浏览器自动打开 http://localhost:8765。
 3. 关闭弹出的黑色控制台窗口即停止服务。
 > 无需安装 Node.js、无需任何外部文件；可直接拷贝到任意 Windows 机器运行。
@@ -26,7 +26,7 @@ alphasun-beihai-climate/
 1. 拷贝整个 `alphasun-beihai-climate` 文件夹到任意位置（或解压 `alphasun-beihai-climate.zip`）。
 2. Windows：双击 `app/start.bat`。macOS / Linux：终端执行 `bash app/start.sh`。
 3. 浏览器自动打开 http://localhost:8765。
-> 已内置 `app/node/node.exe`，**无需安装 Node.js**。无该运行时时回退系统 `node`。
+> 单文件 exe 已内置 Node 运行时，**无需安装 Node.js**；完整目录运行（方式 B）需系统具备 Node.js。
 
 ## 方式二：WorkBuddy 智能体安装
 ```bash
@@ -49,7 +49,7 @@ PORT=8765 node server.js      # 直接运行，实时改 public/ 刷新即生效
 
 ## 依赖
 - 独立运行：**零依赖**（内置 Node 运行时；或单文件 exe）。
-- 作为技能由智能体运行：智能体侧具备 Node.js 16+（或使用包内 `app/node/node.exe`）。
+- 作为技能由智能体运行：智能体侧具备 Node.js 16+。
 - 可选密钥（非必需）：`FIRMS_MAP_KEY`（火点）、`NMDIS_APPID` / `NMDIS_APPSECRET`（权威潮汐）。
 
 ## 自动更新（多端）
