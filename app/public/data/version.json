@@ -7,9 +7,9 @@
   "gitee": "https://gitee.com/net2net2net/alphasun-beihai-climate",
   "releases": "https://github.com/net2net2net/alphasun-beihai-climate/releases",
   "downloads": {
-    "windows": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate.exe",
-    "linux": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-linux",
-    "macos": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-macos",
+    "windows": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate.exe",
+    "linux": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate-linux",
+    "macos": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate-macos",
     "android": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-debug.apk",
     "ios": "https://testflight.apple.com/join/XXXX",
     "agent": "https://github.com/net2net2net/alphasun-beihai-climate"

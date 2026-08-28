@@ -4,8 +4,8 @@ name: Build EXE (Windows/Linux/macOS)
 # 彻底绕开 pkg / @yao-pkg-pkg 上游基础二进制已下线（404）导致构建失败的问题，免去本机装 Node。
 # 流程：每个 OS runner 用 esbuild 把 server.js（+lib/* + embedded-assets）打成单文件，
 #       再用 node --experimental-sea-config 生成 blob，复制对应平台 Node 二进制并 postject 注入。
-# 触发：推送到 main（含 app/ 或本文件改动），或手动 Run workflow。
-# 构建完成后自动把三个平台的 exe 提交回仓库 downloads/ 目录（与 APK 机制一致：CI 自动写 downloads）。
+# 发布：因 GitHub 仓库单文件硬上限 100MB，SEA 产物（Node 二进制 80–120MB）无法入库 downloads/，
+#       故改为发布到 GitHub Release（Release assets 支持大文件）。version.json 的 downloads.* 链接指向对应 Release。
 on:
   push:
     branches: [main]
@@ -14,7 +14,7 @@ on:
       - '.github/workflows/build-exe.yml'
   workflow_dispatch:
 
-# 允许工作流把构建产物提交回仓库
+# 允许工作流创建 Release 并把构建产物发布上去
 permissions:
   contents: write
 
@@ -78,14 +78,12 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish to downloads/
+    name: Publish to GitHub Release
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -97,22 +95,21 @@ jobs:
         with:
           path: artifacts
 
-      - name: Stage into downloads/
-        run: |
-          mkdir -p downloads
-          for f in alphasun-beihai-climate.exe alphasun-beihai-climate-linux alphasun-beihai-climate-macos; do
-            if [ -f "artifacts/$f/$f" ]; then cp "artifacts/$f/$f" "downloads/$f"; else echo "missing $f"; fi
-          done
-          ls -la downloads/
-
-      - name: Commit & push
+      - name: Publish to GitHub Release (绕过仓库 100MB 单文件限制)
         env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main 2>/dev/null || true
-          git add -f downloads/alphasun-beihai-climate.exe downloads/alphasun-beihai-climate-linux downloads/alphasun-beihai-climate-macos
-          git commit -m "ci: 自动发布 EXE v$(node -p "require('./app/package.json').version") 至 downloads（win/linux/macos，SEA）" || echo "no changes"
-          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          git push origin HEAD:refs/heads/main
+          TAG="v$(node -p "require('./app/package.json').version")"
+          mkdir -p dist
+          for f in alphasun-beihai-climate.exe alphasun-beihai-climate-linux alphasun-beihai-climate-macos; do
+            if [ -f "artifacts/$f/$f" ]; then cp "artifacts/$f/$f" "dist/$f"; else echo "missing $f"; fi
+          done
+          ls -la dist/
+          gh release create "$TAG" \
+            --title "AlphaSun $TAG" \
+            --notes "CI 自动发布的单文件可执行程序（Node SEA，跨平台）。
+
+- Windows: alphasun-beihai-climate.exe
+- Linux: alphasun-beihai-climate-linux
+- macOS: alphasun-beihai-climate-macos（ad-hoc 签名，首次运行需在「系统设置 → 隐私与安全性」中允许）" \
+            dist/* 2>/dev/null || gh release upload "$TAG" --clobber dist/*
