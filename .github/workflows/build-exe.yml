@@ -31,7 +31,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install build deps (pkg)
         run: npm install
@@ -40,13 +40,13 @@ jobs:
         run: npm run build:assets
 
       - name: Build exe — Windows
-        run: npx pkg . -c package.json --targets node18-win-x64 --output dist/alphasun-beihai-climate.exe
+        run: npx @yao-pkg/pkg . -c package.json --targets node22-win-x64 --output dist/alphasun-beihai-climate.exe
 
       - name: Build exe — Linux
-        run: npx pkg . -c package.json --targets node18-linux-x64 --output dist/alphasun-beihai-climate-linux
+        run: npx @yao-pkg/pkg . -c package.json --targets node22-linux-x64 --output dist/alphasun-beihai-climate-linux
 
       - name: Build exe — macOS
-        run: npx pkg . -c package.json --targets node18-macos-x64 --output dist/alphasun-beihai-climate-macos
+        run: npx @yao-pkg/pkg . -c package.json --targets node22-macos-x64 --output dist/alphasun-beihai-climate-macos
 
       - name: Publish to downloads/
         env:
