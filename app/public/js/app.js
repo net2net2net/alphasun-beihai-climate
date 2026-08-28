@@ -1041,6 +1041,7 @@ const SITES = [
   ] },
   { cat: '实时数据 / API（系统主源）', items: [
     { n: 'Open-Meteo', u: 'https://open-meteo.com/', note: '气象/空气/海洋/气候数据主源（免费免密钥）' },
+    { n: '和风天气 QWeather', u: 'https://www.qweather.com/', note: '中国气象局授权商业气象数据（本系统 CMA 实况校核源，需 KEY）' },
     { n: 'USGS 地震', u: 'https://earthquake.usgs.gov/', note: '全球地震实时 Feed（本系统震情源）' },
     { n: '国家海洋信息中心', u: 'http://www.nmdis.org.cn/', note: '潮汐 / 海浪（需凭证）' },
     { n: 'NASA FIRMS', u: 'https://firms.modaps.eosdis.nasa.gov/', note: '活跃火点（需 KEY）' },

@@ -53,8 +53,26 @@
 - 陆地 / 海洋 / 空气质量 / 洪涝：**Open-Meteo** 全系（免费、免密钥）
 - 地震：**USGS** GeoJSON
 - 台风与气象预警：**中央气象台（nmc）**
+- 中国气象局实况校核（多源交叉验证）：**和风天气 QWeather**（CMA 官方商业分发方；配置 KEY 后作为 `cma` 源参与「多源气候数据校核」，提供温度/湿度/风/气压/紫外线等）
 - 天文与晚霞概率：**服务端本地计算**（免额外数据源）
 - 卫星云图 / 雷达：经中央气象台代理叠加（绕开防盗链 / CORS）
+
+### 配置和风天气 KEY（可选，启用 CMA 实况校核源）
+和风天气需 KEY。本系统**不硬编码密钥**，按以下任一方式提供即可（环境变量优先级高于本地文件）：
+
+```bash
+# 方式一：本地配置文件（推荐，已被 .gitignore 忽略，绝不入库）
+cp app/config.example.json app/config.json
+# 编辑 app/config.json，填入你的 KEY 与 Host
+#   { "qweatherKey": "你的KEY", "qweatherHost": "devapi.qweather.com" }
+#   - 免费版/开发版订阅用 devapi.qweather.com；标准版/商业版订阅用 api.qweather.com
+
+# 方式二：环境变量
+export QWEATHER_KEY="你的KEY"
+export QWEATHER_HOST="devapi.qweather.com"   # 或 api.qweather.com
+node app/server.js
+```
+> 若调用和风返回 `403 Invalid Host`，说明该 KEY 的订阅计划未授权所填 Host（或 KEY 未激活/已过期），请到和风天气控制台核对订阅类型与授权 Host；修复后无需改代码即自动生效。未配置 KEY 时，CMA 实况校核源标记为「未配置·可选」，系统照常运行（回落公开接口兜底）。
 
 ## 重建单文件 exe（可选）
 exe 因体积未纳入 git，需要时可自行构建：

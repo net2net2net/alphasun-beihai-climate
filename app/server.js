@@ -19,6 +19,28 @@ const PORT = process.env.PORT || 8765;
 const PUBLIC = path.join(__dirname, 'public');
 const climateCache = new Map(); // id -> {expire, data}
 
+// ===== 本地配置（gitignore 的 config.json / .env，不入库，避免泄露密钥）=====
+// 优先级：环境变量 QWEATHER_KEY / QWEATHER_HOST > 本地 config.json
+// 这样非技术用户只需把 key 填进 app/config.json 即可启用和风天气，无需设置环境变量。
+function loadServerConfig() {
+  const cfg = {};
+  if (process.env.QWEATHER_KEY) cfg.qweatherKey = process.env.QWEATHER_KEY;
+  if (process.env.QWEATHER_HOST) cfg.qweatherHost = process.env.QWEATHER_HOST;
+  const cfgPath = path.join(__dirname, 'config.json');
+  try {
+    const j = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    if (j && j.qweatherKey && !cfg.qweatherKey) cfg.qweatherKey = j.qweatherKey;
+    if (j && j.qweatherHost && !cfg.qweatherHost) cfg.qweatherHost = j.qweatherHost;
+  } catch (e) { /* 无 config.json 则忽略（和风天气回落未配置状态）*/ }
+  // 回写 process.env 供 lib/sources.js 懒读取
+  if (cfg.qweatherKey) process.env.QWEATHER_KEY = cfg.qweatherKey;
+  if (cfg.qweatherHost) process.env.QWEATHER_HOST = cfg.qweatherHost;
+  return cfg;
+}
+const SERVER_CFG = loadServerConfig();
+if (SERVER_CFG.qweatherKey) console.log('[cfg] 已加载和风天气 KEY（本地配置/环境变量），将作为 CMA 实况校核源参与多源数据校核。');
+else console.log('[cfg] 未配置和风天气 KEY（QWEATHER_KEY/config.json 缺失），CMA 实况源标记为「未配置·可选」。');
+
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
   res.end(JSON.stringify(obj));

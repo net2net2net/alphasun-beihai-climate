@@ -364,6 +364,13 @@ function runAssertions() {
   const srvSrc = fs.readFileSync(path.join(ROOT, 'app/server.js'), 'utf8');
   ok(srvSrc.indexOf('/api/version') >= 0, '服务端暴露 /api/version（返回当前运行版本清单）');
   ok(srvSrc.indexOf('/api/latest') >= 0, '服务端暴露 /api/latest（代理上游最新版本检测，绕开浏览器 CORS）');
+  // 需求⑤：多源气候数据校核 — 增加和风天气(QWeather) 作为 CMA 实况校核源
+  ok(idxHtml.indexOf('和风天气(QWeather)') >= 0, '页脚数据源署名含和风天气(QWeather)（需求⑤）');
+  const appSrcQ = fs.readFileSync(path.join(ROOT, 'app/public/js/app.js'), 'utf8');
+  ok(appSrcQ.indexOf('和风天气 QWeather') >= 0, '数据源网站清单含和风天气 QWeather 条目（需求⑤）');
+  ok(srvSrc.indexOf('loadServerConfig') >= 0 && srvSrc.indexOf('config.json') >= 0, '服务端支持本地 config.json 读取和风天气 KEY（无需硬编码/环境变量）');
+  const srcLib = fs.readFileSync(path.join(ROOT, 'app/lib/sources.js'), 'utf8');
+  ok(srcLib.indexOf('qweatherNow') >= 0 && srcLib.indexOf('QWEATHER_KEY') >= 0, 'lib/sources.js: qweatherNow() 接入和风天气实况并参与多源校核');
   // 黄历库（vendor/lunar.js）独立校验：2026-08-28 应为 丙午年 丙申月 甲戌日
   try {
     const LL = require(path.join(ROOT, 'app/public/vendor/lunar.js'));

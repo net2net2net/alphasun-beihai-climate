@@ -13,10 +13,12 @@
 | 台风/预警（中央气象台） | ✅ | ✅ 直连（可选代理增强） |
 | 潮汐/水位 | ✅ | ✅ 调和模型估算（填凭证可真实） |
 | 野火（NASA FIRMS） | 需 KEY | 缺省降级，填 KEY 增强 |
+| 中国气象局实况校核（多源交叉验证 · 和风天气 QWeather） | 需 KEY | 随 Node 聚合服务 `/api/overview` 生效（KEY 配在服务端） |
 | 卫星/雷达产品图（nmc） | ✅ 服务端代理 | ⚠️ 移动端降级（点 ↗ 看官方原图） |
 | 后端依赖 | 需 Node 服务 | **无**，纯静态 |
 
 数据源逻辑全部移植到 `www/js/data.js`（`window.AlphaData`），与桌面 `lib/` 一一对应。
+> 多源校核面板（含和风天气 CMA 源）由桌面 Node 聚合服务的 `lib/sources.js·verifyRealtime` 计算，经 `/api/overview` 同时供给 Web 与 APP 两端；在 `app/config.json`（或环境变量 `QWEATHER_KEY`/`QWEATHER_HOST`）配置和风 KEY 后即可参与交叉验证。
 
 ## 方式一：云端自动出 APK（推荐，无需本机装 Android Studio）
 

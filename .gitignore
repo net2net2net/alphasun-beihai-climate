@@ -33,3 +33,9 @@ app/dist/
 
 # 多源实况校核快照（运行时节流落盘，本地审计缓存，不入库）
 data/realtime-check.json
+
+# 本地密钥 / 配置（含和风天气 KEY 等敏感信息，绝不入库；请用 config.example.json 作模板复制为 config.json）
+app/config.json
+.env
+*.local.json
+

@@ -1,0 +1,6 @@
+{
+  "_comment": "本地配置模板。复制本文件为 app/config.json（已被 .gitignore 忽略，绝不入库），填入你的密钥即可启用对应数据源。环境变量 QWEATHER_KEY / QWEATHER_HOST 优先级高于本文件。",
+  "qweatherKey": "在此填入你的和风天气 KEY（中国气象局授权商业气象数据，作为 CMA 实况校核源）",
+  "qweatherHost": "devapi.qweather.com",
+  "_hostNote": "免费版/开发版订阅用 devapi.qweather.com；标准版/商业版订阅用 api.qweather.com。若调用返回 403 Invalid Host，说明本 KEY 的订阅计划未授权该 Host，请到和风天气控制台核对订阅类型与授权 Host。"
+}
