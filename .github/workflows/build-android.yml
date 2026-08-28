@@ -85,6 +85,7 @@ jobs:
         working-directory: app-android
         run: |
           set -e
+          mkdir -p "$GITHUB_WORKSPACE/downloads"
           TAG="v$(node -p "require('./package.json').version")"
           SRC="android/app/build/outputs/apk/debug/app-debug.apk"
           ASSET="$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate.apk"
