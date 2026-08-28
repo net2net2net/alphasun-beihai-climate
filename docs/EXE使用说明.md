@@ -4,7 +4,7 @@
 
 本说明对应仓库 **GitHub Release** 中发布的单文件可执行程序。该文件由本项目源码构建，内置 Node.js 运行时与全部前端资源，**无需安装 Node.js、无需任何外部文件**，一个 exe 即可运行整套系统。
 
-> 说明：因 GitHub 仓库单文件 100MB 上限，三平台 exe（约 84–120MB）统一发布到 **GitHub Release**，不再入库 `downloads/`；安卓 APK（约 4MB）仍走仓库 `downloads/`。
+> 说明：因 GitHub 仓库单文件 100MB 上限，三平台 exe（约 84–120MB）与安卓 APK（约 4MB）统一发布到 **GitHub Release**（资产名 `alphasun-beihai-climate.{exe,linux,macos,ipa,apk}`），不再入库 `downloads/`；下载入口统一为 `releases/latest/download/`。
 
 ## 一、文件信息
 

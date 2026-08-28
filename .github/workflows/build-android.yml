@@ -2,7 +2,7 @@ name: Build Android APK
 
 # 在 GitHub 云端构建真实可安装的 APK，免去本机安装 Android Studio。
 # 触发：推送到 main（含 app-android/ 或本文件改动），或手动 Run workflow。
-# 构建完成后自动把 APK 提交回仓库 downloads/ 目录（实现 "CI 自动写 downloads"）。
+# 构建完成后自动把 APK 发布到同版本 GitHub Release（资产名 alphasun-beihai-climate.apk，与 exe/ios 一致）。
 on:
   push:
     branches: [main]
@@ -11,7 +11,7 @@ on:
       - '.github/workflows/build-android.yml'
   workflow_dispatch:
 
-# 允许工作流把构建产物提交回仓库
+# 允许工作流发布 Release 资产
 permissions:
   contents: write
 
@@ -78,17 +78,19 @@ jobs:
           path: app-android/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      # 构建产物写回仓库 downloads/，使 "CI 自动写 downloads" 成立。
-      # 注意：本步骤仅改动 downloads/，不命中 paths 触发器，不会产生构建循环。
-      - name: Publish APK to downloads/
+      # 发布 APK 到同版本 GitHub Release（永久留存，与 exe / ipa 一致；资产名统一为 alphasun-beihai-climate.apk）。
+      - name: Publish APK to GitHub Release
         env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: app-android
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate-debug.apk"
-          cd "$GITHUB_WORKSPACE"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add downloads/alphasun-beihai-climate-debug.apk
-          git commit -m "ci: 自动发布 APK v$(node -p "require('./package.json').version") 至 downloads" || echo "no changes"
-          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          git push origin HEAD:refs/heads/main
+          set -e
+          TAG="v$(node -p "require('./package.json').version")"
+          SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          ASSET="$GITHUB_WORKSPACE/downloads/alphasun-beihai-climate.apk"
+          cp "$SRC" "$ASSET"
+          echo "Publishing $ASSET to $TAG"
+          gh release upload "$TAG" --clobber "$ASSET" 2>/dev/null || \
+            gh release create "$TAG" --title "AlphaSun $TAG" \
+              --notes "Android APK（CI 自动发布，debug 签名，仅供自用/测试安装）。" "$ASSET"
+          echo "done"

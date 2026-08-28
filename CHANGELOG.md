@@ -9,7 +9,8 @@
 ## v8.2.0 — 页脚开源地址 · 多端自动更新 · EXE 构建纳入 CI · 文档梳理
 - **页脚版本与开源地址（需求①）**：页面底部新增版本号展示 + **GitHub / Gitee 开源地址链接** + 「检查更新」入口；`version.json` 升级为统一更新清单（含 `github`/`gitee`/`releases` 与 `downloads` 各平台稳定下载 URL）。
 - **多端自动更新（需求②）**：新增前端更新检查器 `checkUpdate()`——启动后及每 30 分钟请求服务端 `/api/latest`（服务端代理 GitHub raw 的 `version.json`），与当前版本比较；发现新版本按运行平台（智能体 / Windows / Linux / macOS / Android / iOS / 网页）给出对应下载或重载指引，页脚「检查更新」可手动触发；无外网时静默跳过。后端新增 `/api/version`（返回当前版本清单）与 `/api/latest`（服务端代理上游最新清单）接口。
-- **打包与发布（需求③）**：新增 `.github/workflows/build-exe.yml`——推送 `main` 后自动构建 Windows / Linux / macOS 三平台单文件 exe 并发布到 **GitHub Release**（因 GitHub 仓库单文件 100MB 上限，`pkg`/`@yao-pkg/pkg` 上游基础二进制已 404 失效，故改用 **Node.js SEA** 方案：`esbuild` 单文件 bundle + `postject` 注入官方 Node 二进制，运行时零依赖）；APK（4MB 未超限）仍走仓库 `downloads/`。`app/package.json` 的 `build:exe` 改为调用 `build-exe.js`；Android `build-android.yml` 增加原生版本号注入（与 web 版本一致）。EXE / APK 二进制由 CI 自动构建发布，规避大文件入库。；iOS IPA 由 `build-ios.yml` 在 macOS runner 构建并发布到同一 GitHub Release（资产 `alphasun-beihai-climate-ios.ipa`——免签版用 Sideloadly + 免费 Apple ID 自装，配置 Apple 开发者密钥则为签名版）。
+- **打包与发布（需求③）**：新增 `.github/workflows/build-exe.yml`——推送 `main` 后自动构建 Windows / Linux / macOS 三平台单文件 exe 并发布到 **GitHub Release**（因 GitHub 仓库单文件 100MB 上限，`pkg`/`@yao-pkg/pkg` 上游基础二进制已 404 失效，故改用 **Node.js SEA** 方案：`esbuild` 单文件 bundle + `postject` 注入官方 Node 二进制，运行时零依赖）。`app/package.json` 的 `build:exe` 改为调用 `build-exe.js`；Android `build-android.yml` 增加原生版本号注入（与 web 版本一致）。iOS IPA 由 `build-ios.yml` 在 macOS runner 构建并发布到同一 GitHub Release（资产 `alphasun-beihai-climate-ios.ipa`——免签版用 Sideloadly + 免费 Apple ID 自装，配置 Apple 开发者密钥则为签名版）。
+- **下载入口统一（全平台 Release）**：exe / linux / macos / ipa / **apk** 五类产物统一发布到 **GitHub Release**（资产名 `alphasun-beihai-climate.{exe,linux,macos,ipa,apk}`），下载入口统一为 `releases/latest/download/`；`build-android.yml` 改为发布 APK 到 Release（不再写回 `downloads/`）。双端 `version.json` 的 `downloads.*` 全部指向 Release；README 新增「文档导航」串联设计 / 实施 / 安装 / 说明等子文档。
 - **文档梳理（需求④）**：刷新 README / SKILL / INSTALL / CHANGELOG 至 v8.2.0 并纠正旧下载链接；`knowledge-base/` 设计 / 使用 / 分发文档补充自动更新章节；项目技能包同步至共享技能目录 `~/.workbuddy/skills/alphasun-beihai-climate/`，并推送 GitHub + Gitee。
 - 门禁 `tools/smoke.js` 扩至 54 项（新增断言：页脚含 GitHub/Gitee 链接、更新接口、下载面板右移等），双端一致性保持。
 
@@ -58,7 +59,7 @@
 - **实现**：config.js 新增 RIVER_PROFILE / RESERVOIR_PROFILE 档案常量；sources.js 新增 fetchRiverReservoir() 接入 buildOverview 顶层 riverReservoir 字段；前端 index.html 新增两面板容器、app.js 新增 renderRiverReservoir() 渲染。
 - **数据性质（重要）**：北海本地江河实测站与水库的实时源（广西水文中心、水利部）当前网络不可程序化对接，fetchRiverReservoir 内置 5s 实时可用性探测（实测 unreachable）；界面明确标注“数据性质：档案（实时源不可达）”，依据广西水文中心/北海市政府/北海新闻网等公开资料整理，非实时站测，绝不冒充实时。
 - 鲤鱼地/石康/闸口水库精确参数待核实（条目已标注待核实）。
-- **Android APK 自动发布**：CI（`build-android.yml`）增强为构建后自动将 APK 发布回 `downloads/alphasun-beihai-climate-debug.apk`（v8.0.5，含江河/水库模块）；工作流改动经 GitHub Actions 重建并写回仓库，无需本地 Android SDK。
+- **Android APK 自动发布**：CI（`build-android.yml`）增强为构建后自动发布 APK（v8.0.5，含江河/水库模块）；工作流改动经 GitHub Actions 重建并写回仓库，无需本地 Android SDK。（注：v8.0.5 当时发布到 `downloads/`；**v8.2.0 起统一改发 GitHub Release**，资产名 `alphasun-beihai-climate.apk`。）
 ## v8.0.3 — 世界时钟模块
 - 在「推荐天气 / 数据源网站」面板下方新增**世界时钟**模块：
   - 精美圆形传统**机械钟**（SVG 表盘 / 60 刻度 / 阿拉伯数字 / 时分秒三针 + 毫秒平滑扫秒）。

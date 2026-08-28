@@ -10,7 +10,7 @@
     "windows": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate.exe",
     "linux": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate-linux",
     "macos": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate-macos",
-    "android": "https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-debug.apk",
+    "android": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate.apk",
     "ios": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.2.0/alphasun-beihai-climate-ios.ipa",
     "agent": "https://github.com/net2net2net/alphasun-beihai-climate"
   }

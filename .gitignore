@@ -39,3 +39,6 @@ app/config.json
 .env
 *.local.json
 
+# 构建产物分发目录（exe / apk 等由 CI 发布到 GitHub Release，本地构建产物不入库）
+downloads/
+

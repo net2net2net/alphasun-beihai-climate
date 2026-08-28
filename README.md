@@ -12,7 +12,7 @@
 - **Windows exe**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe
 - **Linux**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux
 - **macOS**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos
-- **安卓 Android APK**：https://github.com/net2net2net/alphasun-beihai-climate/raw/main/downloads/alphasun-beihai-climate-debug.apk
+- **安卓 Android APK**：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.apk
 - **iOS ipa（测试版）**：[未签名 IPA（GitHub Release，需自签）](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa) — 用 Sideloadly + 免费 Apple ID 自签装 iPad/iPhone（证书 7 天有效，到期重签）；详见下方「移动端 APP」。
 - **全部平台 / 源码**：https://github.com/net2net2net/alphasun-beihai-climate/releases
 
@@ -37,6 +37,22 @@
 - `INSTALL.md`：跨智能体 / 独立安装说明
 - `CHANGELOG.md`：版本变更总览
 - `knowledge-base/`：完整文档（设计 / 使用 / API / 分发）
+
+## 文档导航
+
+| 类别 | 文档 | 说明 |
+|------|------|------|
+| **设计** | [knowledge-base/设计文档.md](knowledge-base/设计文档.md) | 总体架构、数据域与权威源矩阵、告警引擎、地图方案、世界时钟、实施状态 |
+| **实施 / 构建** | [docs/EXE使用说明.md](docs/EXE使用说明.md) | 单文件 exe（Node SEA）构建与校验方法 |
+| | [app-android/README.md](app-android/README.md) | 移动端（iOS + Android）Capacitor 工程、云端构建与安装 |
+| | [app-android/docs/iOS-Sideload-Guide.md](app-android/docs/iOS-Sideload-Guide.md) | 未签名 IPA 用 Sideloadly + 免费 Apple ID 自签装机指南 |
+| | [.github/workflows/](.github/workflows/) | CI 自动构建（exe / apk / ipa）工作流 |
+| **安装** | [INSTALL.md](INSTALL.md) | 跨智能体 / 独立安装说明 |
+| | [knowledge-base/技能安装与分发指南.md](knowledge-base/技能安装与分发指南.md) | 作为独立软件 / 技能安装、跨智能体分发 |
+| **说明 / 使用** | [knowledge-base/使用手册.md](knowledge-base/使用手册.md) | 运行方式、界面导览、环境变量、常见问题 |
+| | [knowledge-base/API接口文档.md](knowledge-base/API接口文档.md) | 全部 HTTP 接口定义与字段说明 |
+| **变更** | [CHANGELOG.md](CHANGELOG.md) | 版本变更总览 |
+| **技能** | [SKILL.md](SKILL.md) | 技能定义（触发 + 运行流程） |
 
 ## 核心功能
 - **实时天气**：大温标 + 体感 + 风/阵风/湿度/降水/气压/云量指标卡片；地理区域选择后展示「区域概况」（覆盖面积、覆盖人口、真实行政区轮廓）。
@@ -106,7 +122,7 @@ npm run build:exe              # 输出 app/dist/alphasun-beihai-climate.exe（�
 - **项目目录**：[`app-android/`](app-android/)（含完整 `www/` 前端 + Capacitor 配置 + 双端构建文档 [README](app-android/README.md)）
 - **数据源**：由 `www/js/data.js` 直连 Open-Meteo / USGS / 中央气象台，无需 Node 后端
 - **降级项**：中央气象台卫星/雷达产品图在手机端无法跨域抓取，地图叠加层提示「点 ↗ 看官方原图」；野火 / 潮汐缺省降级（可在 `www/index.html` 填 key 增强）
-- **获取安卓 APK（无需本机装 Android Studio）**：仓库内置 GitHub Actions 工作流，推送到 `main` 后自动在云端编译出 APK 并作为构建产物提供下载。步骤：进入 [Actions](https://github.com/net2net2net/alphasun-beihai-climate/actions) → 找 **Build Android APK** 运行 → 下载 Artifact `alphasun-beihai-apk` → 解压 `app-debug.apk` 安装。未自动触发时可手动 **Run workflow**。
+- **获取安卓 APK（无需本机装 Android Studio）**：APK 由 CI 在推送 `main` 后自动构建并发布到 **GitHub Release**（资产名 `alphasun-beihai-climate.apk`，始终最新：[点此下载](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.apk)）。也可从 [Actions](https://github.com/net2net2net/alphasun-beihai-climate/actions) → **Build Android APK** 运行下载 Artifact `alphasun-beihai-apk` → 解压 `app-debug.apk` 安装。未自动触发时手动 **Run workflow**。
 - **本机构建（安卓）**：装 Android Studio + Node 18+ 后，`cd app-android && npm install && npx cap add android && npx cap build android` 生成 APK（详见 [app-android/README.md](app-android/README.md)）。
 - **iOS（无需 Mac，推荐）**：仓库内置 `build-ios.yml` 工作流在 GitHub 云端构建并**发布到 GitHub Release**（永久留存，资产名 `alphasun-beihai-climate-ios.ipa`）。拿到后（[最新版](https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-ios.ipa) 或 Actions → **Build iOS** → Run workflow 下载 Artifact `alphasun-ios-unsigned-ipa`）用 **Sideloadly + 免费 Apple ID** 自签装 iPad/iPhone（详见 [app-android/docs/iOS-Sideload-Guide.md](app-android/docs/iOS-Sideload-Guide.md)）。若仓库配置了 `APPLE_CERT_P12` 等 Secrets，则产出已签名 IPA（可 AltStore/企业/App Store 分发）。
 - **本机构建（iOS，需 Mac + Xcode）**：`cd app-android && npm install && npx cap add ios && npx cap open ios`，Xcode 中 Run / Archive（详见 [app-android/README.md](app-android/README.md)）。

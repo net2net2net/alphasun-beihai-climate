@@ -76,8 +76,8 @@ PORT=8765 node server.js          # 或：bash start.sh / 双击 start.bat
   - Linux：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-linux
   - macOS：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate-macos
   - 页脚检测到新版本 → 点「下载 X 版」→ 覆盖原文件即可。
-- **安卓 Android（APK）**：`build-android.yml` 在推送 `main` 后自动构建并发布到 `downloads/alphasun-beihai-climate-debug.apk`；页脚提示 → 下载 → 安装覆盖（版本自增）。
-- **iOS（ipa）**：`build-ios.yml` 云端产出未签名 IPA → TestFlight / Sideloadly 自签安装。
+- **安卓 Android（APK）**：`build-android.yml` 在推送 `main` 后自动构建并发布到 **GitHub Release（`releases/latest/download/alphasun-beihai-climate.apk`，始终最新）**；页脚提示 → 下载 → 安装覆盖（版本自增）。
+- **iOS（ipa）**：`build-ios.yml` 云端构建并发布未签名 IPA 到 **GitHub Release（`releases/latest/download/alphasun-beihai-climate-ios.ipa`）**；用 Sideloadly + 免费 Apple ID 自签装 iPad/iPhone（证书 7 天有效，到期重签）。
 - **网页 / PWA**：服务端资源更新后刷新即生效。
 
 检测机制：前端每 30 分钟请求服务端 `/api/latest`（服务端代理 GitHub raw 的 `version.json`）与当前版本比较；页脚「检查更新」可手动触发，无外网静默跳过。

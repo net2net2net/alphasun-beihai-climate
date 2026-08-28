@@ -31,6 +31,7 @@
 4. 解压得到 `app-debug.apk`，拷到安卓手机安装即可（允许「未知来源」）
 
 > 若 Actions 未自动触发：进入 Actions 页 → 左侧 **Build Android APK** → **Run workflow** 手动触发一次。
+> 最新版也可直接从 **GitHub Release** 下载（始终最新）：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.apk
 > 提示：APK 为 debug 签名，仅供自用/测试安装；上架 Google Play 需 release 签名（见下方「签名上架」）。
 
 ## 方式二：本机 Android Studio 构建 APK
