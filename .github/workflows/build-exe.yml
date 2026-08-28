@@ -105,11 +105,5 @@ jobs:
             if [ -f "artifacts/$f/$f" ]; then cp "artifacts/$f/$f" "dist/$f"; else echo "missing $f"; fi
           done
           ls -la dist/
-          gh release create "$TAG" \
-            --title "AlphaSun $TAG" \
-            --notes "CI 自动发布的单文件可执行程序（Node SEA，跨平台）。
-
-- Windows: alphasun-beihai-climate.exe
-- Linux: alphasun-beihai-climate-linux
-- macOS: alphasun-beihai-climate-macos（ad-hoc 签名，首次运行需在「系统设置 → 隐私与安全性」中允许）" \
-            dist/* 2>/dev/null || gh release upload "$TAG" --clobber dist/*
+          NOTES="CI 自动发布的单文件可执行程序（Node SEA，跨平台）：Windows=alphasun-beihai-climate.exe，Linux=alphasun-beihai-climate-linux，macOS=alphasun-beihai-climate-macos（ad-hoc 签名，首次运行需在 系统设置-隐私与安全性 中允许）"
+          gh release create "$TAG" --title "AlphaSun $TAG" --notes "$NOTES" dist/* 2>/dev/null || gh release upload "$TAG" --clobber dist/*
