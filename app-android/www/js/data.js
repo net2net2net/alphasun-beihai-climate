@@ -724,7 +724,7 @@
     const perHour = 60 / 15, hourly = [];
     for (let k = 0; k <= 24; k++) hourly.push(series[Math.min(k * perHour, series.length - 1)]);
     return {
-      ok: true, source: meta.source, configured: meta.configured, model: !!meta.model, real: !!meta.real,
+      ok: true, source: meta.source, configured: meta.configured, model: !!meta.model, real: !!meta.real, degraded: !!meta.degraded,
       datumLabel: meta.datumLabel || '理论最低潮面 (LAT)',
       meanLevel, current, trend, rate, lowest, highest, range: +(highest - lowest).toFixed(2),
       warnLevel: st.warnLevel, margin: +(current - st.warnLevel).toFixed(2), exceeded: current >= st.warnLevel,
@@ -732,12 +732,39 @@
     };
   }
   // NMDIS 请求（原生经 CapacitorHttp.post 直连；PWA 经 fetch+代理。认证头 appid/appsecret，空 body）
-  async function nmdisFetch(siteCode, dateStr) {
+  // 带 8s 超时(Promise.race) + 单次重试；任意失败返回 null，由 getTide 降级模型
+  const NMDIS_TIMEOUT_MS = 8000;
+  function withTimeout(p, ms) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('nmdis-timeout')), ms);
+      Promise.resolve(p).then(resolve, reject).finally(() => clearTimeout(t));
+    });
+  }
+  async function nmdisFetch(siteCode, dateStr, attempt = 0) {
     const url = `${API.nmdis}/api/v1/CoreData/GetPortTideData?SiteCode=${encodeURIComponent(siteCode)}&Date=${dateStr}`;
     const headers = { 'Content-Type': 'application/json', appid: NMDIS_APPID, appsecret: NMDIS_APPSECRET };
-    const j = await httpPostParsed(url, headers, {});
-    if (!j || j.ResultCode !== '200' || !j.ResultValue || !j.ResultValue.data) return null;
-    return j.ResultValue;
+    try {
+      const j = await withTimeout(httpPostParsed(url, headers, {}), NMDIS_TIMEOUT_MS);
+      if (!j || j.ResultCode !== '200' || !j.ResultValue || !j.ResultValue.data) {
+        if (attempt < 1) return nmdisFetch(siteCode, dateStr, attempt + 1);
+        return null;
+      }
+      return j.ResultValue;
+    } catch (e) {
+      if (attempt < 1) return nmdisFetch(siteCode, dateStr, attempt + 1);
+      return null;
+    }
+  }
+  // 降级/兜底：调和模型估算；degraded=true 表示已配置 NMDIS 但请求失败，仅用于 UI 提示
+  function modelFallback(st, degraded) {
+    const { base, startMs } = modelBase(st);
+    const series = buildSeries(base, startMs, Date.now());
+    const rawExtremes = classifyExtremes(modelExtremes(series));
+    return finalizeTide(st, series, rawExtremes, {
+      source: degraded ? '官方预报不可用·已降级模型' : '调和模型估算(演示)',
+      configured: !!degraded, model: true, real: false, degraded: !!degraded,
+      datumLabel: '理论最低潮面 (LAT)',
+    });
   }
   async function getTide(st) {
     if (NMDIS_APPID && NMDIS_APPSECRET && st.siteCode) {
@@ -761,14 +788,12 @@
             });
           }
         }
-      } catch (e) { /* 落回模型 */ }
+        return modelFallback(st, true); // 已配置但无可用数据
+      } catch (e) {
+        return modelFallback(st, true); // 请求/超时/解析异常
+      }
     }
-    const { base, startMs } = modelBase(st);
-    const series = buildSeries(base, startMs, Date.now());
-    const rawExtremes = classifyExtremes(modelExtremes(series));
-    return finalizeTide(st, series, rawExtremes, {
-      source: '调和模型估算(演示)', configured: false, model: true, datumLabel: '理论最低潮面 (LAT)',
-    });
+    return modelFallback(st, false); // 未配置凭证/站点代码
   }
   async function getAllTides() { return Promise.all(TIDE_STATIONS.map(async st => ({ ...st, ...(await getTide(st)) }))); }
 

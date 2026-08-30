@@ -959,9 +959,9 @@ function renderTides() {
     const marginTxt = t.exceeded
       ? `<span class="tide-warn">超警戒 ${Math.abs(t.margin).toFixed(2)} m</span>`
       : `距警戒 <b>${t.margin.toFixed(2)}</b> m`;
-    const badge = t.model
-      ? `<span class="tide-badge model">模型估算</span>`
-      : (t.real ? `<span class="tide-badge real">官方预报</span>` : `<span class="tide-badge real">实测</span>`);
+    const badge = t.real
+      ? `<span class="tide-badge real">官方预报</span>`
+      : (t.degraded ? `<span class="tide-badge degraded">官方失败·降级</span>` : `<span class="tide-badge model">模型估算</span>`);
     const extRows = (t.extremes || []).map(e => `
       <tr class="${e.next ? 'tide-next' : ''}">
         <td>${e.type === 'high' ? '▲ 高潮' : '▼ 低潮'}</td>

@@ -164,7 +164,7 @@ function buildMock() {
   };
   const tides = [
     {
-      name: '北海港', source: 'NMHC', configured: false, model: true, datumLabel: '理论最低潮面 (LAT)',
+      name: '北海港', source: 'NMHC', configured: false, model: true, degraded: false, datumLabel: '理论最低潮面 (LAT)',
       current: 2.4, trend: 'falling', rate: -0.42, meanLevel: 1.6, lowest: 0.3, highest: 3.1, range: 2.8,
       warnLevel: 4.0, margin: -1.6, exceeded: false,
       series: [
@@ -183,7 +183,7 @@ function buildMock() {
       ],
     },
     {
-      name: '铁山港', source: 'NMHC', configured: false, model: true, datumLabel: '理论最低潮面 (LAT)',
+      name: '铁山港', source: 'NMHC', configured: false, model: true, degraded: false, datumLabel: '理论最低潮面 (LAT)',
       current: 1.9, trend: 'rising', rate: 0.31, meanLevel: 1.6, lowest: 0.2, highest: 3.0, range: 2.8,
       warnLevel: 4.2, margin: -2.3, exceeded: false,
       series: [
@@ -200,6 +200,16 @@ function buildMock() {
         { t: '2026-08-28T03:00:00.000Z', h: 1.9 }, { t: '2026-08-28T04:00:00.000Z', h: 2.2 },
         { t: '2026-08-28T05:00:00.000Z', h: 2.5 }, { t: '2026-08-28T06:00:00.000Z', h: 2.4 },
       ],
+    },
+    {
+      name: '涠洲岛', source: '官方预报不可用·已降级模型', configured: true, model: true, real: false, degraded: true, datumLabel: '理论最低潮面 (LAT)',
+      current: 2.0, trend: 'flat', rate: 0, meanLevel: 1.6, lowest: 0.5, highest: 3.0, range: 2.5,
+      warnLevel: 3.8, margin: -1.8, exceeded: false,
+      series: [
+        { t: '2026-08-28T03:00:00.000Z', h: 2.0 }, { t: '2026-08-28T04:00:00.000Z', h: 2.0 },
+      ],
+      extremes: [], next: null,
+      hourly: [ { t: '2026-08-28T03:00:00.000Z', h: 2.0 } ],
     },
   ];
   const riverReservoir = {
@@ -380,6 +390,8 @@ function runAssertions() {
   ok(tb.indexOf('tide-tbl') >= 0 && tb.indexOf('高潮') >= 0 && tb.indexOf('低潮') >= 0, '潮汐模块渲染高潮/低潮预报表（tide-tbl）');
   ok(tb.indexOf('逐时潮位表') >= 0, '潮汐模块渲染逐时潮位表（24h）');
   ok(tb.indexOf('距警戒') >= 0 || tb.indexOf('超警戒') >= 0, '潮汐模块渲染当前潮位与警戒水位关系');
+  ok(tb.indexOf('模型估算') >= 0, '潮汐徽标：未配置显示「模型估算」');
+  ok(tb.indexOf('官方失败·降级') >= 0, '潮汐徽标：已配置但请求失败显示「官方失败·降级」（降级契约）');
   // 需求③：多源校核综合判定突出
   ok(rc.indexOf('rc-cons') >= 0, '多源校核综合判定已突出显示（需求③）');
   ok(rc.indexOf('综合判定') >= 0, '多源校核综合判定含标签（需求③）');

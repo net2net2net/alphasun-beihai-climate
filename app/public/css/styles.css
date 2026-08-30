@@ -190,6 +190,7 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .tide-badge{font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid var(--line)}
 .tide-badge.model{color:#d29922;border-color:#d29922}
 .tide-badge.real{color:#3fb950;border-color:#3fb950}
+.tide-badge.degraded{color:#fb8500;border-color:#fb8500}
 .tide-datum{font-size:10px}
 .tide-status{display:flex;align-items:flex-end;gap:12px;margin:6px 0 2px}
 .tide-cur{font-size:30px;font-weight:700;line-height:1;color:var(--accent)}
