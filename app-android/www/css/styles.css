@@ -185,8 +185,28 @@ body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,s
 .update-banner .ub-primary:hover{filter:brightness(1.08)}
 .update-banner .ub-ghost{background:transparent}
 @media (max-width:560px){.update-banner{flex-direction:column;align-items:stretch;text-align:center}.update-banner .ub-actions{justify-content:center}}
-.tide-st .nm{font-weight:600}
-.tide-ext{font-size:11px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
+.tide-st .nm{font-weight:600;font-size:13px}
+.tide-st-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tide-badge{font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid var(--line)}
+.tide-badge.model{color:#d29922;border-color:#d29922}
+.tide-badge.real{color:#3fb950;border-color:#3fb950}
+.tide-datum{font-size:10px}
+.tide-status{display:flex;align-items:flex-end;gap:12px;margin:6px 0 2px}
+.tide-cur{font-size:30px;font-weight:700;line-height:1;color:var(--accent)}
+.tide-cur-u{font-size:12px;color:var(--muted);margin-left:2px}
+.tide-status-meta{font-size:11px;color:var(--muted);line-height:1.6}
+.tide-next-line{color:var(--info)}
+.tide-tbl-wrap{margin-top:6px;overflow:auto}
+.tide-tbl{border-collapse:collapse;width:100%;font-size:11px}
+.tide-tbl th,.tide-tbl td{border-bottom:1px solid var(--line);padding:3px 6px;text-align:center}
+.tide-tbl th{color:var(--muted);font-weight:600}
+.tide-tbl tr.tide-next{background:rgba(251,133,0,.12)}
+.tide-hourly{margin-top:6px;font-size:11px}
+.tide-hourly summary{cursor:pointer;color:var(--info);user-select:none}
+.tide-hourly-strip{display:flex;gap:4px;overflow:auto;padding:6px 0;flex-wrap:nowrap}
+.tide-hcell{flex:0 0 auto;text-align:center;background:var(--bg3);border-radius:6px;padding:3px 5px;font-size:10px;color:var(--muted);min-width:40px;line-height:1.3}
+.tide-hcell b{color:var(--txt);font-size:11px}
+.tide-hcell.hi b{color:var(--red)}
 .glow-meter{height:10px;border-radius:5px;background:var(--bg3);overflow:hidden}
 .glow-fill{height:100%;background:linear-gradient(90deg,#fb8500,#f0a500,#ffd166)}
 

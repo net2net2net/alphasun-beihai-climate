@@ -23,10 +23,14 @@ const STATIONS = [
 ];
 
 // ===== 潮汐/水位 验潮站 =====
+// siteCode：国家海洋信息中心(NMDIS) 站点代码，用于 GetPortTideData。
+//   获取方式：注册 service-tide.nmdis.org.cn 取得 appid/appsecret 后，
+//   调用其「获取站点信息」接口或登录 global-tide.nmdis.org.cn 查各港代码；
+//   留空则潮汐模块降级为调和模型估算。同时需在运行环境设置 NMDIS_APPID / NMDIS_APPSECRET。
 const TIDE_STATIONS = [
-  { id: 'bhg',   name: '北海港',   lat: 21.48, lon: 109.07, datum: 0.0, warnLevel: 4.0 },
-  { id: 'tsg',   name: '铁山港',   lat: 21.40, lon: 109.47, datum: 0.0, warnLevel: 4.2 },
-  { id: 'wzd',   name: '涠洲岛',   lat: 21.05, lon: 109.10, datum: 0.0, warnLevel: 3.8 },
+  { id: 'bhg',   name: '北海港',   lat: 21.48, lon: 109.07, datum: 0.0, warnLevel: 4.0, siteCode: '' },
+  { id: 'tsg',   name: '铁山港',   lat: 21.40, lon: 109.47, datum: 0.0, warnLevel: 4.2, siteCode: '' },
+  { id: 'wzd',   name: '涠洲岛',   lat: 21.05, lon: 109.10, datum: 0.0, warnLevel: 3.8, siteCode: '' },
 ];
 
 // 北海地理中心（用于地震距离计算）

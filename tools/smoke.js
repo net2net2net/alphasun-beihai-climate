@@ -163,8 +163,44 @@ function buildMock() {
     moon: { nextNew: '2026-09-12', nextFull: '2026-08-29' },
   };
   const tides = [
-    { name: '北海港', source: 'NMHC', current: 1.5, warnLevel: 3.0, extremes: [{ type: 'high', time: '10:00', h: 2.8 }, { type: 'low', time: '16:00', h: 0.6 }] },
-    { name: '铁山港', source: 'NMHC', current: 1.2, warnLevel: 3.2, extremes: [{ type: 'high', time: '10:30', h: 3.0 }, { type: 'low', time: '16:30', h: 0.5 }] },
+    {
+      name: '北海港', source: 'NMHC', configured: false, model: true, datumLabel: '理论最低潮面 (LAT)',
+      current: 2.4, trend: 'falling', rate: -0.42, meanLevel: 1.6, lowest: 0.3, highest: 3.1, range: 2.8,
+      warnLevel: 4.0, margin: -1.6, exceeded: false,
+      series: [
+        { t: '2026-08-28T03:00:00.000Z', h: 2.4 }, { t: '2026-08-28T04:00:00.000Z', h: 2.1 },
+        { t: '2026-08-28T05:00:00.000Z', h: 1.7 }, { t: '2026-08-28T06:00:00.000Z', h: 1.3 },
+        { t: '2026-08-28T07:00:00.000Z', h: 1.0 }, { t: '2026-08-28T08:00:00.000Z', h: 0.8 },
+      ],
+      extremes: [
+        { idx: 5, time: '2026-08-28T08:00:00.000Z', h: 0.8, type: 'low', next: true, inHours: 5 },
+        { idx: 2, time: '2026-08-28T05:00:00.000Z', h: 1.7, type: 'high', next: false, inHours: 2 },
+      ],
+      next: { idx: 5, time: '2026-08-28T08:00:00.000Z', h: 0.8, type: 'low', inHours: 5 },
+      hourly: [
+        { t: '2026-08-28T03:00:00.000Z', h: 2.4 }, { t: '2026-08-28T04:00:00.000Z', h: 2.1 },
+        { t: '2026-08-28T05:00:00.000Z', h: 1.7 }, { t: '2026-08-28T06:00:00.000Z', h: 1.3 },
+      ],
+    },
+    {
+      name: '铁山港', source: 'NMHC', configured: false, model: true, datumLabel: '理论最低潮面 (LAT)',
+      current: 1.9, trend: 'rising', rate: 0.31, meanLevel: 1.6, lowest: 0.2, highest: 3.0, range: 2.8,
+      warnLevel: 4.2, margin: -2.3, exceeded: false,
+      series: [
+        { t: '2026-08-28T03:00:00.000Z', h: 1.9 }, { t: '2026-08-28T04:00:00.000Z', h: 2.2 },
+        { t: '2026-08-28T05:00:00.000Z', h: 2.5 }, { t: '2026-08-28T06:00:00.000Z', h: 2.4 },
+        { t: '2026-08-28T07:00:00.000Z', h: 2.0 }, { t: '2026-08-28T08:00:00.000Z', h: 1.5 },
+      ],
+      extremes: [
+        { idx: 2, time: '2026-08-28T05:00:00.000Z', h: 2.5, type: 'high', next: true, inHours: 2 },
+        { idx: 5, time: '2026-08-28T08:00:00.000Z', h: 1.5, type: 'low', next: false, inHours: 5 },
+      ],
+      next: { idx: 2, time: '2026-08-28T05:00:00.000Z', h: 2.5, type: 'high', inHours: 2 },
+      hourly: [
+        { t: '2026-08-28T03:00:00.000Z', h: 1.9 }, { t: '2026-08-28T04:00:00.000Z', h: 2.2 },
+        { t: '2026-08-28T05:00:00.000Z', h: 2.5 }, { t: '2026-08-28T06:00:00.000Z', h: 2.4 },
+      ],
+    },
   ];
   const riverReservoir = {
     ok: true, realtime: false, realtimeStatus: 'unreachable', source: '公开资料',
@@ -338,6 +374,12 @@ function runAssertions() {
   const wc = (els['worldClockMount'] && els['worldClockMount'].innerHTML) || '';
   ok(wc.indexOf('wc-top') >= 0, '世界时钟：机械钟/电子钟与对时区已用 wc-top 行布局包裹');
   ok(wc.indexOf('wc-sync') >= 0 && wc.indexOf('wc-sync') > wc.indexOf('wc-analog'), '世界时钟：对时区位于机械钟/电子钟右侧');
+  // 潮汐/水位模块：波形曲线 + 高潮低潮预报表 + 逐时潮位表 已渲染
+  const tb = (els['tideBody'] && els['tideBody'].innerHTML) || '';
+  ok(tb.indexOf('tide-svg') >= 0, '潮汐模块渲染 48h 潮位波形曲线（tide-svg）');
+  ok(tb.indexOf('tide-tbl') >= 0 && tb.indexOf('高潮') >= 0 && tb.indexOf('低潮') >= 0, '潮汐模块渲染高潮/低潮预报表（tide-tbl）');
+  ok(tb.indexOf('逐时潮位表') >= 0, '潮汐模块渲染逐时潮位表（24h）');
+  ok(tb.indexOf('距警戒') >= 0 || tb.indexOf('超警戒') >= 0, '潮汐模块渲染当前潮位与警戒水位关系');
   // 需求③：多源校核综合判定突出
   ok(rc.indexOf('rc-cons') >= 0, '多源校核综合判定已突出显示（需求③）');
   ok(rc.indexOf('综合判定') >= 0, '多源校核综合判定含标签（需求③）');

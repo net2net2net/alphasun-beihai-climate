@@ -821,29 +821,55 @@ function moonPhaseSVG(p) {
   </svg>`;
 }
 
-// 潮汐曲线：基于高低潮极值连线，标出当前潮位
-function tideSVG(t) {
-  const W = 240, H = 70, padX = 14, base = 56, top = 10;
-  const ex = (t.extremes || []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
-  if (ex.length < 2) return '';
-  const hs = ex.map(e => e.h);
-  const minH = Math.min(...hs), maxH = Math.max(...hs);
-  const span = (maxH - minH) || 1;
-  const yOf = h => base - (h - minH) / span * (base - top);
-  const xOf = (i) => padX + i * (W - 2 * padX) / (ex.length - 1);
-  const dpath = ex.map((e, i) => (i ? 'L' : 'M') + xOf(i).toFixed(1) + ' ' + yOf(e.h).toFixed(1)).join(' ');
-  const dots = ex.map((e, i) => {
-    const isHigh = e.type === 'high';
-    return `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(e.h).toFixed(1)}" r="3" fill="${isHigh ? '#58a6ff' : '#3fb950'}"/>`;
+// 潮汐曲线：连续 48h 波形（Catmull-Rom 平滑），标注高/低潮、当前潮位、警戒水位
+function tideSmooth(p) {
+  if (p.length < 2) return '';
+  let d = `M ${p[0][0].toFixed(1)} ${p[0][1].toFixed(1)}`;
+  for (let i = 0; i < p.length - 1; i++) {
+    const p0 = p[i - 1] || p[i], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+function fmtHM(iso) { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function fmtMD(iso) { const d = new Date(iso); return (d.getMonth() + 1) + '/' + d.getDate(); }
+function tideWaveSVG(t) {
+  const series = t.series || [];
+  if (series.length < 2) return '';
+  const W = 320, H = 108, padX = 20, padTop = 14, padBot = 22;
+  let lo = Math.min(...series.map(s => s.h)), hi = Math.max(...series.map(s => s.h));
+  lo = Math.min(lo, t.warnLevel); hi = Math.max(hi, t.warnLevel);
+  const span = (hi - lo) || 1;
+  const yOf = h => padTop + (hi - h) / span * (H - padTop - padBot);
+  const xOf = i => padX + i * (W - 2 * padX) / (series.length - 1);
+  const pts = series.map((s, i) => [xOf(i), yOf(s.h)]);
+  const line = tideSmooth(pts);
+  const area = line + ` L ${xOf(series.length - 1).toFixed(1)} ${(H - padBot).toFixed(1)} L ${padX.toFixed(1)} ${(H - padBot).toFixed(1)} Z`;
+  const marks = (t.extremes || []).map(e => {
+    const x = xOf(e.idx), y = yOf(e.h), high = e.type === 'high';
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${high ? '#58a6ff' : '#3fb950'}" ${e.next ? 'stroke="#fb8500" stroke-width="1.6"' : ''}/>` +
+      `<text x="${x.toFixed(1)}" y="${(y + (high ? -6 : 12)).toFixed(1)}" font-size="8" fill="${high ? '#58a6ff' : '#3fb950'}" text-anchor="middle">${e.h.toFixed(1)}</text>`;
   }).join('');
-  const curY = yOf(Math.max(minH, Math.min(maxH, t.current)));
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:4px">
-    <line x1="${padX}" y1="${base}" x2="${W - padX}" y2="${base}" stroke="#33414f" stroke-width="1"/>
-    <path d="${dpath}" fill="none" stroke="#58a6ff" stroke-width="1.6"/>
-    ${dots}
-    <line x1="${padX}" y1="${curY.toFixed(1)}" x2="${W - padX}" y2="${curY.toFixed(1)}" stroke="#fb8500" stroke-width="1" stroke-dasharray="3 3"/>
-    <circle cx="${W - padX}" cy="${curY.toFixed(1)}" r="3.5" fill="#fb8500"/>
-    <text x="${W - padX}" y="${(curY - 6).toFixed(1)}" font-size="9" fill="#fb8500" text-anchor="end">现 ${t.current}m</text>
+  const wy = yOf(t.warnLevel);
+  const warnLine = `<line x1="${padX}" y1="${wy.toFixed(1)}" x2="${(W - padX).toFixed(1)}" y2="${wy.toFixed(1)}" stroke="#e5484d" stroke-width="1" stroke-dasharray="4 3" opacity=".7"/>` +
+    `<text x="${(W - padX).toFixed(1)}" y="${(wy - 3).toFixed(1)}" font-size="8" fill="#e5484d" text-anchor="end">警戒 ${t.warnLevel}</text>`;
+  const cx = xOf(0), cy = yOf(t.current);
+  const cur = `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5" fill="#fb8500"/>` +
+    `<text x="${(cx + 4).toFixed(1)}" y="${(cy - 5).toFixed(1)}" font-size="8" fill="#fb8500">现 ${t.current.toFixed(2)}</text>`;
+  let ticks = '';
+  for (let hh = 0; hh <= 48; hh += 6) {
+    const idx = hh * 4; if (idx >= series.length) break;
+    const x = xOf(idx);
+    ticks += `<text x="${x.toFixed(1)}" y="${(H - 7).toFixed(1)}" font-size="8" fill="#8b949e" text-anchor="middle">${hh === 0 ? '现在' : '+' + hh + 'h'}</text>`;
+  }
+  const yl = `<text x="${(padX - 3).toFixed(1)}" y="${(padTop + 2).toFixed(1)}" font-size="8" fill="#8b949e" text-anchor="end">${hi.toFixed(1)}</text>` +
+    `<text x="${(padX - 3).toFixed(1)}" y="${(H - padBot).toFixed(1)}" font-size="8" fill="#8b949e" text-anchor="end">${lo.toFixed(1)}</text>`;
+  return `<svg class="tide-svg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:6px">
+    <path d="${area}" fill="rgba(88,166,255,.12)" stroke="none"/>
+    <path d="${line}" fill="none" stroke="#58a6ff" stroke-width="1.8"/>
+    ${warnLine}${marks}${cur}${yl}${ticks}
   </svg>`;
 }
 
@@ -926,13 +952,52 @@ function renderMorningGlow() {
 }
 
 function renderTides() {
-  $('tideBody').innerHTML = state.data.tides.map(t => `
-    <div class="tide-st">
-      <div class="nm">${t.name} <span class="muted" style="font-size:11px">（${t.source}）</span></div>
-      <div>当前潮位 <b>${''}</b><b class="${t.current >= t.warnLevel ? 'tide-warn' : ''}">${t.current} m</b> · 警戒 ${t.warnLevel} m</div>
-      <div class="tide-ext">${t.extremes.map(e=>`<span>${e.type==='high'?'▲高':'▼低'} ${fmt(e.time)} ${e.h}m</span>`).join('')}</div>
-      ${tideSVG(t)}
-    </div>`).join('');
+  const tides = (state.data.tides || []);
+  if (!tides.length) { $('tideBody').innerHTML = '<div class="muted">潮汐数据暂不可用</div>'; return; }
+  $('tideBody').innerHTML = tides.map(t => {
+    const trendTxt = t.trend === 'rising' ? '涨潮 ▲' : t.trend === 'falling' ? '落潮 ▼' : '平潮 —';
+    const marginTxt = t.exceeded
+      ? `<span class="tide-warn">超警戒 ${Math.abs(t.margin).toFixed(2)} m</span>`
+      : `距警戒 <b>${t.margin.toFixed(2)}</b> m`;
+    const badge = t.model
+      ? `<span class="tide-badge model">模型估算</span>`
+      : (t.real ? `<span class="tide-badge real">官方预报</span>` : `<span class="tide-badge real">实测</span>`);
+    const extRows = (t.extremes || []).map(e => `
+      <tr class="${e.next ? 'tide-next' : ''}">
+        <td>${e.type === 'high' ? '▲ 高潮' : '▼ 低潮'}</td>
+        <td>${fmtMD(e.time)}</td>
+        <td>${fmtHM(e.time)}</td>
+        <td>${e.h.toFixed(2)}</td>
+        <td>${e.inHours >= 0 ? '+' + e.inHours + 'h' : e.inHours + 'h'}</td>
+      </tr>`).join('');
+    const hourlyCells = (t.hourly || []).map(s => {
+      const hi = s.h >= t.warnLevel;
+      return `<span class="tide-hcell ${hi ? 'hi' : ''}">${fmtHM(s.t)}<br><b>${s.h.toFixed(2)}</b></span>`;
+    }).join('');
+    const nextTxt = t.next
+      ? `下次${t.next.type === 'high' ? '高潮' : '低潮'} ${fmtMD(t.next.time)} ${fmtHM(t.next.time)}（${t.next.inHours >= 0 ? '+' + t.next.inHours : t.next.inHours}h）`
+      : '近期无极值';
+    return `<div class="tide-st">
+      <div class="tide-st-h"><span class="nm">${t.name}</span>${badge}
+        <span class="muted tide-datum">基准面：${t.datumLabel || 'LAT'}</span></div>
+      <div class="tide-status">
+        <div class="tide-cur"><span class="tide-cur-v ${t.exceeded ? 'tide-warn' : ''}">${t.current.toFixed(2)}</span><span class="tide-cur-u">m</span></div>
+        <div class="tide-status-meta">
+          <div>${trendTxt} <span class="muted">${t.rate > 0 ? '+' : ''}${t.rate.toFixed(2)} m/h</span></div>
+          <div>${marginTxt}</div>
+          <div class="muted">均值 ${t.meanLevel} · 变幅 ${t.range} · 预警 ${t.warnLevel} m</div>
+          <div class="tide-next-line">${nextTxt}</div>
+        </div>
+      </div>
+      ${tideWaveSVG(t)}
+      <div class="tide-tbl-wrap">
+        <table class="tide-tbl"><thead><tr><th>潮型</th><th>日期</th><th>时刻</th><th>潮高(m)</th><th>距今</th></tr></thead>
+        <tbody>${extRows}</tbody></table>
+      </div>
+      <details class="tide-hourly"><summary>逐时潮位表（未来 24h）</summary>
+        <div class="tide-hourly-strip">${hourlyCells}</div></details>
+    </div>`;
+  }).join('');
 }
 
 function renderForecast(days, targetId) {

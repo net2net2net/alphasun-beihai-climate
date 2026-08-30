@@ -78,6 +78,24 @@
     clearTimeout(t);
     return r.text();
   }
+  // 原生 POST → 解析后的对象（NMDIS 认证头 appid/appsecret + 空 body；原生直连不经代理以绕 CORS）
+  async function httpPostParsed(url, headers, bodyObj) {
+    if (CapHttp) {
+      const resp = await CapHttp.post({ url, headers: headers || {}, data: bodyObj || {} });
+      if (!resp || resp.status == null || resp.status < 200 || resp.status >= 300) {
+        throw new Error('HTTP ' + (resp && resp.status != null ? resp.status : 'no-response'));
+      }
+      let body = resp.data;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch (_) {} }
+      return body;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 15000);
+    const r = await fetch(proxied(url), { method: 'POST', signal: ctrl.signal, headers: headers || {}, body: JSON.stringify(bodyObj || {}) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    clearTimeout(t);
+    return r.json();
+  }
 
   // ===================== 配置中心 =====================
   const STATIONS = [
@@ -97,10 +115,11 @@
       area: 26.63, pop: 19300,
       poly: [[21.0147,109.0885],[21.0057,109.0999],[21.0075,109.106],[21.0148,109.102],[21.0227,109.1023],[21.025,109.1121],[21.0178,109.1181],[21.0151,109.1258],[21.0158,109.1308],[21.0275,109.137],[21.0413,109.1445],[21.0578,109.145],[21.0716,109.1289],[21.065,109.1068],[21.0528,109.0876],[21.0433,109.0858],[21.0203,109.0858],[21.0147,109.0885]] },
   ];
+  // siteCode：国家海洋信息中心(NMDIS) 站点代码（同 web 端 config.js，留空则降级模型）
   const TIDE_STATIONS = [
-    { id: 'bhg',   name: '北海港',   lat: 21.48, lon: 109.07, datum: 0.0, warnLevel: 4.0 },
-    { id: 'tsg',   name: '铁山港',   lat: 21.40, lon: 109.47, datum: 0.0, warnLevel: 4.2 },
-    { id: 'wzd',   name: '涠洲岛',   lat: 21.05, lon: 109.10, datum: 0.0, warnLevel: 3.8 },
+    { id: 'bhg',   name: '北海港',   lat: 21.48, lon: 109.07, datum: 0.0, warnLevel: 4.0, siteCode: '' },
+    { id: 'tsg',   name: '铁山港',   lat: 21.40, lon: 109.47, datum: 0.0, warnLevel: 4.2, siteCode: '' },
+    { id: 'wzd',   name: '涠洲岛',   lat: 21.05, lon: 109.10, datum: 0.0, warnLevel: 3.8, siteCode: '' },
   ];
   const CENTER = { lat: 21.48, lon: 109.11, name: '北海' };
   const API = {
@@ -600,6 +619,7 @@
   }
 
   // ===================== 潮汐/水位 =====================
+  // 与 web 端 app/lib/tides.js 字段级一致：NMDIS 官方预报优先，缺凭据/站点代码时降级调和模型。
   const CONSTITUENTS = [
     { name: 'M2', amp: 1.9, period: 12.4206, phase: 1.2 },
     { name: 'S2', amp: 0.7, period: 12.0000, phase: 0.4 },
@@ -607,42 +627,148 @@
     { name: 'O1', amp: 0.3, period: 25.8194, phase: 5.0 },
   ];
   const MEAN_LEVEL = 1.6;
-  function tideAt(date) {
+  function tideAt(date, phaseOff) {
     const t = date.getTime() / 1000;
     let h = MEAN_LEVEL;
-    for (const c of CONSTITUENTS) h += c.amp * Math.cos((2 * Math.PI * t) / (c.period * 3600) - c.phase);
-    return +h.toFixed(2);
+    for (const c of CONSTITUENTS) h += c.amp * Math.cos((2 * Math.PI * t) / (c.period * 3600) - c.phase + (phaseOff || 0));
+    return +Math.max(0, h).toFixed(2); // 相对理论最低潮面(LAT)
   }
-  function predictDay(st) {
-    const out = [];
-    const now = new Date();
-    for (let i = 0; i < 24 * 4; i++) {
-      const t = new Date(now.getTime() + i * 15 * 60000);
-      out.push({ time: t.toISOString(), h: tideAt(t) });
+  function localDateStr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function sampleBase(base, startMs, ms) {
+    const hr = (ms - startMs) / 3600000;
+    if (hr <= 0) return base[0];
+    if (hr >= base.length - 1) return base[base.length - 1];
+    const i0 = Math.floor(hr), frac = hr - i0;
+    return base[i0] + (base[i0 + 1] - base[i0]) * frac;
+  }
+  function buildSeries(base, startMs, nowMs, STEP_MIN = 15, HORIZON_H = 48) {
+    const n = HORIZON_H * 60 / STEP_MIN, series = [];
+    for (let i = 0; i <= n; i++) {
+      const ms = nowMs + i * STEP_MIN * 60000;
+      series.push({ t: new Date(ms).toISOString(), h: +sampleBase(base, startMs, ms).toFixed(2) });
     }
+    return series;
+  }
+  function modelBase(st) {
+    const phaseOff = (st.lon - 109.11) * 0.3;
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const startMs = start.getTime(), base = [];
+    for (let k = 0; k < 48; k++) base.push(tideAt(new Date(startMs + k * 3600000), phaseOff));
+    return { base, startMs };
+  }
+  function modelExtremes(series) {
     const ext = [];
-    for (let i = 1; i < out.length - 1; i++) {
-      if ((out[i].h > out[i - 1].h && out[i].h >= out[i + 1].h) || (out[i].h < out[i - 1].h && out[i].h <= out[i + 1].h)) {
-        ext.push({ time: out[i].time, h: out[i].h, type: out[i].h >= MEAN_LEVEL ? 'high' : 'low' });
-      }
+    for (let i = 1; i < series.length - 1; i++) {
+      const a = series[i - 1].h, b = series[i].h, c = series[i + 1].h;
+      if ((b > a && b >= c) || (b < a && b <= c)) ext.push({ time: series[i].t, h: b, type: b >= MEAN_LEVEL ? 'high' : 'low' });
     }
-    return { current: +tideAt(now).toFixed(2), extremes: ext.slice(0, 4) };
+    return ext;
+  }
+  // 解析 NMDIS 单日返回：a0..a23 逐时潮高(cm) + csN/cgN 高低潮（时分 HH:MM / 潮高 cm）
+  function parseNmdisDay(data, dateStr) {
+    const hourly = [];
+    for (let h = 0; h <= 23; h++) {
+      const v = data['a' + h];
+      if (typeof v !== 'number') break;
+      hourly.push(+(v / 100).toFixed(2)); // cm → m（相对海图基准面/LAT）
+    }
+    const extremes = [];
+    for (let i = 0; i < 12; i++) {
+      const ts = data['cs' + i], g = data['cg' + i];
+      if (ts == null || g == null) break;
+      const parts = String(ts).split(':');
+      const d = new Date(dateStr + 'T00:00:00');
+      d.setHours(+parts[0], +(parts[1] || 0), 0, 0);
+      extremes.push({ time: d.toISOString(), h: +(g / 100).toFixed(2), type: g >= 0 ? 'high' : 'low' });
+    }
+    return { hourly, extremes, benchmark: data.Benchmark || null };
+  }
+  function classifyExtremes(exts) {
+    return exts.map((e, i) => {
+      const prev = exts[i - 1] && exts[i - 1].h, next = exts[i + 1] && exts[i + 1].h;
+      const isHigh = (prev == null || e.h > prev) && (next == null || e.h > next);
+      return { time: e.time, h: e.h, type: isHigh ? 'high' : 'low' };
+    });
+  }
+  function sampleSeries(series, ms) {
+    const t0 = new Date(series[0].t).getTime();
+    const f = (ms - t0) / (15 * 60000);
+    if (f <= 0) return series[0].h;
+    if (f >= series.length - 1) return series[series.length - 1].h;
+    const i0 = Math.floor(f), frac = f - i0;
+    return series[i0].h + (series[i0 + 1].h - series[i0].h) * frac;
+  }
+  function finalizeTide(st, series, rawExtremes, meta) {
+    const nowMs = new Date(series[0].t).getTime();
+    const lastMs = new Date(series[series.length - 1].t).getTime();
+    const STEP_MS = 15 * 60000;
+    const current = series[0].h;
+    const h30 = sampleSeries(series, nowMs + 30 * 60000);
+    const rate = +((h30 - current) / 0.5).toFixed(3);
+    const trend = Math.abs(rate) < 0.02 ? 'flat' : (rate > 0 ? 'rising' : 'falling');
+    const ext = (rawExtremes || [])
+      .filter(e => { const ms = new Date(e.time).getTime(); return ms >= nowMs && ms <= lastMs; })
+      .sort((a, b) => new Date(a.time) - new Date(b.time))
+      .map(e => {
+        const ms = new Date(e.time).getTime();
+        const idx = Math.max(0, Math.min(series.length - 1, Math.round((ms - nowMs) / STEP_MS)));
+        return { idx, time: e.time, h: e.h, type: e.type, inHours: +((ms - nowMs) / 3600000).toFixed(1) };
+      });
+    let next = null;
+    for (const e of ext) { if (new Date(e.time).getTime() >= nowMs) { next = e; break; } }
+    if (next) ext.forEach(e => { e.next = (e.time === next.time); });
+    const hs = series.map(s => s.h);
+    const lowest = +Math.min(...hs).toFixed(2), highest = +Math.max(...hs).toFixed(2);
+    const meanLevel = +(hs.reduce((a, b) => a + b, 0) / hs.length).toFixed(2);
+    const perHour = 60 / 15, hourly = [];
+    for (let k = 0; k <= 24; k++) hourly.push(series[Math.min(k * perHour, series.length - 1)]);
+    return {
+      ok: true, source: meta.source, configured: meta.configured, model: !!meta.model, real: !!meta.real,
+      datumLabel: meta.datumLabel || '理论最低潮面 (LAT)',
+      meanLevel, current, trend, rate, lowest, highest, range: +(highest - lowest).toFixed(2),
+      warnLevel: st.warnLevel, margin: +(current - st.warnLevel).toFixed(2), exceeded: current >= st.warnLevel,
+      series, extremes: ext, next, hourly,
+    };
+  }
+  // NMDIS 请求（原生经 CapacitorHttp.post 直连；PWA 经 fetch+代理。认证头 appid/appsecret，空 body）
+  async function nmdisFetch(siteCode, dateStr) {
+    const url = `${API.nmdis}/api/v1/CoreData/GetPortTideData?SiteCode=${encodeURIComponent(siteCode)}&Date=${dateStr}`;
+    const headers = { 'Content-Type': 'application/json', appid: NMDIS_APPID, appsecret: NMDIS_APPSECRET };
+    const j = await httpPostParsed(url, headers, {});
+    if (!j || j.ResultCode !== '200' || !j.ResultValue || !j.ResultValue.data) return null;
+    return j.ResultValue;
   }
   async function getTide(st) {
-    if (NMDIS_APPID && NMDIS_APPSECRET) {
+    if (NMDIS_APPID && NMDIS_APPSECRET && st.siteCode) {
       try {
-        const res = await fetch(proxied(`${API.nmdis}/GetPortTideData`), {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ appid: NMDIS_APPID, appsecret: NMDIS_APPSECRET, port: st.name }),
-        });
-        if (res.ok) {
-          const d = await res.json();
-          return { ok: true, source: '国家海洋信息中心', current: d.cur, extremes: d.extremes, warnLevel: st.warnLevel };
+        const today = new Date();
+        const d0 = localDateStr(today), d1 = localDateStr(new Date(today.getTime() + 86400000));
+        const [r0, r1] = await Promise.all([nmdisFetch(st.siteCode, d0), nmdisFetch(st.siteCode, d1)]);
+        if (r0 && r0.data) {
+          const p0 = parseNmdisDay(r0.data, d0);
+          const p1 = r1 && r1.data ? parseNmdisDay(r1.data, d1) : null;
+          if (p0.hourly.length === 24) {
+            const base = p0.hourly.concat(p1 && p1.hourly.length === 24 ? p1.hourly : []);
+            const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+            const startMs = start.getTime();
+            const series = buildSeries(base, startMs, today.getTime());
+            const rawExtremes = classifyExtremes(p0.extremes.concat(p1 ? p1.extremes : []));
+            const benchmark = p0.benchmark || (r0.report && r0.report.Benchmark) || null;
+            return finalizeTide(st, series, rawExtremes, {
+              source: '国家海洋信息中心(预报)', configured: true, real: true,
+              datumLabel: benchmark ? ('海图基准面：' + benchmark) : '理论最低潮面 (LAT)',
+            });
+          }
         }
-      } catch (e) { /* fallthrough to model */ }
+      } catch (e) { /* 落回模型 */ }
     }
-    const p = predictDay(st);
-    return { ok: true, source: '调和模型估算(演示)', configured: false, current: p.current, extremes: p.extremes, warnLevel: st.warnLevel, meanLevel: MEAN_LEVEL, exceeded: p.current >= st.warnLevel };
+    const { base, startMs } = modelBase(st);
+    const series = buildSeries(base, startMs, Date.now());
+    const rawExtremes = classifyExtremes(modelExtremes(series));
+    return finalizeTide(st, series, rawExtremes, {
+      source: '调和模型估算(演示)', configured: false, model: true, datumLabel: '理论最低潮面 (LAT)',
+    });
   }
   async function getAllTides() { return Promise.all(TIDE_STATIONS.map(async st => ({ ...st, ...(await getTide(st)) }))); }
 
