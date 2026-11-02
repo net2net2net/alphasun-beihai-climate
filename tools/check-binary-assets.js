@@ -30,6 +30,7 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { execFileSync } = require('child_process');
 
 // ---------------------------------------------------------------------------
 // 格式定义：magic bytes（文件头）
@@ -113,6 +114,63 @@ function walk(dir, rel, out) {
 }
 
 // ---------------------------------------------------------------------------
+// 遍历仓库内「所有」含 NUL 字节的文件（真二进制，与扩展名白名单无关）
+// 用途：确保任何二进制资产都被 .gitattributes 的 binary 规则覆盖。
+// 背景：若将来引入白名单外的二进制格式（如 .bin / .dat / 新字体），
+//       仅按扩展名扫描的门禁会完全看不见它 —— 保护规则与实际资产就会脱节。
+// ---------------------------------------------------------------------------
+function walkBinaryContent(dir, rel, out) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
+  for (const ent of entries) {
+    if (ent.name === '.git' || ent.name === 'node_modules' || ent.name === 'dist') continue;
+    const abs = path.join(dir, ent.name);
+    const r = rel ? rel + '/' + ent.name : ent.name;
+    if (ent.isDirectory()) { walkBinaryContent(abs, r, out); continue; }
+    let buf;
+    try { buf = fs.readFileSync(abs); } catch (e) { continue; }
+    if (buf.length && buf.includes(0)) out.push(r);
+  }
+  return out;
+}
+
+/**
+ * 用 `git check-attr` 判定每个文件是否被 binary 规则保护 —— 这是权威来源，
+ * 能识别任意形态的规则（`*.ext` / `*.tar.gz` / 路径型 `dir/** binary` 等）。
+ * 返回 Map<相对路径, boolean>；不在 git 仓库或 git 不可用时返回 null，
+ * 由调用方回退到「按扩展名判定」。
+ */
+function queryGitBinaryAttrs(root, files) {
+  if (!files.length) return new Map();
+  let out;
+  try {
+    out = execFileSync('git', ['check-attr', 'text', 'diff', '--'].concat(files), {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch (e) {
+    return null;
+  }
+  // 输出形如 "<path>: <attr>: <value>"（path 可能含 ':'，故用贪婪匹配锚定末尾）
+  const re = /^(.*): (\w+): (.*)$/;
+  const attrs = new Map();
+  for (const line of String(out).split(/\r?\n/)) {
+    const m = re.exec(line);
+    if (!m) continue;
+    const [, p, attr, val] = m;
+    if (!attrs.has(p)) attrs.set(p, {});
+    attrs.get(p)[attr] = val;
+  }
+  const map = new Map();
+  for (const [p, a] of attrs) {
+    // binary 宏 = -text -diff → git check-attr 报 "unset"
+    map.set(p, a.text === 'unset' && a.diff === 'unset');
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
 // .gitattributes 规则检查
 // ---------------------------------------------------------------------------
 function checkGitattributes(root, presentExts) {
@@ -124,7 +182,7 @@ function checkGitattributes(root, presentExts) {
       msg: '.gitattributes 存在（二进制资产需要 binary 规则保护，否则 git add 会损坏 PNG）',
       level: 'error',
     });
-    return { checks, exists: false };
+    return { checks, exists: false, binaryExts: new Set() };
   }
   const lines = fs.readFileSync(gaPath, 'utf8').split(/\r?\n/);
   // 找到每个 binary 规则与其后是否还有针对同目录的 text 规则
@@ -144,6 +202,17 @@ function checkGitattributes(root, presentExts) {
     msg: '.gitattributes 存在（已读取 ' + lines.length + ' 行规则）',
     level: 'info',
   });
+  // 记录哪些扩展名有 binary 规则（供「全仓二进制覆盖兜底」检查复用）
+  // 注意：模式形如 `*.png`，去掉前缀 `*` 后得到 `.png` —— 若再交给 path.extname()
+  // 会被当成「点开头无扩展名的文件」而返回空串，所以这里直接取模式末尾的扩展名。
+  const binaryExts = new Set(
+    binaryRuleIdx
+      .map(r => {
+        const m = r.pattern.match(/^\*(\.[A-Za-z0-9]+)$/);
+        return m ? m[1].toLowerCase() : '';
+      })
+      .filter(Boolean)
+  );
   // 只对「仓库里真实存在的扩展名」要求 binary 规则 —— 不为不存在的格式设门槛，
   // 避免门禁产生噪音而掩盖真正的问题。
   for (const ext of BINARY_EXTS) {
@@ -166,7 +235,7 @@ function checkGitattributes(root, presentExts) {
       level: 'error',
     });
   }
-  return { checks, exists: true };
+  return { checks, exists: true, binaryExts };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,15 +282,43 @@ function runChecks(opts) {
     }
   }
 
-  // 2) .gitattributes 规则
   // 2) .gitattributes 规则（只对仓库内真实存在的格式提要求）
   const presentExts = new Set(files.map(f => path.extname(f).toLowerCase()));
   const ga = checkGitattributes(root, presentExts);
   checks.push(...ga.checks);
 
+  // 3) 覆盖兜底：全仓「真二进制」（含 NUL 字节）文件是否都被 binary 规则保护。
+  //    这一项不依赖扩展名白名单 —— 白名单外的二进制格式也能被看见。
+  const allBinaries = walkBinaryContent(root, '', []);
+  const uncovered = [];
+  // 判定「某个文件是否被 binary 规则保护」的权威来源是 git 自己的属性解析
+  // （git check-attr），它能识别任意形态的规则：*.ext / *.tar.gz / 路径型 /** 等。
+  // 若只用正则从 .gitattributes 里抠扩展名，遇到非 `*.<ext>` 形态的规则会误报
+  // 「未受保护」（实测：*.tar.gz binary 与路径型规则都会误报）。
+  // 因此优先用 git check-attr；不在 git 仓库 / 无 git 时回退到扩展名判定。
+  const attrProtected = queryGitBinaryAttrs(root, allBinaries);
+  for (const rel of allBinaries) {
+    let binaryRule;
+    if (attrProtected) {
+      binaryRule = attrProtected.get(rel) === true;
+    } else {
+      // 回退：按扩展名判定（仅能识别 `*.<ext>` 形态）
+      const ext = path.extname(rel).toLowerCase();
+      binaryRule = !!(ga.binaryExts && ga.binaryExts.has(ext));
+    }
+    if (!binaryRule) uncovered.push(rel);
+  }
+  checks.push({
+    ok: uncovered.length === 0,
+    msg: '全仓二进制文件均被 .gitattributes 的 binary 规则覆盖（共 ' + allBinaries.length + ' 个真二进制）',
+    level: 'error',
+    detail: uncovered.length ? '未受保护：' + uncovered.join(', ') : '',
+  });
+
   return {
     checks,
     scanned: files.length,
+    binaryScanned: allBinaries.length,
     failed: checks.filter(c => !c.ok).length,
     passed: checks.filter(c => c.ok).length,
   };
@@ -237,8 +334,10 @@ function main() {
     console.log('=== 二进制资产完整性校验 ===');
     console.log('扫描文件数：' + res.scanned);
     console.log('');
+    // 全部检查都列出（含 info 级）：汇总「通过 N」必须与可见行数一致，
+    // 否则读者会误判门禁覆盖范围 —— 曾因隐藏 info 级断言，
+    // 误以为 docs/screenshot.jpg 没有专属校验（实际第 10 条就是它）。
     for (const c of res.checks) {
-      if (c.level === 'info' && res.failed === 0) continue;
       console.log((c.ok ? '  ✓ ' : '  ✗ ') + c.msg + (c.ok || !c.detail ? '' : '\n      → ' + c.detail));
     }
   }
