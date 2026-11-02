@@ -148,6 +148,9 @@ function queryGitBinaryAttrs(root, files) {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 16 * 1024 * 1024,
+      // 静默 git 的 stderr：不在 git 仓库内时它会打印 "fatal: not a git repository"，
+      // 那只是「走回退路径」的信号，不该污染门禁输出。
+      stdio: ['ignore', 'pipe', 'ignore'],
     });
   } catch (e) {
     return null;
@@ -205,11 +208,16 @@ function checkGitattributes(root, presentExts) {
   // 记录哪些扩展名有 binary 规则（供「全仓二进制覆盖兜底」检查复用）
   // 注意：模式形如 `*.png`，去掉前缀 `*` 后得到 `.png` —— 若再交给 path.extname()
   // 会被当成「点开头无扩展名的文件」而返回空串，所以这里直接取模式末尾的扩展名。
+  // 扩展名**不做大小写归一**：git 的路径匹配是大小写敏感的（CI runner 是 Linux，
+  // core.ignorecase=false），回退路径必须与 git check-attr 在 CI 上的判定一致，
+  // 否则同一份仓库在两条路径下会得出相反结论。
+  // 注：Windows 上 core.ignorecase=true 时 git 会大小写不敏感地匹配 `*.png`，
+  // 此时两条路径会分歧 —— 回退路径选择「报未保护」（宁可误报也不漏报）。
   const binaryExts = new Set(
     binaryRuleIdx
       .map(r => {
         const m = r.pattern.match(/^\*(\.[A-Za-z0-9]+)$/);
-        return m ? m[1].toLowerCase() : '';
+        return m ? m[1] : '';
       })
       .filter(Boolean)
   );
@@ -302,8 +310,8 @@ function runChecks(opts) {
     if (attrProtected) {
       binaryRule = attrProtected.get(rel) === true;
     } else {
-      // 回退：按扩展名判定（仅能识别 `*.<ext>` 形态）
-      const ext = path.extname(rel).toLowerCase();
+      // 回退：按扩展名判定（仅能识别 `*.<ext>` 形态；大小写敏感，与 git 一致）
+      const ext = path.extname(rel);
       binaryRule = !!(ga.binaryExts && ga.binaryExts.has(ext));
     }
     if (!binaryRule) uncovered.push(rel);
