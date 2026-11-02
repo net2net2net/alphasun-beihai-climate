@@ -564,6 +564,48 @@ function runAssertions() {
       ok(false, 'NMDIS 站点代码解析断言未抛错: ' + (e.stack || e.message));
   }
 
+  // -------------------------------------------------------------------------
+  // 5) 二进制资产完整性（PNG 等曾被文本模式读写破坏，签名首字节被替换为 U+FFFD）
+  //    由 tools/check-binary-assets.js 提供：magic bytes + PNG chunk CRC + IDAT 解压
+  // -------------------------------------------------------------------------
+  section('5) 二进制资产完整性（magic bytes + PNG chunk CRC + IDAT）');
+  try {
+    const { runChecks } = require(path.join(ROOT, 'tools', 'check-binary-assets'));
+    const binRes = runChecks({ root: ROOT });
+    (binRes.checks || []).forEach(c => ok(c.ok, c.msg));
+  } catch (e) {
+    ok(false, '二进制资产完整性检查未抛错: ' + (e.stack || e.message));
+  }
+
+  // -------------------------------------------------------------------------
+  // 6) 内联资源新鲜度：app/embedded-assets.js 是被提交入库的构建产物，
+  //    若忘记重建，单文件 exe 会内联旧版 version.json（页脚版本号与下载地址都错）。
+  // -------------------------------------------------------------------------
+  section('6) 内联资源新鲜度（embedded-assets.js 与 public/ 同步）');
+  try {
+    const assets = require(path.join(ROOT, 'app', 'embedded-assets'));
+    const diskVer = fs.readFileSync(path.join(ROOT, 'app', 'public', 'data', 'version.json'));
+    const inlinedVer = assets['/data/version.json']
+      ? Buffer.from(assets['/data/version.json'], 'base64') : null;
+    ok(!!inlinedVer, 'embedded-assets.js 含 /data/version.json');
+    ok(inlinedVer && inlinedVer.equals(diskVer),
+      '内联 version.json 与 public/data/version.json 逐字节一致（重建后未漂移）');
+    const diskIdx = fs.readFileSync(path.join(ROOT, 'app', 'public', 'index.html'));
+    const inlinedIdx = assets['/index.html']
+      ? Buffer.from(assets['/index.html'], 'base64') : null;
+    ok(inlinedIdx && inlinedIdx.equals(diskIdx),
+      '内联 index.html 与 public/index.html 逐字节一致（重建后未漂移）');
+    if (inlinedVer) {
+      const j = JSON.parse(inlinedVer.toString('utf8'));
+      // 版本号从 app/package.json 推导（发布链路单一权威源），不硬编码字面量：
+      // 硬编码会在下次版本升级时静默变红，制造无谓的「假失败」。
+      const pkgVer = JSON.parse(fs.readFileSync(path.join(ROOT, 'app', 'package.json'), 'utf8')).version;
+      ok(j.version === pkgVer, '内联 version.json 的版本号与 app/package.json 一致（当前 ' + pkgVer + '）');
+    }
+  } catch (e) {
+    ok(false, '内联资源新鲜度检查未抛错: ' + (e.stack || e.message));
+  }
+
   finish();
 }
 

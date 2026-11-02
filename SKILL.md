@@ -43,8 +43,9 @@ alphasun-beihai-climate/
 │   ├── start.bat         # Windows 一键启动（自动打开浏览器）
 │   └── start.sh          # Linux / macOS 启动
 ├── tools/                # 工具脚本
-│   ├── smoke.js          # 回归门禁（102 项断言：语法/双端一致/render/历法/站点解析）
+│   ├── smoke.js          # 回归门禁（119 项断言：语法/双端一致/render/历法/站点解析/二进制资产）
 │   ├── sync-frontend.js  # 双端前端字节级镜像（public → android/www）
+│   ├── check-binary-assets.js # 二进制资产完整性门禁（magic bytes + PNG chunk CRC/IDAT）
 │   └── nmdis-portlist.js # NMDIS 三港站点代码查询与 config.json 回填
 └── knowledge-base/       # 完整文档（设计 / 使用 / API / 分发）
     ├── README.md

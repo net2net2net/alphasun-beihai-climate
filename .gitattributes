@@ -1,0 +1,28 @@
+# 前端资源统一 LF：覆盖 core.autocrlf，让 Windows / Linux 工作树形态一致，
+# 使内联产物 app/embedded-assets.js 跨平台可复现（否则 Windows 提交 CRLF 载荷、
+# CI 重建 LF 载荷，同一份源码产出两个不同的构建产物）。
+app/public/**      text eol=lf
+app-android/www/** text eol=lf
+app/embedded-assets.js text eol=lf
+*.yml               text eol=lf
+*.md                text eol=lf
+.gitignore          text eol=lf
+
+# 二进制资源：禁止行尾转换与差异过滤（否则 PNG 会被文本模式破坏成乱码）
+#
+# ⚠ 顺序要求：本段必须放在上面的 text 规则之后。git 的属性规则是「后匹配者胜」，
+# 若 binary 规则在前，app-android/www/** 的 text eol=lf 会重新覆盖它，
+# 而 PNG 签名 89 50 4E 47 0D 0A 1A 0A 本身含 CRLF，会被改写而损坏。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.ttf binary
+*.otf binary
+*.mp3 binary
+*.mp4 binary

@@ -1,7 +1,7 @@
 {
   "version": "8.3",
   "released": "2026-11-02",
-  "notes": "潮汐调和模型升级为六分潮（M2/S2/N2/K1/O1/P1）并按站点差异化，新增潮型与大中小潮自动判别；EXE 单文件环境实测加固（.exe 同目录 config.json 生效、修复 SEA 下审计快照污染上级目录、Windows 防火墙拦截排障）；新增 NMDIS 三港站点代码查询回填工具 tools/nmdis-portlist.js；站点匹配升级为别名+坐标消歧（避免命中外省同名港）；新增 DoH DNS 兜底直连（应对国内 DNS 对 nmdis 域名的 NXDOMAIN）；回归门禁扩至 102 项；版本号统一为 8.3（exe/apk/ipa 发布 TAG 单源一致）。",
+  "notes": "潮汐调和模型升级为六分潮（M2/S2/N2/K1/O1/P1）并按站点差异化，新增潮型与大中小潮自动判别；EXE 单文件环境实测加固（.exe 同目录 config.json 生效、修复 SEA 下审计快照污染上级目录、Windows 防火墙拦截排障）；新增 NMDIS 三港站点代码查询回填工具 tools/nmdis-portlist.js；站点匹配升级为别名+坐标消歧（避免命中外省同名港）；新增 DoH DNS 兜底直连（应对国内 DNS 对 nmdis 域名的 NXDOMAIN）；修复 9 个 PNG 二进制资源损坏（PWA 图标 / Leaflet 标记，签名曾被文本模式破坏）并以 .gitattributes 钉死 EOL 与 binary 规则，解决构建产物跨平台不可复现；回归门禁扩至 119 项（新增二进制资产完整性与内联资源新鲜度断言）；版本号统一为 8.3（exe/apk/ipa 发布 TAG 单源一致）。",
   "minAndroid": "8.0.0",
   "github": "https://github.com/net2net2net/alphasun-beihai-climate",
   "gitee": "https://gitee.com/net2net2net/alphasun-beihai-climate",
