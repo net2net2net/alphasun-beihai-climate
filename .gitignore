@@ -45,3 +45,22 @@ app/config.json
 # 构建产物分发目录（exe / apk 等由 CI 发布到 GitHub Release，本地构建产物不入库）
 downloads/
 
+# GitHub Release 产物的本地归档目录（tools/sync-releases.js 生成）
+#
+# 为什么不入库：
+#   1) 体量 —— 本地按「只保留最新发布版本」策略归档（约 317MB，当前为 v8.3）；
+#      若用 --all 全量归档则是全部 8 个 release / 17 个资产 / 约 730MB
+#      （单个 linux/macos 单文件运行时就有 108~120MB）。Git 无法承受这种二进制
+#      载荷：仓库体积暴涨、clone/pull 变慢、每次提交都要为不可压缩的二进制算 delta。
+#   2) 可再生 —— 归档内容是 GitHub Release 上的**已发布产物**，随时可以
+#      `node tools/sync-releases.js --download` 重新拉回（默认只拉最新版本，
+#      加 --all 拉全部），并用 GitHub 资产 API 提供的 digest（sha256）做逐文件
+#      完整性校验，不存在"丢了就没了"的风险。
+#   3) 与源码生命周期脱节 —— 发布产物不该跟着源码 commit 反复演进；
+#      仓库内只需要保留「哪些版本发布过、对应哪些资产」的**记录**
+#      （见 knowledge-base/发布版本索引.md），那部分是要入库的。
+#
+# 归档目录位于 SynologyDrive 下，由其自动同步到 NAS，作为仓库之外的第二份留存。
+# 本地已下载资产 + _index.json（全局清单）由该工具自行维护，无需手工干预。
+_releases/
+

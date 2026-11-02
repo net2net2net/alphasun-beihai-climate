@@ -98,17 +98,216 @@ function inspectPng(buf) {
 }
 
 // ---------------------------------------------------------------------------
+// 扫描时的目录跳过规则
+// ---------------------------------------------------------------------------
+// 无条件跳过：非仓库内容（既非入库资产也无须保护）。
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist']);
+
+// 条件跳过：只有当 git 确认该路径**确实被忽略**时才跳过。
+//
+// 归档目录 `_releases` 装着约 317MB 发布产物（v8.3，5 个资产），一旦 .gitignore 里的
+// `_releases/` 规则被误删或改名，它就会被 git 跟踪。若只按「目录名」无条件跳过，门禁就会
+// 对归档目录 100% 失明 —— 二进制扫描看不见它、binary 规则覆盖检查也看不见它，
+// 于是 317MB 产物静默入库而门禁绿灯放行（这正是本轮修复的 P0 盲区）。
+//
+// 因此把「跳过」与「被忽略」绑定：
+//   · 未被 git 忽略        → 不跳过，目录重新纳入扫描，由既有的
+//                            「全仓二进制均被 .gitattributes 的 binary 规则覆盖」
+//                            断言把它抓出来（门禁自愈，项数不变）；
+//   · 已被忽略但内部有被跟踪文件 → 同样不跳过（跟踪状态优先于忽略状态）。
+// 跳过的前提因此始终由门禁自己守着，不会出现「盲区」。
+const CONDITIONAL_SKIP_DIRS = new Set(['_releases']);
+
+// 归档目录名（条件跳过 + git 隔离不变量的唯一目标）。
+const ARCHIVE_DIR = '_releases';
+
+// 归档目录 git 隔离不变量的两条断言文案（smoke.js 与 CLI 共用，保证口径一致）。
+const ARCHIVE_RULE_MSG = '`_releases/` 归档目录被 git 忽略（发布产物永不入库）';
+const ARCHIVE_TRACKED_MSG = '`_releases/` 下无被 git 跟踪的文件（发布产物永不入库）';
+
+/**
+ * git 查询结果缓存（按 仓库根 + 相对路径 键控）。
+ *
+ * 本机每次 spawn git 约 60ms，而同一个问题会被问多次：
+ * walk 与 walkBinaryContent 各判一次目录跳过、CLI 路径的不变量检查又要问一次。
+ * 缓存后全流程只需 2 次 git 调用（check-ignore + ls-files），而不是 6 次。
+ */
+const GIT_QUERY_CACHE = new Map();
+
+/** 缓存键：仓库根 + 查询种类 + 相对路径（种类必须区分，否则布尔值与数组会互相覆盖）。 */
+function gitCacheKey(root, kind, relPath) {
+  return root + '\0' + kind + '\0' + relPath;
+}
+
+/**
+ * 判断某路径是否被 git 忽略。
+ *
+ * @param {string} root git 仓库工作区根目录
+ * @param {string} relPath 相对仓库根的路径（正斜杠分隔）
+ * @returns {boolean|null} true=已忽略；false=未忽略；null=无法判定（git 不可用 / 不在仓库内）
+ */
+function isIgnoredByGit(root, relPath) {
+  const key = gitCacheKey(root, 'ignore', relPath);
+  if (GIT_QUERY_CACHE.has(key)) return GIT_QUERY_CACHE.get(key);
+  let result = null;
+  try {
+    // 用 --no-index：让判定**只依据 .gitignore 规则**，与文件是否已被 git 跟踪无关。
+    // 否则「已被跟踪」会反过来让 check-ignore 报「未忽略」，把两种不同的故障
+    // （规则丢失 / 文件被强加跟踪）混为一谈。
+    execFileSync('git', ['check-ignore', '-q', '--no-index', '--', relPath], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    result = true;
+  } catch (e) {
+    // git check-ignore 的退出码：0=命中忽略规则，1=未命中，128+=git 自身错误
+    result = (e && e.status === 1) ? false : null;
+  }
+  GIT_QUERY_CACHE.set(key, result);
+  return result;
+}
+
+/**
+ * 列出 git 已跟踪的、位于指定路径下的文件。
+ *
+ * @param {string} root git 仓库工作区根目录
+ * @param {string} relPath 相对仓库根的路径
+ * @returns {Array<string>} 已跟踪文件的相对路径
+ */
+function listTrackedFiles(root, relPath) {
+  const key = gitCacheKey(root, 'tracked', relPath);
+  if (GIT_QUERY_CACHE.has(key)) return GIT_QUERY_CACHE.get(key);
+  let list = [];
+  try {
+    const out = execFileSync('git', ['ls-files', '--', relPath], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    list = String(out || '').split(/\r?\n/).filter(Boolean);
+  } catch (e) {
+    list = [];
+  }
+  GIT_QUERY_CACHE.set(key, list);
+  return list;
+}
+
+/**
+ * 决定扫描时是否跳过某个子目录。
+ *
+ * @param {string} root git 仓库工作区根目录
+ * @param {string} rel 子目录相对仓库根的路径
+ * @param {string} name 子目录名
+ * @param {Object} state 收集跳过决策的诊断信息（可选）
+ * @returns {boolean} true=跳过，false=纳入扫描
+ */
+function shouldSkipDir(root, rel, name, state) {
+  if (SKIP_DIRS.has(name)) return true;
+  if (!CONDITIONAL_SKIP_DIRS.has(name)) return false;
+
+  // 缓存：walk 与 walkBinaryContent 会对同一目录各判一次，每次判定都要问 git
+  // （本机 git 进程启动约 60ms/次），不缓存等于把成本翻倍。
+  const cache = state && state.skipCache;
+  if (cache && cache.has(rel)) return cache.get(rel);
+
+  let skip;
+  // 探测路径带尾斜杠：.gitignore 的规则写作 `_releases/`（只匹配目录），
+  // 归档目录尚未创建时（全新 clone）不带尾斜杠的探测会误判为「未忽略」→ 假失败。
+  const ignored = isIgnoredByGit(root, rel + '/');
+  if (ignored === null) {
+    // git 不可用 / 不在仓库内：没有 git 也就没有「被提交入库」的风险，
+    // 维持旧行为（跳过），避免非 git 场景下把 317MB 归档扫进来。
+    skip = true;
+  } else if (ignored === false) {
+    if (state) state.notIgnored.push(rel);
+    skip = false; // 未被忽略 → 纳入扫描，让既有断言把它抓出来
+  } else {
+    const tracked = listTrackedFiles(root, rel);
+    if (tracked.length) {
+      if (state) state.tracked.push(rel + '（已被 git 跟踪：' + tracked.join(', ') + '）');
+      skip = false; // 内部有被跟踪文件 → 纳入扫描
+    } else {
+      skip = true;
+    }
+  }
+  if (cache) cache.set(rel, skip);
+  return skip;
+}
+
+/**
+ * 归档目录的 git 隔离不变量（**两条独立断言**，由 tools/smoke.js 第 7 组接入）。
+ *
+ * 这两条守的是「门禁跳过归档目录」这个动作的**前提**：
+ *   1. `_releases/` 必须始终处于 git 忽略状态 —— 否则 317MB 产物会被误提交；
+ *   2. `_releases/` 下不得存在被 git 跟踪的文件。
+ * 与之配套的还有 {@link shouldSkipDir} 的条件跳过：前提被破坏时目录会被重新
+ * 纳入扫描，由既有的 binary 规则覆盖断言直接失败（门禁自愈）。
+ *
+ * 无 git 环境（不在 git 仓库内 / git 不可用）时**优雅跳过**而非失败：
+ * 非 git 场景下既不存在「产物被提交入库」的风险，也无法判定跟踪状态；
+ * 与本工具其它 fallback（如 check-attr 不可用时回退扩展名判定）保持同一口径。
+ *
+ * @param {string} root 仓库根目录
+ * @returns {Array<{status: 'pass'|'fail'|'skip', msg: string, detail: string}>}
+ */
+function checkArchiveInvariants(root) {
+  const checks = [];
+  // 探测路径带尾斜杠（`_releases/`）：.gitignore 里的规则写作 `_releases/`（只匹配目录），
+  // 归档目录尚未创建时（全新 clone / 尚未归档）不带尾斜杠的探测会因
+  // 「git 无法确认该路径是目录」而返回「未忽略」→ 造成误报。
+  // 带尾斜杠探测时，两种情形都能正确命中规则。
+  const ignored = isIgnoredByGit(root, ARCHIVE_DIR + '/');
+
+  if (ignored === null) {
+    // 无 git 环境：既无法判定忽略状态，也无法列出跟踪文件 → 跳过（不计失败）。
+    const why = '无 git 环境（不在 git 仓库内或 git 不可用）';
+    checks.push({ status: 'skip', msg: ARCHIVE_RULE_MSG, detail: why });
+    checks.push({ status: 'skip', msg: ARCHIVE_TRACKED_MSG, detail: why });
+    return checks;
+  }
+
+  checks.push({
+    status: ignored ? 'pass' : 'fail',
+    msg: ARCHIVE_RULE_MSG,
+    detail: ignored
+      ? ''
+      : ('git check-ignore 未匹配 `' + ARCHIVE_DIR + '/` —— 请在 .gitignore 中加入一行 `'
+          + ARCHIVE_DIR + '/`（若疑似被误删或改名，请恢复同名规则）'),
+  });
+
+  const tracked = listTrackedFiles(root, ARCHIVE_DIR);
+  const shown = tracked.slice(0, 5).join(', ') + (tracked.length > 5 ? ' …（仅列前 5 个）' : '');
+  checks.push({
+    status: tracked.length ? 'fail' : 'pass',
+    msg: ARCHIVE_TRACKED_MSG,
+    detail: tracked.length
+      ? ('已被 git 跟踪 ' + tracked.length + ' 个文件：' + shown
+          + ' —— 请执行 `git rm -r --cached ' + ARCHIVE_DIR + '` 取消跟踪，'
+          + '并确认 .gitignore 含 `' + ARCHIVE_DIR + '/`')
+      : '',
+  });
+
+  return checks;
+}
+
+// ---------------------------------------------------------------------------
 // 遍历仓库内受检二进制文件
 // ---------------------------------------------------------------------------
-function walk(dir, rel, out) {
+function walk(dir, rel, out, state) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
   for (const ent of entries) {
-    if (ent.name === '.git' || ent.name === 'node_modules' || ent.name === 'dist') continue;
     const abs = path.join(dir, ent.name);
     const r = rel ? rel + '/' + ent.name : ent.name;
-    if (ent.isDirectory()) walk(abs, r, out);
-    else if (BINARY_EXTS.includes(path.extname(ent.name).toLowerCase())) out.push(r);
+    if (ent.isDirectory()) {
+      if (shouldSkipDir(state && state.root, r, ent.name, state)) continue;
+      walk(abs, r, out, state);
+      continue;
+    }
+    if (BINARY_EXTS.includes(path.extname(ent.name).toLowerCase())) out.push(r);
   }
   return out;
 }
@@ -119,19 +318,55 @@ function walk(dir, rel, out) {
 // 背景：若将来引入白名单外的二进制格式（如 .bin / .dat / 新字体），
 //       仅按扩展名扫描的门禁会完全看不见它 —— 保护规则与实际资产就会脱节。
 // ---------------------------------------------------------------------------
-function walkBinaryContent(dir, rel, out) {
+function walkBinaryContent(dir, rel, out, state) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
   for (const ent of entries) {
-    if (ent.name === '.git' || ent.name === 'node_modules' || ent.name === 'dist') continue;
     const abs = path.join(dir, ent.name);
     const r = rel ? rel + '/' + ent.name : ent.name;
-    if (ent.isDirectory()) { walkBinaryContent(abs, r, out); continue; }
+    if (ent.isDirectory()) {
+      if (shouldSkipDir(state && state.root, r, ent.name, state)) continue;
+      walkBinaryContent(abs, r, out, state);
+      continue;
+    }
     let buf;
     try { buf = fs.readFileSync(abs); } catch (e) { continue; }
     if (buf.length && buf.includes(0)) out.push(r);
   }
   return out;
+}
+
+/**
+ * 解析 `git check-attr` 的输出，返回 Map<相对路径, 是否受 binary 规则保护>。
+ *
+ * 输出形如 "<path>: <attr>: <value>"（path 可能含 ':'，故用贪婪匹配锚定末尾）。
+ *
+ * **CRLF 鲁棒性**：Windows 上 git 的 stdout 可能是 CRLF 行尾。切行用 /\r?\n/，
+ * 再对每行额外去掉尾部残留的 \r —— 否则属性值会变成 "unset\r"，
+ * 与 'unset' 比对失败 → 误判「未受保护」→ 门禁假红。
+ * （Linux CI 上 git 输出 LF，本函数同样正确；此处的双保险是为了跨平台一致。）
+ *
+ * @param {string} out `git check-attr` 的原始输出
+ * @returns {Map<string, boolean>}
+ */
+function parseCheckAttrOutput(out) {
+  const re = /^(.*): (\w+): (.*)$/;
+  const attrs = new Map();
+  for (const raw of String(out || '').split(/\r?\n/)) {
+    const line = raw.replace(/\r+$/, '');
+    if (!line) continue;
+    const m = re.exec(line);
+    if (!m) continue;
+    const [, p, attr, val] = m;
+    if (!attrs.has(p)) attrs.set(p, {});
+    attrs.get(p)[attr] = val;
+  }
+  const map = new Map();
+  for (const [p, a] of attrs) {
+    // binary 宏 = -text -diff → git check-attr 报 "unset"
+    map.set(p, a.text === 'unset' && a.diff === 'unset');
+  }
+  return map;
 }
 
 /**
@@ -155,22 +390,7 @@ function queryGitBinaryAttrs(root, files) {
   } catch (e) {
     return null;
   }
-  // 输出形如 "<path>: <attr>: <value>"（path 可能含 ':'，故用贪婪匹配锚定末尾）
-  const re = /^(.*): (\w+): (.*)$/;
-  const attrs = new Map();
-  for (const line of String(out).split(/\r?\n/)) {
-    const m = re.exec(line);
-    if (!m) continue;
-    const [, p, attr, val] = m;
-    if (!attrs.has(p)) attrs.set(p, {});
-    attrs.get(p)[attr] = val;
-  }
-  const map = new Map();
-  for (const [p, a] of attrs) {
-    // binary 宏 = -text -diff → git check-attr 报 "unset"
-    map.set(p, a.text === 'unset' && a.diff === 'unset');
-  }
-  return map;
+  return parseCheckAttrOutput(out);
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +472,10 @@ function checkGitattributes(root, presentExts) {
 function runChecks(opts) {
   const root = (opts && opts.root) || process.cwd();
   const checks = [];
-  const files = walk(root, '', []);
+  // 跳过决策的诊断信息：记录「本该被忽略却没被忽略」「内部有被跟踪文件」的目录，
+  // 让 binary 规则覆盖断言在失败时能直接指出根因（而不是只列一串未保护文件）。
+  const state = { root: root, notIgnored: [], tracked: [], skipCache: new Map() };
+  const files = walk(root, '', [], state);
 
   // 1) 逐文件校验
   for (const rel of files) {
@@ -297,7 +520,7 @@ function runChecks(opts) {
 
   // 3) 覆盖兜底：全仓「真二进制」（含 NUL 字节）文件是否都被 binary 规则保护。
   //    这一项不依赖扩展名白名单 —— 白名单外的二进制格式也能被看见。
-  const allBinaries = walkBinaryContent(root, '', []);
+  const allBinaries = walkBinaryContent(root, '', [], state);
   const uncovered = [];
   // 判定「某个文件是否被 binary 规则保护」的权威来源是 git 自己的属性解析
   // （git check-attr），它能识别任意形态的规则：*.ext / *.tar.gz / 路径型 /** 等。
@@ -316,11 +539,29 @@ function runChecks(opts) {
     }
     if (!binaryRule) uncovered.push(rel);
   }
+  // 失败详情：除了列出未受保护的文件，还要指出**根因** ——
+  // 若归档目录因 .gitignore 规则丢失而重新进入扫描，必须明确说出来，
+  // 否则用户只会看到一串 .ipa/.apk/.exe「未受保护」，却找不到真正的原因。
+  let coverageDetail = '';
+  if (uncovered.length) coverageDetail = '未受保护：' + uncovered.join(', ');
+  const rootCauses = [];
+  // walk 与 walkBinaryContent 会对同一个目录各判一次，去重后再拼装
+  const notIgnored = [...new Set(state.notIgnored)];
+  const trackedDirs = [...new Set(state.tracked)];
+  if (notIgnored.length) {
+    rootCauses.push(notIgnored.join('、') + ' 未被 git 忽略（.gitignore 的 `_releases/` 规则可能被删除或改名）→ 归档产物正面临被提交入库的风险');
+  }
+  if (trackedDirs.length) {
+    rootCauses.push(trackedDirs.join('、') + '（归档目录内存在被 git 跟踪的文件）');
+  }
+  if (rootCauses.length) {
+    coverageDetail += (coverageDetail ? '；根因：' : '根因：') + rootCauses.join('；');
+  }
   checks.push({
     ok: uncovered.length === 0,
     msg: '全仓二进制文件均被 .gitattributes 的 binary 规则覆盖（共 ' + allBinaries.length + ' 个真二进制）',
     level: 'error',
-    detail: uncovered.length ? '未受保护：' + uncovered.join(', ') : '',
+    detail: coverageDetail,
   });
 
   return {
@@ -337,7 +578,12 @@ function runChecks(opts) {
 // ---------------------------------------------------------------------------
 function main() {
   const quiet = process.argv.includes('--quiet');
-  const res = runChecks({ root: process.cwd() });
+  const root = process.cwd();
+  const res = runChecks({ root: root });
+  // 归档目录不变量：检查「跳过 _releases/」这个动作的前提是否成立。
+  // 与 tools/smoke.js 第 7 组的两条断言同源（同一个函数、同样的判定逻辑），
+  // 因此 CLI 直跑与回归门禁不会出现口径分叉。
+  const invariants = checkArchiveInvariants(root);
   if (!quiet) {
     console.log('=== 二进制资产完整性校验 ===');
     console.log('扫描文件数：' + res.scanned);
@@ -348,12 +594,30 @@ function main() {
     for (const c of res.checks) {
       console.log((c.ok ? '  ✓ ' : '  ✗ ') + c.msg + (c.ok || !c.detail ? '' : '\n      → ' + c.detail));
     }
+    console.log('');
+    console.log('--- 归档目录不变量（`_releases/` 永不入库；与 smoke.js 第 7 组同源，独立于上面的 ' + res.checks.length + ' 项）---');
+    for (const c of invariants) {
+      if (c.status === 'pass') {
+        console.log('  ✓ ' + c.msg);
+      } else if (c.status === 'skip') {
+        console.log('  ⊘ 已跳过：' + c.msg + '（' + c.detail + '）');
+      } else {
+        console.log('  ✗ ' + c.msg + '\n      → ' + c.detail);
+      }
+    }
   }
   console.log('');
   console.log('通过 ' + res.passed + ' / 失败 ' + res.failed);
-  if (res.failed) {
-    console.log('❌ 存在损坏或缺保护规则的二进制资产');
-    if (process.argv.includes('--throw')) throw new Error('二进制资产校验未通过：' + res.failed + ' 项');
+  // 只有 status==='fail' 才算失败；status==='skip'（无 git 环境）不计入失败。
+  const failedInvariants = invariants.filter((c) => c.status === 'fail').length;
+  const skippedInvariants = invariants.filter((c) => c.status === 'skip').length;
+  if (skippedInvariants) console.log('（归档目录不变量跳过 ' + skippedInvariants + ' 项：无 git 环境）');
+  if (res.failed || failedInvariants) {
+    if (res.failed) console.log('❌ 存在损坏或缺保护规则的二进制资产');
+    if (failedInvariants) console.log('❌ 归档目录不变量被破坏：`_releases/` 可能正面临被提交入库的风险');
+    if (process.argv.includes('--throw')) {
+      throw new Error('二进制资产校验未通过：' + (res.failed + failedInvariants) + ' 项');
+    }
     process.exit(1);
   }
   console.log('✅ 二进制资产全部完好');
@@ -362,4 +626,20 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { runChecks, inspectPng, FORMATS, BINARY_EXTS, checkGitattributes };
+module.exports = {
+  runChecks,
+  inspectPng,
+  FORMATS,
+  BINARY_EXTS,
+  checkGitattributes,
+  checkArchiveInvariants,
+  parseCheckAttrOutput,
+  isIgnoredByGit,
+  listTrackedFiles,
+  shouldSkipDir,
+  SKIP_DIRS,
+  CONDITIONAL_SKIP_DIRS,
+  ARCHIVE_DIR,
+  ARCHIVE_RULE_MSG,
+  ARCHIVE_TRACKED_MSG,
+};

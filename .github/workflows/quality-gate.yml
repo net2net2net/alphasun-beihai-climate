@@ -1,0 +1,156 @@
+name: Quality Gate
+
+# ============================================================================
+# 本 workflow 的作用：**把只在本地跑的回归门禁搬到 CI 上**。
+#
+# 背景（为什么必须有它）：
+#   `tools/smoke.js`（122 项断言）与 `tools/check-binary-assets.js`（14 项）
+#   此前**只在开发者本机执行**，远程仓库上没有任何一道门禁生效 ——
+#   这意味着「二进制资产损坏」「双端文件不一致」「发布归档目录即将入库」
+#   这类问题只有本机能发现，别人 clone 下来就已经是坏的。
+#   本 workflow 让每次 push / PR 都自动跑一遍同样的门禁，问题在合入前暴露。
+#
+# 门禁失败 = job 失败（PR 上会挡住合入），**不允许任何形式的 `|| true` 吞掉失败**。
+#
+# 关于 CI 环境的两点说明：
+#   1) CI 检出态**没有 `_releases/` 目录**（发布产物 317MB，永不入库）。
+#      smoke.js 第 7 组「归档目录 git 隔离」在「目录不存在」时必须**通过**而不是失败
+#      —— 这正是该组断言的设计前提（规则存在即通过；无 git 环境则优雅跳过）。
+#   2) **不在 CI 里跑 `tools/sync-releases.js --download`**：那会下载 317MB 发布产物，
+#      CI 不该做这种耗时且无校验价值的事。产物归档的完整性校验由本地
+#      `node tools/sync-releases.js --verify` 负责（GitHub digest / 本地实算 / manifest
+#      三方比对），远端 release 清单可用只读的 `--list` 查看，二者都无需占用 CI。
+# ============================================================================
+on:
+  # push：main 与其它分支一律触发（不加 paths 过滤 —— 门禁要覆盖全部改动）
+  push:
+  # pull_request：PR 合并前先跑一遍
+  pull_request:
+  # 手动触发
+  workflow_dispatch:
+
+# 门禁只需读权限
+permissions:
+  contents: read
+
+# 同一分支的连续 push 只保留最新一次（省 CI 额度）
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Regression gate (smoke + binary assets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 保留完整 git 元信息：门禁的「归档目录 git 隔离」依赖 git check-ignore /
+          # git ls-files，「binary 规则覆盖」依赖 git check-attr，均需 .git 与索引。
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ------------------------------------------------------------------------
+      # 门禁 1：回归门禁（122 项断言）
+      # 失败时把「失败项」写进 job 摘要（失败项前带 [组名]，一眼看出是第几组挂的）。
+      # ------------------------------------------------------------------------
+      - name: Regression gate (tools/smoke.js)
+        run: |
+          set -uo pipefail
+          # 关键：GitHub Actions 默认 shell 是 `bash -e {0}`（errexit 开启）。
+          # 若不临时关闭 errexit，门禁失败时 shell 会直接中止在管道那一步，
+          # 根本来不及把失败项写进 job 摘要 —— 所以这里自己接管退出码：
+          # 先 set +e 跑完并落盘摘要，再按需 exit 1。
+          set +e
+          node tools/smoke.js 2>&1 | tee smoke.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            {
+              echo "## ✅ 回归门禁通过（tools/smoke.js）"
+              echo ""
+              echo '```text'
+              grep -E '^通过 ' smoke.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## ❌ 回归门禁失败（tools/smoke.js）"
+              echo ""
+              echo "失败项（方括号内为所属分组）："
+              echo ""
+              echo '```text'
+              sed -n '/^失败项：/,$p' smoke.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::回归门禁未通过（tools/smoke.js），详见 job 摘要"
+            exit 1
+          fi
+
+      # ------------------------------------------------------------------------
+      # 门禁 2：二进制资产完整性（magic bytes + PNG chunk CRC/IDAT）
+      # 失败时把未受保护 / 损坏的文件名与根因写进 job 摘要。
+      # ------------------------------------------------------------------------
+      - name: Binary asset gate (tools/check-binary-assets.js)
+        run: |
+          set -uo pipefail
+          set +e   # 同上：自己接管退出码，确保摘要能落盘
+          node tools/check-binary-assets.js 2>&1 | tee binary-assets.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            {
+              echo "## ✅ 二进制资产门禁通过（tools/check-binary-assets.js）"
+              echo ""
+              echo '```text'
+              grep -E '^通过 ' binary-assets.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## ❌ 二进制资产门禁失败（tools/check-binary-assets.js）"
+              echo ""
+              echo '```text'
+              grep -E '✗|→' binary-assets.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::二进制资产门禁未通过（tools/check-binary-assets.js），详见 job 摘要"
+            exit 1
+          fi
+
+      # ------------------------------------------------------------------------
+      # 门禁 3：归档目录的 git 隔离状态自检（可读，不改任何东西）
+      # 说明：`_releases/` 目录在 CI 上不存在是**预期**的（产物不入库），
+      #       这里只确认「.gitignore 规则仍在、且没有任何归档产物被跟踪」。
+      # ------------------------------------------------------------------------
+      - name: Assert release archive stays out of git
+        run: |
+          set -uo pipefail
+          {
+            echo "## 发布归档目录 git 隔离"
+            echo ""
+            echo '```text'
+            if git check-ignore -q --no-index -- _releases/; then
+              echo '✓ .gitignore 仍忽略 _releases/（发布产物永不入库）'
+            else
+              # 注意用单引号：文本里的反引号在双引号里会被 bash 当成命令替换。
+              echo '✗ .gitignore 未忽略 _releases/ —— 请检查 .gitignore 的 `_releases/` 规则是否被删除或改名'
+            fi
+            tracked=$(git ls-files -- _releases)
+            if [ -z "$tracked" ]; then
+              echo "✓ _releases/ 下无被 git 跟踪的文件"
+            else
+              echo "✗ _releases/ 下存在被跟踪的文件："
+              echo "$tracked"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 断言失败必须让 job 失败
+          git check-ignore -q --no-index -- _releases/ || { echo "::error::_releases/ 未被 git 忽略"; exit 1; }
+          test -z "$(git ls-files -- _releases)" || { echo "::error::_releases/ 下存在被跟踪的文件"; exit 1; }

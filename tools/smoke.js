@@ -8,6 +8,10 @@
  *     在 app/public 与 app-android/www 之间必须逐字节一致（Android 专属文件保留不动）
  *  3) 全量渲染运行时：用自定义 DOM / 全局 stub + 完整 mock state 加载 js/app.js 并跑 render() 全模块
  *  4) 历法正确性：农历/节气/干支（正月初一、中秋、2026 丙午年、2033 闰月不抛错）
+ *  5) 二进制资产完整性：magic bytes + PNG chunk CRC + IDAT（PNG 曾被文本模式破坏）
+ *  6) 内联资源新鲜度：app/embedded-assets.js 与 public/ 逐字节一致
+ *  7) 归档目录 git 隔离：`_releases/` 必须被 git 忽略且无被跟踪文件
+ *     （发布产物 317MB 永不入库；无 git 环境时优雅跳过）
  *
  * 用法： node tools/smoke.js        （本地，失败打印并退出码 1）
  *       node tools/smoke.js --throw （CI，失败时抛错）
@@ -20,11 +24,27 @@ const vm = require('vm');
 const ROOT = process.cwd();
 const fails = [];
 const okList = [];
+const skipList = [];
+// 当前分组名：失败时一并记入，让「失败项」清单能直接看出是第几组挂的
+// （CI 的 job 摘要直接复用这份输出，不必再猜）。
+let currentSection = '';
 function ok(cond, msg) {
   if (cond) { okList.push(msg); console.log('  ✓ ' + msg); }
-  else { fails.push(msg); console.log('  ✗ ' + msg); }
+  else {
+    fails.push((currentSection ? '[' + currentSection + '] ' : '') + msg);
+    console.log('  ✗ ' + msg);
+  }
 }
-function section(t) { console.log('\n=== ' + t + ' ==='); }
+/**
+ * 「优雅跳过」：前提不成立时（如无 git 环境）既不算通过也不算失败。
+ * 与本工具其它 fallback 行为一致 —— 例如二进制属性在无 git 时回退到扩展名判定，
+ * 而不是把门禁判红。跳过的项会在汇总里单列，不计入通过数。
+ */
+function skip(msg) {
+  skipList.push(msg);
+  console.log('  ⊘ 已跳过：' + msg);
+}
+function section(t) { currentSection = t; console.log('\n=== ' + t + ' ==='); }
 function abort(msg) { console.error('\nFATAL: ' + msg); process.exit(2); }
 
 // ---------------------------------------------------------------------------
@@ -572,7 +592,10 @@ function runAssertions() {
   try {
     const { runChecks } = require(path.join(ROOT, 'tools', 'check-binary-assets'));
     const binRes = runChecks({ root: ROOT });
-    (binRes.checks || []).forEach(c => ok(c.ok, c.msg));
+    // 失败时把 detail 一并带出：detail 里含**根因**（如「`_releases` 未被 git 忽略 →
+    // 归档产物正面临被提交入库的风险」），只报「未受保护」会让读者看到一串
+    // .ipa/.exe 却找不到真正的原因。
+    (binRes.checks || []).forEach(c => ok(c.ok, c.ok ? c.msg : (c.msg + ' → ' + (c.detail || '（无详情）'))));
   } catch (e) {
     ok(false, '二进制资产完整性检查未抛错: ' + (e.stack || e.message));
   }
@@ -606,12 +629,42 @@ function runAssertions() {
     ok(false, '内联资源新鲜度检查未抛错: ' + (e.stack || e.message));
   }
 
+  // -------------------------------------------------------------------------
+  // 7) 发布产物归档目录的 git 隔离（`_releases/` 永不入库）
+  //    P0 修复：二进制门禁此前按**目录名**无条件跳过 `_releases/`，一旦
+  //    .gitignore 的 `_releases/` 规则被误删/改名，317MB 产物就会静默入库，
+  //    而门禁因跳过该目录完全看不见它们（既不报「未受 binary 规则保护」，
+  //    也不报体积异常）—— 门禁在恰恰需要它报警的场景里失明。
+  //    现在跳过改成「条件跳过」（被 git 忽略才跳过），并新增下面两条常驻断言，
+  //    把「归档即将入库」从隐性风险变成显性失败。
+  // -------------------------------------------------------------------------
+  section('7) 发布产物归档目录的 git 隔离（`_releases/` 永不入库）');
+  try {
+    const { checkArchiveInvariants } = require(path.join(ROOT, 'tools', 'check-binary-assets'));
+    // 与 tools/check-binary-assets.js 的 CLI 同源：判定逻辑只有一份，
+    // 避免「CLI 绿、门禁红」或反之的口径分叉。
+    checkArchiveInvariants(ROOT).forEach(c => {
+      if (c.status === 'skip') {
+        skip(c.msg + '（' + c.detail + '）');
+      } else {
+        ok(c.status === 'pass', c.status === 'pass' ? c.msg : (c.msg + ' → ' + c.detail));
+      }
+    });
+  } catch (e) {
+    ok(false, '归档目录 git 隔离不变量检查未抛错: ' + (e.stack || e.message));
+  }
+
   finish();
 }
 
 function finish() {
   console.log('\n========================================');
-  console.log('通过 ' + okList.length + ' / 失败 ' + fails.length);
+  console.log('通过 ' + okList.length + ' / 失败 ' + fails.length
+    + (skipList.length ? ' / 跳过 ' + skipList.length : ''));
+  if (skipList.length) {
+    console.log('跳过项：');
+    skipList.forEach(s => console.log('  - ' + s));
+  }
   if (fails.length) {
     console.log('失败项：');
     fails.forEach(f => console.log('  - ' + f));
