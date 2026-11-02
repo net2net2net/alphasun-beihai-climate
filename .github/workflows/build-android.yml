@@ -39,12 +39,22 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # 说明：android-actions/setup-android@v3 的 packages 默认值是 'tools platform-tools'，
+      # 而 Google 已下架旧版 tools 包（已被 cmdline-tools 取代），sdkmanager 会报
+      # "Warning: Failed to find package 'tools'" 并以退出码 1 终止，导致整个 workflow 失败
+      # （失败发生在 SDK 安装阶段，远早于 gradle 与版本号逻辑）。
+      # 显式给出 packages 即可完全覆盖默认值，不再请求已下架的 tools 包；
+      # 该 action 仍会自行准备 cmdline-tools（v3 默认 12266719 → 16.0，runner 已预装则复用）、
+      # 接受许可证，并导出 ANDROID_HOME / ANDROID_SDK_ROOT 与 sdkmanager 到 PATH。
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Accept Android licenses
         run: yes | sdkmanager --licenses || true
 
+      # 幂等：上面已装过则此处为 no-op（sdkmanager 对已安装包返回 0），保留作为兜底。
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
