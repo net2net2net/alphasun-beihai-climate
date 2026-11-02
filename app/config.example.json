@@ -1,6 +1,14 @@
 {
-  "_comment": "本地配置模板。复制本文件为 app/config.json（已被 .gitignore 忽略，绝不入库），填入你的密钥即可启用对应数据源。环境变量 QWEATHER_KEY / QWEATHER_HOST 优先级高于本文件。",
+  "_comment": "本地配置模板。复制本文件为 config.json（已被 .gitignore 忽略，绝不入库），填入你的密钥即可启用对应数据源。环境变量 QWEATHER_KEY / QWEATHER_HOST / NMDIS_APPID / NMDIS_APPSECRET 优先级高于本文件。单文件 exe 版：把本文件放在 .exe 同目录（启动日志会打印 [cfg] 已加载… 以确认生效）。NMDIS 潮汐：只需填 nmdisAppId / nmdisAppSecret —— 应用会自动调用「获取站点列表」按站名别名+坐标消歧解析北海港/铁山港/涠洲岛的真实 SiteCode，无需手工抄码；tideSiteCodes 为可选显式覆盖（可用 node tools/nmdis-portlist.js --write 一键查询回填）。",
   "qweatherKey": "在此填入你的和风天气 KEY（中国气象局授权商业气象数据，作为 CMA 实况校核源）",
   "qweatherHost": "devapi.qweather.com",
-  "_hostNote": "免费版/开发版订阅用 devapi.qweather.com；标准版/商业版订阅用 api.qweather.com。若调用返回 403 Invalid Host，说明本 KEY 的订阅计划未授权该 Host，请到和风天气控制台核对订阅类型与授权 Host。"
+  "_hostNote": "免费版/开发版订阅用 devapi.qweather.com；标准版/商业版订阅用 api.qweather.com。若调用返回 403 Invalid Host，说明本 KEY 的订阅计划未授权该 Host，请到和风天气控制台核对订阅类型与授权 Host。",
+  "nmdisAppId": "在此填入国家海洋信息中心(NMDIS) AppID（service-tide.nmdis.org.cn 注册获取），启用权威潮汐预报",
+  "nmdisAppSecret": "在此填入 NMDIS AppSecret",
+  "tideSiteCodes": {
+    "_note": "可选：各港站点代码显式覆盖（留空即自动解析）。自动解析：程序调用 NMDIS「获取站点列表」接口，按站名别名匹配（中文/英文/简称），同名多候选时用坐标就近消歧（避免命中辽宁铁山港等外省同名港），结果缓存 24h。若自动解析失效，可在此手动填入 —— 用 node tools/nmdis-portlist.js --appid <ID> --secret <SECRET> 查询（真实 SiteCode 属付费订购内容，公开渠道不可得，请勿凭猜测填写）。键名对应 config.js 中 TIDE_STATIONS 的 id：bhg=北海港, tsg=铁山港, wzd=涠洲岛。",
+    "bhg": "",
+    "tsg": "",
+    "wzd": ""
+  }
 }

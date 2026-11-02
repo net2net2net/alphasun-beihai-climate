@@ -22,6 +22,50 @@ alphasun-beihai-climate/
 > 无需安装 Node.js、无需任何外部文件；可直接拷贝到任意 Windows 机器运行。
 > 可选环境变量：`PORT=9000` 修改端口；`OPEN=0` 禁止自动打开浏览器。
 
+#### A-1. exe 同目录放 config.json（启用和风天气 / NMDIS 权威潮汐）
+把 `app/config.example.json` 复制一份为 **`config.json`**，与 `.exe` **放在同一目录**，填入密钥后重启 exe 即可生效：
+
+```jsonc
+{
+  "qweatherKey": "和风天气 KEY",          // 可选：CMA 实况校核源
+  "nmdisAppId": "NMDIS AppID",            // 启用权威潮汐预报（见 A-2）
+  "nmdisAppSecret": "NMDIS AppSecret",
+  "tideSiteCodes": { "bhg": "", "tsg": "", "wzd": "" }  // 可选：显式指定各港站点代码
+}
+```
+启动日志会打印确认行：
+- `[cfg] 已加载和风天气 KEY…` → 生效
+- `[cfg] 已加载国家海洋信息中心(NMDIS) 潮汐凭证…` → 生效
+- `[cfg] 未配置…` → 未读到，请确认 `config.json` 与 exe **同目录**（不是 `app/` 子目录）
+
+exe 运行时的落盘位置（已适配 SEA 单文件包）：
+| 内容 | 位置 |
+|---|---|
+| 配置文件 | `.exe` 同目录 `config.json` |
+| 实况校核审计快照 | `.exe` 同目录 `data/realtime-check.json` |
+
+#### A-2. NMDIS 权威潮汐：三港站点代码怎么填
+北海三港（北海港 / 铁山港 / 涠洲岛）在国家海洋信息中心(NMDIS) 的**真实 SiteCode 需注册订购后由接口返回**（电子潮汐表 500 元/站/年），无法从公开网页查到，**不要凭猜测硬编码**。
+
+本系统提供两条路，二选一：
+- **推荐（零手工）**：只在 `config.json` 填 `nmdisAppId` / `nmdisAppSecret`。程序首次取数时自动调用 NMDIS「获取站点列表」接口，按站名别名（中文/英文/简称）匹配三港，同名时用坐标消歧（防止匹配到辽宁铁山港等外省同名港），结果缓存 24h。启动日志会打印 `[tide] 已从 NMDIS 解析站点代码：bhg=xxx(站名匹配) …`。
+- **手工兜底**：用查询工具一条命令拿到代码并自动回填 `config.json`：
+
+```bash
+node tools/nmdis-portlist.js --appid <ID> --secret <SECRET> --write
+# 只看不写：去掉 --write ；导出全部站点人工挑选：加 --all
+```
+
+`tools/nmdis-portlist.js` 会打印三港的真实 SiteCode 及匹配依据（站名命中 / 坐标消歧 / 坐标兜底）与到标称点的距离，便于人工复核。
+
+#### A-3. 排障
+| 现象 | 原因与处理 |
+|---|---|
+| 双击无反应 / 浏览器打不开 http://localhost:8765 | **Windows 防火墙拦截**：exe 换目录后，Windows 可能为新路径自动生成「阻止」入站规则。需**以管理员身份**运行 PowerShell 执行 `netsh advfirewall firewall add rule name="AlphaSun" dir=in action=allow program="<exe完整路径>" enable=yes`，并删除同名「阻止」规则（Windows 规则中阻止优先于允许）。 |
+| 控制台打印 `[tide] NMDIS 站点列表解析失败（凭证无效或网络不可达）` | ① 凭证无效/未订购该接口；② 本机 DNS 解析不到 `service-tide.nmdis.org.cn`（部分国内 DNS 会返回 NXDOMAIN）。②本系统已内置 **DoH 兜底**（阿里 / 腾讯），会自动直连解析出的 IP，日志出现 `[nmdis] 本机 DNS 无法解析…已通过 DoH 直连 <IP> 完成请求` 即为兜底生效；仍失败请检查网络或改用公共 DNS。 |
+| 潮汐卡片显示「调和模型估算(演示)」 | 未读到凭证或官方接口失败，属预期降级（不影响其他模块）。 |
+| 8765 端口被占用 | 设环境变量 `PORT=9000` 后再运行。 |
+
 ### 方式 B：完整目录运行
 1. 拷贝整个 `alphasun-beihai-climate` 文件夹到任意位置（或解压 `alphasun-beihai-climate.zip`）。
 2. Windows：双击 `app/start.bat`。macOS / Linux：终端执行 `bash app/start.sh`。

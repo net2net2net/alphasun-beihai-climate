@@ -2,9 +2,48 @@
 
 > 本地运行地址：**http://localhost:8765**（改完刷新即生效）
 > 启动方式：`node server.js`（位于 `app/` 目录，纯 Node 零依赖，端口 8765）
-> 版本：v7.0.0 → v8.2.0
+> 版本：v7.0.0 → v8.3
 
 ---
+
+## v8.3 — 版本号统一与发布链路单源化（首个两段式版本号）（2026-11-02）
+> 本条为**首个正式发布的两段式版本号**（`8.3`）。此前 `v8.2.2` / `v8.2.3` 为内部迭代、尚未对外发布，其成果整体并入本条发布记录，下文保留各自技术细节备查。
+
+- **版本号统一为 `8.3`（发布链路单源化）**：`app/package.json` 与 `app-android/package.json` **同步为 `8.3`** —— 二者分别是 `build-exe.yml`（Windows / Linux / macOS 单文件 exe）与 `build-android.yml` / `build-ios.yml`（APK + IPA）推导 GitHub Release TAG 的唯一依据，一旦不一致，5 个产物就会散落到不同 Release。同步刷新 `app/package-lock.json`（2 处）、双端 `data/version.json`（`version` 字段 + `released` + `notes` + `downloads.*` 5 个 URL 的 TAG 段）与双端 `index.html`（h1 版本徽标 + 页脚 `footVer`），并按新 `public/` 重新内联生成 `app/embedded-assets.js`（单文件 exe 的内联资源）。
+- **EXE 单文件实测加固（v8.2.3 迭代成果，随本版发布）**：用 Node SEA 实际构建并运行 `alphasun-beihai-climate.exe`（84.1MB），在独立部署目录中逐项验证 —— ① **`.exe` 同目录 `config.json` 确实被读取**（日志 `[cfg] 已加载国家海洋信息中心(NMDIS) 潮汐凭证…`）；② 首页与全部静态资源（css/js/geojson/version.json）由内联资源正常提供；③ `/api/tides`、`/api/overview` 返回完整数据；④ 潮汐卡片按新字段（`meanLevel/range/tidalType/springNeap/typicalRange`）输出。
+- **修复 SEA 下审计快照污染上级目录（真 bug）**：SEA 中 `__dirname` 指向 **`.exe` 所在目录**（非打包 blob 内部），原 `path.join(__dirname,'..','data')` 会把 `realtime-check.json` 写到 **exe 的上级目录**（实测写到了 `%TEMP%\data`）。新增 `app/lib/paths.js` 收敛运行形态路径（`isSea()` 走 `node:sea`，`dataRoot()` → exe 同目录 / 开发态项目根），`server.js` 改用 `dataPath('data','realtime-check.json')`；实测快照已正确落在 `.exe` 同目录 `data/`，上级目录不再被污染。
+- **Windows 防火墙拦截排障（EXE 部署必踩坑，已写入 INSTALL 排障表）**：exe 换目录运行后，Windows 会为新路径自动生成**入站「阻止」规则**（实测 6 条 Block 规则，且 Block 优先于 Allow），表现为「双击无反应 / 浏览器打不开 localhost:8765」；INSTALL.md 已给出管理员 `netsh advfirewall` 放行与删阻止规则的具体命令。
+- **NMDIS 三港站点代码查询 / 回填工具（新增 `tools/nmdis-portlist.js`）**：实测确认 NMDIS「获取站点列表」接口**全量鉴权**（`GetPortList` / `GetPortTideData` 未授权均返回 `{"code":"1000.1","message":"用户未授权"}`），三港真实 SiteCode 属付费订购内容（500 元/站/年），**公开渠道不可得、不可凭猜测硬编码**。故提供工具替代人工抄码：`--appid/--secret` 或环境变量或 `config.json` 取凭证 → 查询 → 按站名别名匹配三港 → 打印真实 SiteCode 与匹配依据 → `--write` 自动回填 `config.json` 的 `tideSiteCodes`（`--all` 可导出全量站点人工挑选）。
+- **站点匹配从「朴素子串」升级为「别名 + 坐标消歧」（新增 `app/lib/tideSites.js`）**：原 `nameMatch` 仅按站名子串匹配，**会命中辽宁铁山港等外省同名港**。新逻辑：① 站名别名命中（中文 / 英文 / 简称，如 `铁山港`/`TIESHANGANG`/`铁山`、`涠洲岛`/`WEIZHOU`/`涠洲`）；② 同名多候选 → 按 `Coordinate` 就近消歧；③ 站名完全未命中 → 30km 内坐标兜底（结果标注 `via`）。`app/lib/tides.js`（Node / EXE）、`tools/nmdis-portlist.js`、`app-android/www/js/data.js`（安卓内联副本）三处共用同一套规则。
+- **DoH DNS 兜底直连（新增 `app/lib/nmdisHttp.js`）**：实测本机 DNS（114DNS）对 `service-tide.nmdis.org.cn` 返回 **NXDOMAIN**，而 8.8.8.8 / 阿里 DoH 可正常解析（221.239.0.155）—— 即便用户配好凭证也会**静默降级为演示模型**且无提示。新增访问层：标准 DNS 失败（ENOTFOUND / EAI_AGAIN）时自动经**阿里 / 腾讯 DoH** 解析并以显式 `Host` 头直连 IP（NMDIS 为明文 HTTP，故可行），日志打印 `[nmdis] 本机 DNS 无法解析…已通过 DoH 直连 <IP> 完成请求`。已在 EXE 内实测生效。
+- **回归门禁扩容**：`tools/smoke.js` 由 **73 项扩至 102 项**（新增第 4 组「NMDIS 站点代码解析」：坐标格式解析 7 例、别名 / 坐标消歧 / 兜底匹配、4 种返回结构兼容、以及 EXE 路径与 DNS 兜底层的接入断言），全绿 102/0。新增断言固化：`parseCoord` 必能解析十进制度 + 方位（此前因度符号被设为必需而整体失配）、纯十进制对不得误把第二数当「分」、`nameMatch` 不得回归、SEA 落盘路径不得回退。
+- **随本版一并发布（v8.2.2 迭代成果）**：潮汐调和模型升级为**六分潮** `M2/S2/N2/K1/O1/P1` 并按站点 `tideScale` / `tidePhase` 差异化，基准面改为 `offset = Σ振幅 × scale` 使天文潮下限 ≈ LAT、彻底消除低潮钳平假象；新增 `tidalType`（半日潮 / 混合半日潮）、`springNeap`（大 / 中 / 小潮，由窗口潮差相对站点理论最大潮差判定）与 `typicalRange`；潮汐卡片新增今日 / 明日日期标签、「潮型 · 大潮」一行与均值基准线，`app/lib/tides.js` 与 `app-android/www/js/data.js` 双端一致。
+
+## v8.2.3 — EXE 环境实测加固 · 站点代码查询工具 · DNS 兜底（2026-11-02）
+- **EXE 单文件实测（首次完整验证）**：用 Node SEA 实际构建并运行 `alphasun-beihai-climate.exe`（84.1MB），在独立部署目录中逐项验证 —— ① **`.exe` 同目录 `config.json` 确实被读取**（日志 `[cfg] 已加载国家海洋信息中心(NMDIS) 潮汐凭证…`）；② 首页与全部静态资源（css/js/geojson/version.json）由内联资源正常提供；③ `/api/tides`、`/api/overview` 返回完整数据；④ 潮汐卡片按新字段（`meanLevel/range/tidalType/springNeap/typicalRange`）输出。
+- **修复 EXE 下审计快照污染上级目录（真 bug）**：SEA 中 `__dirname` 指向 **`.exe` 所在目录**（非打包 blob 内部），原 `path.join(__dirname,'..','data')` 会把 `realtime-check.json` 写到 **exe 的上级目录**（实测写到了 `%TEMP%\data`）。新增 `app/lib/paths.js` 收敛运行形态路径（`isSea()` 走 `node:sea`，`dataRoot()` → exe 同目录 / 开发态项目根），`server.js` 改用 `dataPath('data','realtime-check.json')`；实测快照已正确落在 `.exe` 同目录 `data/`，上级目录不再被污染。
+- **Windows 防火墙拦截（EXE 部署必踩坑，已写入 INSTALL 排障表）**：exe 换目录运行后，Windows 会为新路径自动生成**入站「阻止」规则**（实测 6 条 Block 规则，且 Block 优先于 Allow），表现为「双击无反应 / 浏览器打不开 localhost:8765」。INSTALL.md 已给出管理员 `netsh advfirewall` 放行与删阻止规则的具体命令。
+- **NMDIS 站点代码查询/回填工具（新增 `tools/nmdis-portlist.js`）**：实测确认 NMDIS「获取站点列表」接口**全量鉴权**（`GetPortList`/`GetPortTideData` 未授权均返回 `{"code":"1000.1","message":"用户未授权"}`），三港真实 SiteCode 属付费订购内容（500 元/站/年），**公开渠道不可得、不可凭猜测硬编码**。故提供工具替代人工抄码：`--appid/--secret` 或环境变量或 `config.json` 取凭证 → 查询 → 按站名别名匹配三港 → 打印真实 SiteCode 与匹配依据 → `--write` 自动回填 `config.json` 的 `tideSiteCodes`（`--all` 可导出全量站点人工挑选）。
+- **站点匹配从「朴素子串」升级为「别名 + 坐标消歧」（新增 `app/lib/tideSites.js`）**：原 `nameMatch` 仅按站名子串匹配，**会命中辽宁铁山港等外省同名港**。新逻辑：① 站名别名命中（中文/英文/简称，如 `铁山港`/`TIESHANGANG`/`铁山`、`涠洲岛`/`WEIZHOU`/`涠洲`）；② 同名多候选 → 按 `Coordinate` 就近消歧；③ 站名完全未命中 → 30km 内坐标兜底（结果标注 `via`）。`app/lib/tides.js`（Node/EXE）、`tools/nmdis-portlist.js`、`app-android/www/js/data.js`（安卓内联副本）三处共用同一套规则。
+- **DNS 兜底直连（新增 `app/lib/nmdisHttp.js`）**：实测本机 DNS（114DNS）对 `service-tide.nmdis.org.cn` 返回 **NXDOMAIN**，而 8.8.8.8 / 阿里 DoH 可正常解析（221.239.0.155）—— 即便用户配好凭证也会**静默降级为演示模型**且无提示。新增访问层：标准 DNS 失败（ENOTFOUND/EAI_AGAIN）时自动经**阿里 / 腾讯 DoH** 解析并以显式 `Host` 头直连 IP（NMDIS 为明文 HTTP，故可行），日志打印 `[nmdis] 本机 DNS 无法解析…已通过 DoH 直连 <IP> 完成请求`。已在 EXE 内实测生效。
+- **回归门禁扩容**：`tools/smoke.js` 由 **73 项扩至 102 项**（新增第 4 组「NMDIS 站点代码解析」：坐标格式解析 7 例、别名/坐标消歧/兜底匹配、4 种返回结构兼容、以及 EXE 路径与 DNS 兜底层的接入断言），全绿 102/0。新增断言固化：`parseCoord` 必能解析十进制度+方位（此前因度符号被设为必需而整体失配）、纯十进制对不得误把第二数当「分」、`nameMatch` 不得回归、SEA 落盘路径不得回退。
+- **文档**：INSTALL.md 新增「exe 同目录 config.json」「站点代码怎么填」「排障表」三节；`app/config.example.json` 注释同步；`package.json` 版本号 8.2.1 → 8.2.3。
+
+## v8.2.2 — 潮汐调和模型真实化 · 卡片展示增强（2026-11-02）
+- **潮汐调和模型真实化（无凭证时的 EXE 展示基础）**：原模型（`M2+S2+K1+O1`，均值 1.6、低潮被 `Math.max(0,h)` 钳平）存在低潮平底假象与站点无差异问题。现升级为**六分潮** `M2/S2/N2/K1/O1/P1`，并按站点 `tideScale`/`tidePhase` 差异化（北海港/铁山港/涠洲岛形态有别），基准面改为 `offset = Σ振幅 × scale` 使天文潮下限≈LAT、彻底消除钳平；`app/lib/tides.js` 与 `app-android/www/js/data.js` 双端一致。
+- **朔望大潮/小潮自动判别**：`finalizeTide` 新增 `tidalType`(半日潮/混合半日潮)、`springNeap`(大潮/中潮/小潮，由窗口潮差相对站点理论最大潮差判定) 与 `typicalRange`；因 M2–S2/N2 拍频，标签随农历朔望自然在「大潮→中潮→小潮」间约 14–15 天摆动（实测：大潮峰值潮差≈3.4m、小潮谷值≈1.0–1.6m），符合北部湾潮情。
+- **极值检测净化**：模型连续波形上的 15min 插值微抖与近均值次要拐点曾被误标为「低潮 3.5m」；`modelExtremes` 现加入显著起伏阈值(PROM=0.18m)与最小间隔(MIN_GAP_H=2.5h)、强制高/低交替（保留离均值更远者），并改由模型路径**直接采用其自带的正确高/低类型**（不再经 `classifyExtremes` 的严格交替重分类，避免误标）；双端一致。
+- **潮汐卡片展示增强**：`renderTides` 高低潮表日期列改为**今日/明日**本地化标签（跨日回退 M/D），新增「潮型 `<半日潮>` · `<大潮>`」一行；`tideWaveSVG` 在曲线内新增**均值基准线**（虚线灰）与既有警戒线并列，便于判断当前潮位相对均值/警戒的位置；Web 与安卓 `app.js` 同步。
+- **凭证注入已就位（上一轮）延续**：EXE 双击运行时 `server.js` 从 `config.json`(含 `.exe` 同目录回退) 注入 `NMDIS_APPID/APPSECRET`，`tides.js` 改为**懒读取** `process.env`，使「已配置却仍显示模型估算」的问题根除；安卓端 `data.js` 凭证来自 `window.ALPHASUN_CONFIG`（加载期即就绪，平台正确，保持不变）。仍须用户注册 NMDIS 并填入真实 `siteCode`(`tideSiteCodes`) 方切换官方预报。
+- 回归门禁 `tools/smoke.js` 维持 73/0 全绿（语法/双端一致/render/历法），潮汐改动均落在非字节同步文件集内，不触发前端镜像漂移。
+
+## v8.2.1 — 性能与代码质量优化（已发布 · 2026-11-01）
+- **概览响应短期缓存（性能·韧性）**：`/api/overview` 单次触发 40+ 外部请求（气象/空气/海洋/地震/台风/预警/7 源实况/区域/气候…），新增 60s 内存 TTL 缓存，显著降低上游负载与首屏延迟，并对上游瞬时抖动更具韧性；缓存对象只读复用，不引入状态风险。
+- **实况覆盖补全彩云源（一致性）**：`applyRealtimeOverride` 原先把 `caiyunRes` 当死参数丢弃；配置 `CAIYUN_TOKEN` 时现将其纳入实时覆盖优先级（中国气象局 > 中国天气网 > 和风天气 > 彩云天气 > wttr.in），使彩云实况不仅参与交叉校核、也参与实时天气静默覆盖。
+- **霞光概率去重（可维护性）**：`sunsetGlow`/`sunriseGlow` 合并为 `evaluateGlow(station, isMorning)`，去除约 80% 重复代码，原因子文案逐字保留、行为零变化（黄昏=`色彩/霞光`、早晨=`朝霞`、冬春清晨雾削弱仅作用于早晨）。
+- **野火采集清理（健壮性）**：`fetchFires` 去掉冗余 `AbortController ?` 三元判断，直接使用原生 `AbortController`。
+- **实况归一化去重（可维护性）**：新增 `buildCurrent(spec)` 统一实况 `current` 归一化（类型规整 + WMO 文本/图标兜底 + feels 缺省回退 temp + 气压≤0 归零 + 云量缺失归 100 + uv 一位小数 + vis 容错），7 个实时源 fetcher（和风天气/中国天气网/中国气象局/彩云/wttr.in/yr.no 及 Open-Meteo 区域）统一复用，去除 7 处重复的 `current` 对象构造；Web 端 `app/lib/sources.js` 与安卓端 `app-android/www/js/data.js` 双端保持一致。
+- 回归门禁 `tools/smoke.js` 维持 73/0 全绿（语法/双端一致/render/历法）。
 
 ## v8.2.0 — 页脚开源地址 · 多端自动更新 · EXE 构建纳入 CI · 文档梳理
 - **页脚版本与开源地址（需求①）**：页面底部新增版本号展示 + **GitHub / Gitee 开源地址链接** + 「检查更新」入口；`version.json` 升级为统一更新清单（含 `github`/`gitee`/`releases` 与 `downloads` 各平台稳定下载 URL）。

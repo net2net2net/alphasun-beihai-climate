@@ -27,10 +27,15 @@ const STATIONS = [
 //   获取方式：注册 service-tide.nmdis.org.cn 取得 appid/appsecret 后，
 //   调用其「获取站点信息」接口或登录 global-tide.nmdis.org.cn 查各港代码；
 //   留空则潮汐模块降级为调和模型估算。同时需在运行环境设置 NMDIS_APPID / NMDIS_APPSECRET。
+// tideScale：潮差相对基准的缩放（演示值，使三站形态有别）；tidePhase：站点相位微调；
+// tideType：潮型分类（用于卡片展示）。正式预报由 NMDIS siteCode 接管后这些仅作降级模型参考。
 const TIDE_STATIONS = [
-  { id: 'bhg',   name: '北海港',   lat: 21.48, lon: 109.07, datum: 0.0, warnLevel: 4.0, siteCode: '' },
-  { id: 'tsg',   name: '铁山港',   lat: 21.40, lon: 109.47, datum: 0.0, warnLevel: 4.2, siteCode: '' },
-  { id: 'wzd',   name: '涠洲岛',   lat: 21.05, lon: 109.10, datum: 0.0, warnLevel: 3.8, siteCode: '' },
+  { id: 'bhg',   name: '北海港',   lat: 21.48, lon: 109.07, datum: 0.0, warnLevel: 4.0, siteCode: '',
+    tideScale: 1.00, tidePhase: 0.00,  tideType: '半日潮' },
+  { id: 'tsg',   name: '铁山港',   lat: 21.40, lon: 109.47, datum: 0.0, warnLevel: 4.2, siteCode: '',
+    tideScale: 0.78, tidePhase: 0.18,  tideType: '半日潮' },
+  { id: 'wzd',   name: '涠洲岛',   lat: 21.05, lon: 109.10, datum: 0.0, warnLevel: 3.8, siteCode: '',
+    tideScale: 1.10, tidePhase: -0.22, tideType: '混合半日潮' },
 ];
 
 // 北海地理中心（用于地震距离计算）
@@ -53,7 +58,8 @@ const API = {
   // ⚠️ 野火 NASA FIRMS 活跃火点（需 FIRMS_MAP_KEY，缺省降级）
   firms: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv',
   // ⚠️ 潮汐 国家海洋信息中心（需 NMDIS_APPID/APPSECRET，缺省用调和模型估算）
-  nmdis: 'https://service-tide.nmdis.org.cn',
+  // 官方文档基址为 http://service-tide.nmdis.org.cn:8080（GetPortTideData / GetPortList 同源）
+  nmdis: 'http://service-tide.nmdis.org.cn:8080',
   // ✅ 台风 中央气象台（nmc）实时路径，国内直连免密钥
   typhoonList: 'http://typhoon.nmc.cn/weatherservice/typhoon/jsons/list_default',
   typhoonView: 'http://typhoon.nmc.cn/weatherservice/typhoon/jsons/view_',

@@ -124,6 +124,33 @@ function dirToDeg(d) {
 // 中国天气网(CMA) 公开接口 d1.weather.com.cn/sk_ 已于近年全局下线（301 跳转商用引导页），
 // 故改用「和风天气 QWeather」——CMA 数据的官方商业分发方——作为权威中国实况源。
 // 配置环境变量 QWEATHER_KEY（免费 dev key）后启用；未配置时回退原 d1 接口（通常不可达，标记 skipped）。
+
+// 统一实况 current 归一化：各源 fetcher 在调用前已按自身单位/字段完成换算
+// （如风速 km/h→m/s、风力级→m/s、气压≤0 归零、云量缺失归 100），此处仅做类型规整与 WMO 兜底，
+// 不改变各源既有取值语义。所有 fetcher 复用，去除 7 处重复的 current 对象构造。
+function buildCurrent(spec) {
+  const w = wmo(spec.code);
+  return {
+    time: spec.time,
+    temp: (spec.temp != null && !isNaN(+spec.temp)) ? +spec.temp : null,
+    feels: (spec.feels != null && !isNaN(+spec.feels)) ? +spec.feels
+      : ((spec.temp != null && !isNaN(+spec.temp)) ? +spec.temp : null),
+    rh: (spec.rh != null && !isNaN(+spec.rh)) ? Math.round(+spec.rh) : null,
+    precip: (spec.precip != null && !isNaN(+spec.precip)) ? +spec.precip : 0,
+    code: spec.code,
+    text: spec.text || w[0],
+    icon: spec.icon || w[1],
+    wind: (spec.wind != null && !isNaN(+spec.wind)) ? +spec.wind : 0,
+    gust: (spec.gust != null && !isNaN(+spec.gust)) ? +spec.gust : 0,
+    windDir: (spec.windDir != null && !isNaN(+spec.windDir)) ? +spec.windDir : 0,
+    pressure: (spec.pressure != null && !isNaN(+spec.pressure) && +spec.pressure > 0) ? +spec.pressure : 0,
+    cloud: (spec.cloud != null && !isNaN(+spec.cloud)) ? +spec.cloud : 100,
+    isDay: (spec.isDay != null) ? +spec.isDay : 1,
+    uv: (spec.uv != null && !isNaN(+spec.uv)) ? +(+spec.uv).toFixed(1) : null,
+    vis: (spec.vis != null && !isNaN(+spec.vis)) ? +spec.vis : null,
+  };
+}
+
 async function qweatherNow(s) {
   const key = process.env.QWEATHER_KEY;
   if (!key) return null;
@@ -150,14 +177,14 @@ async function qweatherNow(s) {
   const wind = (parseFloat(n.windSpeed) || 0) / 3.6; // km/h -> m/s
   return {
     ok: true, source: 'cma', label: '和风天气(QWeather)', time: n.obsTime || null,
-    current: {
+    current: buildCurrent({
       time: new Date().toISOString().slice(0, 16),
       temp: parseFloat(n.temp), feels: parseFloat(n.feelsLike),
-      rh: parseInt(n.humidity, 10) || 0, precip: parseFloat(n.precip) || 0,
+      rh: parseInt(n.humidity, 10), precip: parseFloat(n.precip),
       code, text: zh || wmo(code)[0], icon: wmo(code)[1],
       wind, gust: 0, windDir: dirToDeg(n.windDir),
-      pressure: parseFloat(n.pressure) || 0, cloud: parseInt(n.cloud, 10) || 100, isDay: 1, uv: (typeof uvIdx === 'number' && !isNaN(uvIdx)) ? +uvIdx.toFixed(1) : null, vis: (n.vis != null ? parseFloat(n.vis) : null),
-    },
+      pressure: parseFloat(n.pressure), cloud: parseInt(n.cloud, 10), isDay: 1, uv: uvIdx, vis: (n.vis != null ? parseFloat(n.vis) : null),
+    }),
   };
 }
 async function fetchCmaLive(s) {
@@ -189,14 +216,14 @@ async function fetchCmaLive(s) {
     const wind = parseFloat(String(j.WS || '0').replace(/[^0-9.]/g, ''));
     return {
       ok: true, source: 'cma', city: CITY, time: j.time,
-      current: {
+      current: buildCurrent({
         time: new Date().toISOString().slice(0, 16),
         temp: parseFloat(j.temp), feels: parseFloat(j.temp),
-        rh: isNaN(rh) ? null : rh, precip: isNaN(precip) ? 0 : precip,
+        rh, precip,
         code, text: zh || wmoPair[0], icon: wmoPair[1],
-        wind: isNaN(wind) ? 0 : wind, gust: 0,
+        wind, gust: 0,
         windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1,
-      },
+      }),
     };
   } catch (e) { return { ok: false, error: 'cma parse: ' + (e.message || e) }; }
 }
@@ -235,14 +262,14 @@ async function fetchWeatherCnLive(s) {
     const pressure = parseFloat(j.qy) || 0;
     return {
       ok: true, source: 'weathercn', label: '中国天气网(国家气象中心)', time: j.time,
-      current: {
+      current: buildCurrent({
         time: new Date().toISOString().slice(0, 16),
         temp: parseFloat(j.temp), feels: parseFloat(j.temp),
-        rh: isNaN(rh) ? null : rh, precip: isNaN(precip) ? 0 : precip,
+        rh, precip,
         code, text: zh || wmoPair[0], icon: wmoPair[1],
         wind, gust: 0, windDir: dirToDeg(j.WD), pressure: pressure > 0 ? pressure : 0,
-        cloud: 100, isDay: 1, uv: null, vis: null,
-      },
+        cloud: 100, isDay: 1,
+      }),
     };
   } catch (e) { return { ok: false, error: 'weathercn parse: ' + (e.message || e) }; }
 }
@@ -273,12 +300,12 @@ async function fetchCmaGovLive(s) {
     const text = (precip > 0.1) ? '雨' : '多云';
     return {
       ok: true, source: 'cmagov', label: '中国气象局(CMA)', time: (j.data && j.data.lastUpdate) || null,
-      current: {
+      current: buildCurrent({
         time: new Date().toISOString().slice(0, 16),
         temp, feels: temp, rh, precip: precip > 0 ? +precip.toFixed(1) : 0,
         code, text, icon: wmo(code)[1], wind, gust: 0, windDir, pressure: pressure > 0 ? pressure : 0,
-        cloud: 100, isDay: 1, uv: null, vis: null,
-      },
+        cloud: 100, isDay: 1,
+      }),
     };
   } catch (e) { return { ok: false, error: 'cmagov parse: ' + (e.message || e) }; }
 }
@@ -313,15 +340,15 @@ async function fetchWttrLive(s) {
     const m = enToWmo(desc);
     return {
       ok: true, source: 'wttr', label: 'wttr.in', time: c.localObsDateTime || null,
-      current: {
+      current: buildCurrent({
         temp: parseFloat(c.temp_C), feels: parseFloat(c.FeelsLikeC),
-        rh: parseInt(c.humidity, 10) || 0,
-        precip: parseFloat(c.precipMM) || 0,
+        rh: parseInt(c.humidity, 10),
+        precip: parseFloat(c.precipMM),
         code: m.code, text: m.zh, icon: wmo(m.code)[1],
         wind: (parseFloat(c.windspeedKmph) || 0) / 3.6, gust: 0,
-        windDir: parseFloat(c.winddirDegree) || 0, pressure: 0,
-        cloud: parseInt(c.cloudcover, 10) || 0, isDay: 1, uv: (c.uvIndex != null ? parseFloat(c.uvIndex) : null), vis: (c.visibility != null ? parseFloat(c.visibility) : null),
-      },
+        windDir: parseFloat(c.winddirDegree), pressure: 0,
+        cloud: parseInt(c.cloudcover, 10), isDay: 1, uv: (c.uvIndex != null ? parseFloat(c.uvIndex) : null), vis: (c.visibility != null ? parseFloat(c.visibility) : null),
+      }),
     };
   } catch (e) { return { ok: false, error: 'wttr parse: ' + (e.message || e) }; }
 }
@@ -366,14 +393,14 @@ async function fetchCaiyunLive(s) {
     else if (typeof rt.precipitation === 'number') precip = rt.precipitation;
     return {
       ok: true, source: 'caiyun', label: '彩云天气(Caiyun)', time: null,
-      current: {
+      current: buildCurrent({
         time: new Date().toISOString().slice(0, 16),
         temp: parseFloat(rt.temperature),
         feels: parseFloat(rt.apparent_temperature != null ? rt.apparent_temperature : rt.temperature),
-        rh, precip: isNaN(precip) ? 0 : precip,
+        rh, precip,
         code: sky.code, text: sky.zh, icon: wmo(sky.code)[1],
         wind, gust: 0, windDir, pressure: 0, cloud, isDay: 1,
-      },
+      }),
     };
   } catch (e) { return { ok: false, error: 'caiyun parse: ' + (e.message || e) }; }
 }
@@ -410,14 +437,15 @@ async function fetchMetNoLive(s) {
     const n1 = (ts.data.next_1_hours && ts.data.next_1_hours.details && ts.data.next_1_hours.details.precipitation_amount);
     if (typeof n1 === 'number' && n1 > 0.1) { code = 61; text = '雨'; }
     const cat = wxCategory(code, text);
+    const metCurrent = buildCurrent({
+      time: new Date().toISOString().slice(0, 16),
+      temp, feels: temp, rh, precip: (typeof n1 === 'number' ? n1 : 0),
+      code, text, icon: wmo(code)[1], wind, gust, windDir, pressure, cloud, isDay: 1,
+    });
+    metCurrent.realtimeSource = 'MET Norway (yr.no)';
     return {
       ok: true, source: 'metno', label: '挪威气象局(yr.no)', time: ts.time || null,
-      current: {
-        time: new Date().toISOString().slice(0, 16),
-        temp, feels: temp, rh, precip: (typeof n1 === 'number' ? n1 : 0),
-        code, text, icon: wmo(code)[1], wind, gust, windDir, pressure, cloud, isDay: 1, uv: null, vis: null,
-        realtimeSource: 'MET Norway (yr.no)',
-      },
+      current: metCurrent,
     };
   } catch (e) { return { ok: false, error: 'metno parse: ' + (e.message || e) }; }
 }
@@ -683,7 +711,7 @@ async function fetchFires() {
   if (!process.env.FIRMS_MAP_KEY) return { ok: false, configured: false, reason: '未配置 FIRMS_MAP_KEY' };
   // bbox 覆盖北部湾 + 桂南：经度 106–112，纬度 20–23
   const url = `${API.firms}/${process.env.FIRMS_MAP_KEY}/VIIRS_SNPP_NRT/-1/106,20,112,23/1`;
-  const csv = await fetch(url, { signal: AbortController ? new AbortController().signal : undefined }).then(r => r.text());
+  const csv = await fetch(url, { signal: new AbortController().signal }).then(r => r.text());
   const lines = csv.trim().split('\n').slice(1);
   const fires = lines.map(l => l.split(','))
     .filter(a => a.length > 5)

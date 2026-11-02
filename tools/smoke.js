@@ -469,6 +469,101 @@ function runAssertions() {
     ok(false, 'data.js 运行时加载未抛错: ' + (e.stack || e.message));
   }
 
+  // ---------------------------------------------------------------------------
+  // 4) NMDIS 站点代码解析（tideSites.js）—— 站名别名 + 坐标消歧
+  //    真实 SiteCode 需 NMDIS 凭证方可获取（服务为付费订购：500 元/站/年），
+  //    故此处用「接口真实结构」的模拟列表验证匹配逻辑，确保证码后能正确命中三港。
+  // ---------------------------------------------------------------------------
+  section('4) NMDIS 站点代码解析（别名匹配 / 坐标消歧 / 返回结构兼容）');
+  try {
+    const ts = require(path.join(ROOT, 'app', 'lib', 'tideSites'));
+    const { TIDE_STATIONS } = require(path.join(ROOT, 'app', 'lib', 'config'));
+
+    // 坐标解析
+    const c1 = ts.parseCoord("    6°57′N 79°51′E");
+    ok(c1 && Math.abs(c1.lat - (6 + 57 / 60)) < 1e-6 && Math.abs(c1.lon - (79 + 51 / 60)) < 1e-6,
+      'parseCoord 解析度分格式（斯里兰卡科伦坡港 → 6.95N/79.85E）');
+    const c2 = ts.parseCoord('21.48N 109.07E');
+    ok(c2 && Math.abs(c2.lat - 21.48) < 1e-6 && Math.abs(c2.lon - 109.07) < 1e-6,
+      'parseCoord 解析十进制度+方位（21.48N 109.07E）');
+    const c3 = ts.parseCoord('40°40′N 122°10′E');
+    ok(c3 && c3.lat > 40 && c3.lon > 122, 'parseCoord 解析北半球度数（辽宁铁山港诱饵坐标）');
+
+    // 模拟 NMDIS「获取站点列表」返回（结构与官方示例一致：Title 中英双语 + Coordinate 度分）
+    const MOCK_PORTS = [
+      { SiteCode: 'S003', Title: '斯里兰卡－科伦坡港（SRILANKA－PORTCOLOMBO）', Coordinate: '    6°57′N 79°51′E' },
+      { SiteCode: 'BHS001', Title: '中国－北海港（CHINA－BEIHAI）', Coordinate: '21°29′N 109°04′E' },
+      { SiteCode: 'TSG002', Title: '中国－铁山港（CHINA－TIESHANGANG）', Coordinate: '21°24′N 109°28′E' },
+      { SiteCode: 'WZD003', Title: '中国－涠洲岛（CHINA－WEIZHOU ISLAND）', Coordinate: '21°03′N 109°06′E' },
+      // 同名诱饵：辽宁铁山港（站名完全相同，靠坐标消歧排除）
+      { SiteCode: 'LN999', Title: '中国－铁山港（CHINA－TIESHANGANG）', Coordinate: '40°40′N 122°10′E' },
+    ];
+    const m = ts.matchStations(MOCK_PORTS, TIDE_STATIONS);
+    ok(m.bhg && m.bhg.code === 'BHS001', '北海港匹配到真实 SiteCode（BHS001）');
+    ok(m.tsg && m.tsg.code === 'TSG002', '铁山港匹配到北海 SiteCode（TSG002，非辽宁同名诱饵 LN999）');
+    ok(m.wzd && m.wzd.code === 'WZD003', '涠洲岛匹配到真实 SiteCode（WZD003）');
+    ok(m.tsg && m.tsg.via === 'name+coord', '同名多候选时启用坐标消歧（via=name+coord）');
+    ok(m.bhg && m.bhg.distKm !== null && m.bhg.distKm < 15, '匹配结果含坐标距离（便于人工复核站点是否正确）');
+
+    // 纯英文标题（无中文）也应命中
+    const m2 = ts.matchStations([{ SiteCode: 'E01', Title: 'BEIHAI', Coordinate: '21.48N 109.07E' }], TIDE_STATIONS);
+    ok(m2.bhg && m2.bhg.code === 'E01', '纯英文站名 BEIHAI 也能命中北海港（别名兼容）');
+    // 简称「涠洲」「铁山」也应命中
+    const m3 = ts.matchStations([
+      { SiteCode: 'E02', Title: '涠洲', Coordinate: '21.05N 109.10E' },
+      { SiteCode: 'E03', Title: '铁山', Coordinate: '21.40N 109.47E' },
+    ], TIDE_STATIONS);
+    ok(m3.wzd && m3.wzd.code === 'E02' && m3.tsg && m3.tsg.code === 'E03', '简称「涠洲」「铁山」可命中对应站点');
+
+    // 站名完全不匹配时，坐标就近兜底
+    const m4 = ts.matchStations([{ SiteCode: 'E04', Title: '某无名港', Coordinate: '21.480N 109.070E' }], TIDE_STATIONS);
+    ok(m4.bhg && m4.bhg.code === 'E04' && m4.bhg.via === 'coord', '站名未命中时坐标就近兜底（via=coord）');
+
+    // 返回结构兼容
+    ok(Array.isArray(ts.pickPortList({ ResultValue: { data: MOCK_PORTS } })), 'pickPortList 兼容 ResultValue.data 数组结构');
+    ok(Array.isArray(ts.pickPortList({ ResultValue: MOCK_PORTS })), 'pickPortList 兼容 ResultValue 数组结构');
+    ok(Array.isArray(ts.pickPortList({ data: MOCK_PORTS })), 'pickPortList 兼容 data 数组结构');
+    ok(Array.isArray(ts.pickPortList(MOCK_PORTS)), 'pickPortList 兼容顶层数组结构');
+
+    // 运行时接入检查：tides.js / data.js 均已改为基于 tideSites 的匹配
+    const tidesSrc = fs.readFileSync(path.join(ROOT, 'app', 'lib', 'tides.js'), 'utf8');
+    ok(/require\('\.\/tideSites'\)/.test(tidesSrc) && /matchStations\(list, TIDE_STATIONS\)/.test(tidesSrc),
+      'lib/tides.js 已接入 tideSites.matchStations（别名+坐标消歧）');
+    ok(!/function nameMatch\(/.test(tidesSrc), 'lib/tides.js 旧的朴素 nameMatch 已移除（避免匹配到外省同名港）');
+    const dataSrc2 = fs.readFileSync(path.join(ROOT, 'app-android', 'www', 'js', 'data.js'), 'utf8');
+    ok(/matchStations/.test(dataSrc2) && /parseCoord/.test(dataSrc2),
+      '安卓 data.js 已镜像 tideSites 匹配逻辑（别名+坐标消歧）');
+
+    // EXE 路径：SEA 下数据根目录必须落在 .exe 同目录，而非其上级目录
+    const pathsMod = require(path.join(ROOT, 'app', 'lib', 'paths'));
+    ok(typeof pathsMod.isSea === 'function' && typeof pathsMod.dataRoot === 'function',
+      'lib/paths.js 导出 isSea/dataRoot（EXE 落盘路径收敛）');
+    const srvSrc2 = fs.readFileSync(path.join(ROOT, 'app', 'server.js'), 'utf8');
+    ok(/dataPath\('data', 'realtime-check\.json'\)/.test(srvSrc2),
+      'server.js 校核快照改用 dataPath()（EXE 下写入 .exe 同目录/data/）');
+  ok(!/path\.join\(__dirname, '\.\.', 'data'/.test(srvSrc2),
+    'server.js 已移除 __dirname/../data 写法（SEA 下会污染 exe 上级目录）');
+
+  // NMDIS 访问层：本机 DNS（114DNS 等）对该域名会返回 NXDOMAIN，需 DoH 兜底直连 IP
+  const nh = require(path.join(ROOT, 'app', 'lib', 'nmdisHttp'));
+  ok(typeof nh.postNmdis === 'function' && typeof nh.dohResolve === 'function',
+    'lib/nmdisHttp.js 导出 postNmdis/dohResolve（DNS 兜底访问层）');
+  const nhSrc = fs.readFileSync(path.join(ROOT, 'app', 'lib', 'nmdisHttp.js'), 'utf8');
+  ok(/dns\.alidns\.com\/resolve/.test(nhSrc) && /doh\.pub\/resolve/.test(nhSrc),
+    'nmdisHttp.js 内置国内可达 DoH 解析器（阿里 / 腾讯）');
+  ok(/Host/.test(nhSrc), 'nmdisHttp.js 直连 IP 时显式带 Host 头（保持原域名）');
+  ok(/postNmdis/.test(tidesSrc), 'lib/tides.js 已改走 nmdisHttp.postNmdis（DNS 失败自动兜底）');
+  ok(!/await fetch\(url,/.test(tidesSrc), 'lib/tides.js 不再直接依赖裸 fetch（绕过 DNS 兜底）');
+
+  // 命令行查询/回填工具
+  ok(fs.existsSync(path.join(ROOT, 'tools', 'nmdis-portlist.js')), 'tools/nmdis-portlist.js 存在（站点代码查询与回填工具）');
+  const toolSrc = fs.readFileSync(path.join(ROOT, 'tools', 'nmdis-portlist.js'), 'utf8');
+  ok(/--write/.test(toolSrc) && /tideSiteCodes/.test(toolSrc), 'nmdis-portlist.js 支持 --write 回填 config.json 的 tideSiteCodes');
+  ok(/matchStations/.test(toolSrc), 'nmdis-portlist.js 复用 tideSites.matchStations（与运行时同一套匹配规则）');
+} catch (e) {
+      ok(false, 'NMDIS 站点代码解析断言未抛错: ' + (e.stack || e.message));
+  }
+
   finish();
 }
 

@@ -130,7 +130,8 @@
     climate: 'https://climate-api.open-meteo.com/v1/climate',
     usgs: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson',
     firms: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv',
-    nmdis: 'https://service-tide.nmdis.org.cn',
+    // 官方文档基址为 http://service-tide.nmdis.org.cn:8080（GetPortTideData / GetPortList 同源）；CapacitorHttp 原生请求与代理均兼容
+    nmdis: 'http://service-tide.nmdis.org.cn:8080',
     // 必须用 HTTPS（nmc 已支持且返回 Access-Control-Allow-Origin:*）。
     // 之前误用 http:// 明文，Android WebView 默认拦截明文流量，导致台风/区域告警在手机端取不到。
     typhoonList: 'https://typhoon.nmc.cn/weatherservice/typhoon/jsons/list_default',
@@ -621,17 +622,22 @@
   // ===================== 潮汐/水位 =====================
   // 与 web 端 app/lib/tides.js 字段级一致：NMDIS 官方预报优先，缺凭据/站点代码时降级调和模型。
   const CONSTITUENTS = [
-    { name: 'M2', amp: 1.9, period: 12.4206, phase: 1.2 },
-    { name: 'S2', amp: 0.7, period: 12.0000, phase: 0.4 },
-    { name: 'K1', amp: 0.4, period: 23.9345, phase: 3.1 },
-    { name: 'O1', amp: 0.3, period: 25.8194, phase: 5.0 },
+    { name: 'M2', amp: 0.95, period: 12.4206, phase: 1.2 },
+    { name: 'S2', amp: 0.40, period: 12.0000, phase: 0.4 },
+    { name: 'N2', amp: 0.19, period: 12.6584, phase: 2.1 },
+    { name: 'K1', amp: 0.22, period: 23.9345, phase: 3.1 },
+    { name: 'O1', amp: 0.17, period: 25.8194, phase: 5.0 },
+    { name: 'P1', amp: 0.12, period: 24.0659, phase: 3.6 },
   ];
-  const MEAN_LEVEL = 1.6;
-  function tideAt(date, phaseOff) {
+  const SUM_AMP = CONSTITUENTS.reduce((a, c) => a + c.amp, 0);
+  function tideAt(st, date, phaseOff) {
     const t = date.getTime() / 1000;
-    let h = MEAN_LEVEL;
-    for (const c of CONSTITUENTS) h += c.amp * Math.cos((2 * Math.PI * t) / (c.period * 3600) - c.phase + (phaseOff || 0));
-    return +Math.max(0, h).toFixed(2); // 相对理论最低潮面(LAT)
+    const scale = (st && st.tideScale) || 1;
+    const ph = (st && st.tidePhase) || 0;
+    const offset = SUM_AMP * scale; // 基准面：令曲线下限≈LAT(>0)，消除钳平假象
+    let h = offset;
+    for (const c of CONSTITUENTS) h += c.amp * scale * Math.cos((2 * Math.PI * t) / (c.period * 3600) - c.phase + (phaseOff || 0) + ph);
+    return +h.toFixed(2); // 相对理论最低潮面(LAT)
   }
   function localDateStr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function sampleBase(base, startMs, ms) {
@@ -654,16 +660,32 @@
     const today = new Date();
     const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
     const startMs = start.getTime(), base = [];
-    for (let k = 0; k < 48; k++) base.push(tideAt(new Date(startMs + k * 3600000), phaseOff));
+    for (let k = 0; k < 48; k++) base.push(tideAt(st, new Date(startMs + k * 3600000), phaseOff));
     return { base, startMs };
   }
   function modelExtremes(series) {
-    const ext = [];
+    if (!series.length) return [];
+    const m = series.reduce((a, b) => a + b.h, 0) / series.length;
+    const PROM = 0.18, MIN_GAP_H = 2.5;
+    const raw = [];
     for (let i = 1; i < series.length - 1; i++) {
       const a = series[i - 1].h, b = series[i].h, c = series[i + 1].h;
-      if ((b > a && b >= c) || (b < a && b <= c)) ext.push({ time: series[i].t, h: b, type: b >= MEAN_LEVEL ? 'high' : 'low' });
+      if ((b > a && b >= c) || (b < a && b <= c)) raw.push({ t: new Date(series[i].t).getTime(), h: b, type: b >= m ? 'high' : 'low' });
     }
-    return ext;
+    const out = [];
+    for (const e of raw) {
+      if (Math.abs(e.h - m) < PROM) continue;
+      if (out.length) {
+        const last = out[out.length - 1];
+        const gapH = (e.t - last.t) / 3600000;
+        if (gapH < MIN_GAP_H || e.type === last.type) {
+          if (Math.abs(e.h - m) <= Math.abs(last.h - m)) continue;
+          out.pop();
+        }
+      }
+      out.push(e);
+    }
+    return out.map(e => ({ time: new Date(e.t).toISOString(), h: +e.h.toFixed(2), type: e.type }));
   }
   // 解析 NMDIS 单日返回：a0..a23 逐时潮高(cm) + csN/cgN 高低潮（时分 HH:MM / 潮高 cm）
   function parseNmdisDay(data, dateStr) {
@@ -721,12 +743,22 @@
     const hs = series.map(s => s.h);
     const lowest = +Math.min(...hs).toFixed(2), highest = +Math.max(...hs).toFixed(2);
     const meanLevel = +(hs.reduce((a, b) => a + b, 0) / hs.length).toFixed(2);
+    const range = +(highest - lowest).toFixed(2);
+    const scale = (st && st.tideScale) || 1;
+    const typicalRange = +(2 * SUM_AMP * scale).toFixed(2);
+    let springNeap = '中潮';
+    if (typicalRange > 0) {
+      const rr = range / typicalRange;
+      springNeap = rr >= 0.8 ? '大潮' : (rr <= 0.45 ? '小潮' : '中潮');
+    }
+    const tidalType = (st && st.tideType) || '半日潮';
     const perHour = 60 / 15, hourly = [];
     for (let k = 0; k <= 24; k++) hourly.push(series[Math.min(k * perHour, series.length - 1)]);
     return {
       ok: true, source: meta.source, configured: meta.configured, model: !!meta.model, real: !!meta.real, degraded: !!meta.degraded,
       datumLabel: meta.datumLabel || '理论最低潮面 (LAT)',
-      meanLevel, current, trend, rate, lowest, highest, range: +(highest - lowest).toFixed(2),
+      meanLevel, current, trend, rate, lowest, highest, range,
+      tidalType, springNeap, typicalRange,
       warnLevel: st.warnLevel, margin: +(current - st.warnLevel).toFixed(2), exceeded: current >= st.warnLevel,
       series, extremes: ext, next, hourly,
     };
@@ -755,11 +787,156 @@
       return null;
     }
   }
+  // ---- 站点代码自动解析（NMDIS「获取站点列表」接口，需凭证）----
+  // 匹配逻辑与 web 端 app/lib/tideSites.js 保持一致（安卓端为内联副本）：
+  //   A. 站名别名命中 → B. 同名多候选用坐标消歧 → C. 坐标就近兜底（30km）
+  // 目的：避免匹配到外省同名港（如辽宁铁山港），确保命中北海三港。
+  const PORTLIST_URL = `${API.nmdis}/api/v1/CoreData/GetPortList`;
+  const TIDE_SITE_ALIASES = {
+    bhg: ['北海港', '北海', 'BEIHAI'],
+    tsg: ['铁山港', '铁山', 'TIESHANGANG', 'TIESHAN'],
+    wzd: ['涠洲岛', '涠洲', 'WEIZHOU', 'WEIZHOUDao'],
+  };
+  let _codeCache = null, _codeCacheAt = 0, _codeInflight = null, _codeLogged = false;
+  function normName(s) {
+    return String(s == null ? '' : s).toLowerCase()
+      .replace(/[\s\-_－—–()（）\/·、,，.。'"“”‘’]/g, '');
+  }
+  function parseCoord(raw) {
+    if (!raw) return null;
+    const s = String(raw);
+    const re = /(\d+(?:\.\d+)?)\s*(?:(?:°|度)\s*(?:(\d+(?:\.\d+)?)\s*(?:['′’]|分)?)?)?\s*([NSEWnsew])?/g;
+    const pts = [];
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      let v = parseFloat(m[1]);
+      if (!isFinite(v)) continue;
+      const mi = m[2] !== undefined ? parseFloat(m[2]) : 0;
+      if (isFinite(mi)) v += mi / 60;
+      const d = (m[3] || '').toUpperCase();
+      if (d === 'S' || d === 'W') v = -v;
+      pts.push(v);
+      if (pts.length >= 2) break;
+    }
+    if (pts.length < 2) return null;
+    const lat = pts[0], lon = pts[1];
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return { lat, lon };
+  }
+  function distKm(a, b) {
+    const R = 6371, rad = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+    const x = Math.sin(dLat / 2) ** 2 +
+      Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(x)));
+  }
+  function titleHit(title, id) {
+    const t = normName(title);
+    if (!t) return false;
+    return (TIDE_SITE_ALIASES[id] || []).some(a => {
+      const n = normName(a);
+      return n && (t.indexOf(n) >= 0 || n.indexOf(t) >= 0);
+    });
+  }
+  function pickPortList(j) {
+    if (!j) return null;
+    if (j.ResultValue && Array.isArray(j.ResultValue.data)) return j.ResultValue.data;
+    if (j.ResultValue && Array.isArray(j.ResultValue)) return j.ResultValue;
+    if (j.ResultValue && Array.isArray(j.ResultValue.list)) return j.ResultValue.list;
+    if (j.ResultValue && Array.isArray(j.ResultValue.ports)) return j.ResultValue.ports;
+    if (j.data && Array.isArray(j.data)) return j.data;
+    if (j.data && Array.isArray(j.data.list)) return j.data.list;
+    if (Array.isArray(j)) return j;
+    return null;
+  }
+  function matchStations(rawList, stations) {
+    const items = (rawList || []).map(it => {
+      if (!it || typeof it !== 'object') return null;
+      const code = it.SiteCode || it.siteCode || it.Code || it.code || '';
+      const title = it.Title || it.SiteName || it.siteName || it.Name || it.name ||
+        it.PortName || it.portName || it.CnName || '';
+      if (!code && !title) return null;
+      return {
+        code: String(code || '').trim(),
+        title: String(title || '').trim(),
+        coord: parseCoord(it.Coordinate || it.coordinate || it.Coord || it.coord || it.Position || ''),
+      };
+    }).filter(Boolean);
+    const out = {};
+    for (const st of stations) {
+      let cands = items.filter(it => titleHit(it.title, st.id));
+      let via = 'name';
+      if (cands.length > 1) {
+        const withC = cands.filter(c => c.coord);
+        if (withC.length) {
+          withC.sort((a, b) => distKm(a.coord, st) - distKm(b.coord, st));
+          cands = [withC[0]];
+        } else {
+          cands = [cands[0]];
+        }
+        via = 'name+coord';
+      } else if (cands.length === 0) {
+        const near = items.filter(it => it.coord && it.code)
+          .map(it => ({ it, d: distKm(it.coord, st) }))
+          .filter(x => x.d <= 30)
+          .sort((a, b) => a.d - b.d);
+        if (!near.length) continue;
+        out[st.id] = { id: st.id, code: near[0].it.code, title: near[0].it.title, via: 'coord', distKm: Math.round(near[0].d) };
+        continue;
+      }
+      const pick = cands[0];
+      if (!pick.code) continue;
+      out[st.id] = {
+        id: st.id, code: pick.code, title: pick.title, via,
+        distKm: pick.coord ? Math.round(distKm(pick.coord, st)) : null,
+      };
+    }
+    return out;
+  }
+  async function resolveSiteCodes() {
+    const appid = RAW.NMDIS_APPID || '', appsecret = RAW.NMDIS_APPSECRET || '';
+    if (!appid || !appsecret) return null;
+    const headers = { 'Content-Type': 'application/json', appid, appsecret };
+    try {
+      const j = await withTimeout(httpPostParsed(PORTLIST_URL, headers, {}), NMDIS_TIMEOUT_MS);
+      if (!j) return null;
+      const list = pickPortList(j);
+      if (!list) return null;
+      const matched = matchStations(list, TIDE_STATIONS);
+      return Object.keys(matched).length ? matched : null;
+    } catch (e) { return null; }
+  }
+  async function ensureCodes() {
+    const now = Date.now();
+    if (_codeCache && now - _codeCacheAt <= 24 * 3600 * 1000) return _codeCache;
+    if (_codeInflight) return _codeInflight;
+    _codeInflight = (async () => {
+      const m = await resolveSiteCodes();
+      _codeCache = m; _codeCacheAt = Date.now(); _codeInflight = null;
+      if (m) {
+        const detail = Object.entries(m)
+          .map(([id, v]) => `${id}=${v.code}(${v.via === 'coord' ? '坐标兜底' : '站名匹配'})`)
+          .join(' ');
+        console.log(`[tide] 已从 NMDIS 解析站点代码：${detail}`);
+      } else if (!_codeLogged) {
+        console.log('[tide] NMDIS 站点列表解析失败（凭证无效或网络不可达），潮汐回退演示模型；可在 ALPHASUN_CONFIG 用 tideSiteCodes 显式指定各港代码');
+      }
+      _codeLogged = true;
+      return m;
+    })();
+    return _codeInflight;
+  }
+  async function siteCodeFor(st) {
+    if (st.siteCode) return st.siteCode;
+    const map = await ensureCodes();
+    if (map && map[st.id] && map[st.id].code) return map[st.id].code;
+    return null;
+  }
   // 降级/兜底：调和模型估算；degraded=true 表示已配置 NMDIS 但请求失败，仅用于 UI 提示
   function modelFallback(st, degraded) {
     const { base, startMs } = modelBase(st);
     const series = buildSeries(base, startMs, Date.now());
-    const rawExtremes = classifyExtremes(modelExtremes(series));
+    const rawExtremes = modelExtremes(series);
     return finalizeTide(st, series, rawExtremes, {
       source: degraded ? '官方预报不可用·已降级模型' : '调和模型估算(演示)',
       configured: !!degraded, model: true, real: false, degraded: !!degraded,
@@ -767,33 +944,37 @@
     });
   }
   async function getTide(st) {
-    if (NMDIS_APPID && NMDIS_APPSECRET && st.siteCode) {
-      try {
-        const today = new Date();
-        const d0 = localDateStr(today), d1 = localDateStr(new Date(today.getTime() + 86400000));
-        const [r0, r1] = await Promise.all([nmdisFetch(st.siteCode, d0), nmdisFetch(st.siteCode, d1)]);
-        if (r0 && r0.data) {
-          const p0 = parseNmdisDay(r0.data, d0);
-          const p1 = r1 && r1.data ? parseNmdisDay(r1.data, d1) : null;
-          if (p0.hourly.length === 24) {
-            const base = p0.hourly.concat(p1 && p1.hourly.length === 24 ? p1.hourly : []);
-            const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-            const startMs = start.getTime();
-            const series = buildSeries(base, startMs, today.getTime());
-            const rawExtremes = classifyExtremes(p0.extremes.concat(p1 ? p1.extremes : []));
-            const benchmark = p0.benchmark || (r0.report && r0.report.Benchmark) || null;
-            return finalizeTide(st, series, rawExtremes, {
-              source: '国家海洋信息中心(预报)', configured: true, real: true,
-              datumLabel: benchmark ? ('海图基准面：' + benchmark) : '理论最低潮面 (LAT)',
-            });
+    if (NMDIS_APPID && NMDIS_APPSECRET) {
+      const siteCode = await siteCodeFor(st); // 显式配置优先，否则从 NMDIS 站点列表自动解析
+      if (siteCode) {
+        try {
+          const today = new Date();
+          const d0 = localDateStr(today), d1 = localDateStr(new Date(today.getTime() + 86400000));
+          const [r0, r1] = await Promise.all([nmdisFetch(siteCode, d0), nmdisFetch(siteCode, d1)]);
+          if (r0 && r0.data) {
+            const p0 = parseNmdisDay(r0.data, d0);
+            const p1 = r1 && r1.data ? parseNmdisDay(r1.data, d1) : null;
+            if (p0.hourly.length === 24) {
+              const base = p0.hourly.concat(p1 && p1.hourly.length === 24 ? p1.hourly : []);
+              const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+              const startMs = start.getTime();
+              const series = buildSeries(base, startMs, today.getTime());
+              const rawExtremes = classifyExtremes(p0.extremes.concat(p1 ? p1.extremes : []));
+              const benchmark = p0.benchmark || (r0.report && r0.report.Benchmark) || null;
+              return finalizeTide(st, series, rawExtremes, {
+                source: '国家海洋信息中心(预报)', configured: true, real: true,
+                datumLabel: benchmark ? ('海图基准面：' + benchmark) : '理论最低潮面 (LAT)',
+              });
+            }
           }
+          return modelFallback(st, true); // 已配置但无可用数据
+        } catch (e) {
+          return modelFallback(st, true); // 请求/超时/解析异常
         }
-        return modelFallback(st, true); // 已配置但无可用数据
-      } catch (e) {
-        return modelFallback(st, true); // 请求/超时/解析异常
       }
+      return modelFallback(st, false); // 已配置凭证但未能解析到该站代码 → 仍走演示模型
     }
-    return modelFallback(st, false); // 未配置凭证/站点代码
+    return modelFallback(st, false); // 未配置凭证
   }
   async function getAllTides() { return Promise.all(TIDE_STATIONS.map(async st => ({ ...st, ...(await getTide(st)) }))); }
 
@@ -1077,6 +1258,32 @@
     if (/cloud|overcast/.test(t)) return { code: 3, zh: '多云' };
     return { code: 3, zh: '多云' };
   }
+  // 统一实况 current 归一化（与 server 端 app/lib/sources.js 对齐）：
+  // 各源 fetcher 在调用前已按自身单位/字段完成换算，此处仅做类型规整与 WMO 兜底，
+  // 不改变各源既有取值语义。所有 fetcher 复用，去除重复 current 对象构造。
+  function buildCurrent(spec) {
+    const w = wmo(spec.code);
+    return {
+      time: spec.time,
+      temp: (spec.temp != null && !isNaN(+spec.temp)) ? +spec.temp : null,
+      feels: (spec.feels != null && !isNaN(+spec.feels)) ? +spec.feels
+        : ((spec.temp != null && !isNaN(+spec.temp)) ? +spec.temp : null),
+      rh: (spec.rh != null && !isNaN(+spec.rh)) ? Math.round(+spec.rh) : null,
+      precip: (spec.precip != null && !isNaN(+spec.precip)) ? +spec.precip : 0,
+      code: spec.code,
+      text: spec.text || w[0],
+      icon: spec.icon || w[1],
+      wind: (spec.wind != null && !isNaN(+spec.wind)) ? +spec.wind : 0,
+      gust: (spec.gust != null && !isNaN(+spec.gust)) ? +spec.gust : 0,
+      windDir: (spec.windDir != null && !isNaN(+spec.windDir)) ? +spec.windDir : 0,
+      pressure: (spec.pressure != null && !isNaN(+spec.pressure) && +spec.pressure > 0) ? +spec.pressure : 0,
+      cloud: (spec.cloud != null && !isNaN(+spec.cloud)) ? +spec.cloud : 100,
+      isDay: (spec.isDay != null) ? +spec.isDay : 1,
+      uv: (spec.uv != null && !isNaN(+spec.uv)) ? +(+spec.uv).toFixed(1) : null,
+      vis: (spec.vis != null && !isNaN(+spec.vis)) ? +spec.vis : null,
+    };
+  }
+
   // 和风天气 QWeather 实况（CMA 官方分发，需 QWEATHER_KEY；浏览器端取自 window.ALPHASUN_CONFIG）
   async function qweatherNow(s) {
     const key = RAW.QWEATHER_KEY || '';
@@ -1097,16 +1304,15 @@
     const wind = (parseFloat(n.windSpeed) || 0) / 3.6; // km/h -> m/s
     return {
       ok: true, source: 'cma', label: '和风天气(QWeather)', time: n.obsTime || null,
-      current: {
+      current: buildCurrent({
         time: new Date().toISOString().slice(0, 16),
         temp: parseFloat(n.temp), feels: parseFloat(n.feelsLike),
-        rh: parseInt(n.humidity, 10) || 0, precip: parseFloat(n.precip) || 0,
+        rh: parseInt(n.humidity, 10), precip: parseFloat(n.precip),
         code, text: zh || wmo(code)[0], icon: wmo(code)[1],
         wind, gust: 0, windDir: dirToDeg(n.windDir),
-        pressure: parseFloat(n.pressure) || 0, cloud: parseInt(n.cloud, 10) || 100, isDay: 1,
-        uv: (typeof uvIdx === 'number' && !isNaN(uvIdx)) ? +uvIdx.toFixed(1) : null,
+        pressure: parseFloat(n.pressure), cloud: parseInt(n.cloud, 10), isDay: 1, uv: uvIdx,
         vis: (n.vis != null ? parseFloat(n.vis) : null),
-      },
+      }),
     };
   }
 
@@ -1130,7 +1336,7 @@
       const wind = parseFloat(String(j.WS || '0').replace(/[^0-9.]/g, ''));
       return {
         ok: true, source: 'cma', city: CITY, time: j.time,
-        current: { time: new Date().toISOString().slice(0, 16), temp: parseFloat(j.temp), feels: parseFloat(j.temp), rh: isNaN(rh) ? null : rh, precip: isNaN(precip) ? 0 : precip, code, text: zh || wmoPair[0], icon: wmoPair[1], wind: isNaN(wind) ? 0 : wind, gust: 0, windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1 },
+        current: buildCurrent({ time: new Date().toISOString().slice(0, 16), temp: parseFloat(j.temp), feels: parseFloat(j.temp), rh, precip, code, text: zh || wmoPair[0], icon: wmoPair[1], wind, gust: 0, windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1 }),
       };
     } catch (e) { return { ok: false, error: 'cma fetch failed: ' + (e.message || e), skipped: !RAW.QWEATHER_KEY }; }
   }
@@ -1151,7 +1357,7 @@
       const pressure = parseFloat(j.qy) || 0;
       return {
         ok: true, source: 'weathercn', label: '中国天气网(国家气象中心)', time: j.time,
-        current: { time: new Date().toISOString().slice(0, 16), temp: parseFloat(j.temp), feels: parseFloat(j.temp), rh: isNaN(rh) ? null : rh, precip: isNaN(precip) ? 0 : precip, code, text: zh || wmoPair[0], icon: wmoPair[1], wind, gust: 0, windDir: dirToDeg(j.WD), pressure: pressure > 0 ? pressure : 0, cloud: 100, isDay: 1, uv: null, vis: null },
+        current: buildCurrent({ time: new Date().toISOString().slice(0, 16), temp: parseFloat(j.temp), feels: parseFloat(j.temp), rh, precip, code, text: zh || wmoPair[0], icon: wmoPair[1], wind, gust: 0, windDir: dirToDeg(j.WD), pressure: pressure > 0 ? pressure : 0, cloud: 100, isDay: 1 }),
       };
     } catch (e) { return { ok: false, error: 'weathercn fetch: ' + (e.message || e) }; }
   }
@@ -1170,7 +1376,7 @@
       const code = (precip > 0.1) ? 61 : 3;
       return {
         ok: true, source: 'cmagov', label: '中国气象局(CMA)', time: null,
-        current: { time: new Date().toISOString().slice(0, 16), temp, feels: temp, rh, precip: isNaN(precip) ? 0 : precip, code, text: code === 61 ? '雨' : '多云', icon: wmo(code)[1], wind, gust: 0, windDir, pressure: pressure > 0 ? pressure : 0, cloud: 100, isDay: 1, uv: null, vis: null },
+        current: buildCurrent({ time: new Date().toISOString().slice(0, 16), temp, feels: temp, rh, precip: isNaN(precip) ? 0 : precip, code, text: code === 61 ? '雨' : '多云', icon: wmo(code)[1], wind, gust: 0, windDir, pressure: pressure > 0 ? pressure : 0, cloud: 100, isDay: 1 }),
       };
     } catch (e) { return { ok: false, error: 'cmagov fetch: ' + (e.message || e) }; }
   }
@@ -1184,7 +1390,7 @@
       const m = enToWmo(desc);
       return {
         ok: true, source: 'wttr', label: 'wttr.in', time: c.localObsDateTime || null,
-        current: { temp: parseFloat(c.temp_C), feels: parseFloat(c.FeelsLikeC), rh: parseInt(c.humidity, 10) || 0, precip: parseFloat(c.precipMM) || 0, code: m.code, text: m.zh, icon: wmo(m.code)[1], wind: (parseFloat(c.windspeedKmph) || 0) / 3.6, gust: 0, windDir: parseFloat(c.winddirDegree) || 0, pressure: 0, cloud: parseInt(c.cloudcover, 10) || 0, isDay: 1, uv: (c.uvIndex != null ? parseFloat(c.uvIndex) : null), vis: (c.visibility != null ? parseFloat(c.visibility) : null) },
+        current: buildCurrent({ temp: parseFloat(c.temp_C), feels: parseFloat(c.FeelsLikeC), rh: parseInt(c.humidity, 10), precip: parseFloat(c.precipMM), code: m.code, text: m.zh, icon: wmo(m.code)[1], wind: (parseFloat(c.windspeedKmph) || 0) / 3.6, gust: 0, windDir: parseFloat(c.winddirDegree), pressure: 0, cloud: parseInt(c.cloudcover, 10), isDay: 1, uv: (c.uvIndex != null ? parseFloat(c.uvIndex) : null), vis: (c.visibility != null ? parseFloat(c.visibility) : null) }),
       };
     } catch (e) { return { ok: false, error: 'wttr fetch: ' + (e.message || e) }; }
   }
@@ -1207,7 +1413,7 @@
     else if (typeof rt.precipitation === 'number') precip = rt.precipitation;
     return {
       ok: true, source: 'caiyun', label: '彩云天气(Caiyun)', time: null,
-      current: { time: new Date().toISOString().slice(0, 16), temp: parseFloat(rt.temperature), feels: parseFloat(rt.apparent_temperature != null ? rt.apparent_temperature : rt.temperature), rh, precip: isNaN(precip) ? 0 : precip, code: sky.code, text: sky.zh, icon: wmo(sky.code)[1], wind, gust: 0, windDir, pressure: 0, cloud, isDay: 1 },
+      current: buildCurrent({ time: new Date().toISOString().slice(0, 16), temp: parseFloat(rt.temperature), feels: parseFloat(rt.apparent_temperature != null ? rt.apparent_temperature : rt.temperature), rh, precip, code: sky.code, text: sky.zh, icon: wmo(sky.code)[1], wind, gust: 0, windDir, pressure: 0, cloud, isDay: 1 }),
     };
   }
   async function fetchMetNoLive(s) {
@@ -1231,9 +1437,11 @@
     else if (cloud >= 85) { code = 3; text = '阴'; }
     const n1 = (ts.data.next_1_hours && ts.data.next_1_hours.details && ts.data.next_1_hours.details.precipitation_amount);
     if (typeof n1 === 'number' && n1 > 0.1) { code = 61; text = '雨'; }
+    const metCurrent = buildCurrent({ time: new Date().toISOString().slice(0, 16), temp, feels: temp, rh, precip: (typeof n1 === 'number' ? n1 : 0), code, text, icon: wmo(code)[1], wind, gust, windDir, pressure, cloud, isDay: 1 });
+    metCurrent.realtimeSource = 'MET Norway (yr.no)';
     return {
       ok: true, source: 'metno', label: '挪威气象局(yr.no)', time: ts.time || null,
-      current: { time: new Date().toISOString().slice(0, 16), temp, feels: temp, rh, precip: (typeof n1 === 'number' ? n1 : 0), code, text, icon: wmo(code)[1], wind, gust, windDir, pressure, cloud, isDay: 1, uv: null, vis: null, realtimeSource: 'MET Norway (yr.no)' },
+      current: metCurrent,
     };
   }
   function caiyunSkyconToWmo(sky) {

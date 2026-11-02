@@ -2,24 +2,31 @@
 const { moonPhaseDesc } = require('./config');
 
 // ===== 黄昏/朝霞 概率模型（基于 Open-Meteo 云量/降水/湿度/风，免额外数据源）=====
-// 返回 0–100 评分 + 等级 + 最佳观赏时段
-function sunsetGlow(station) {
+// 返回 0–100 评分 + 等级 + 最佳观赏时段。黄昏/早晨共用同一评分模型，
+// 仅「观赏时段(日出/日落)」与「冬春清晨雾削弱」两项存在差异，由 isMorning 区分。
+// 原 sunsetGlow / sunriseGlow 的因子文案逐字保留，行为与旧版完全一致。
+function evaluateGlow(station, isMorning) {
   const w = station.weather; if (!w || !w.ok) return null;
   const c = w.current;
   const daily = w.daily[0] || {};
+  const W = isMorning ? '朝霞' : '霞光';
   let score = 0; const factors = [];
   // 降水否决
-  if (c.precip > 0.2) { return { score: 0, grade: '低', bestTime: daily.sunset || '', factors: ['当前有降水，霞光概率低'] }; }
+  if (c.precip > 0.2) { return { score: 0, grade: '低', bestTime: isMorning ? (daily.sunrise || '') : (daily.sunset || ''), factors: ['当前有降水，' + W + '概率低'] }; }
   // 云量：30–60% 最佳（有云渲染但不遮天）
   const cl = c.cloud;
-  if (cl >= 30 && cl <= 60) { score += 50; factors.push('云量适中(30–60%)，色彩层次佳'); }
-  else if (cl >= 15 && cl < 30) { score += 35; factors.push('云量偏少，霞光较淡'); }
-  else if (cl > 60 && cl <= 80) { score += 22; factors.push('云量偏多，地平线或可见'); }
+  if (cl >= 30 && cl <= 60) { score += 50; factors.push(isMorning ? '云量适中(30–60%)，朝霞层次佳' : '云量适中(30–60%)，色彩层次佳'); }
+  else if (cl >= 15 && cl < 30) { score += 35; factors.push('云量偏少，' + W + '较淡'); }
+  else if (cl > 60 && cl <= 80) { score += 22; factors.push('云量偏多，' + (isMorning ? '天际线' : '地平线') + '或可见'); }
   else if (cl > 80) { score += 8; factors.push('云量过厚，概率低'); }
-  else { score += 12; factors.push('晴空少云，霞光较弱'); }
+  else { score += 12; factors.push('晴空少云，' + W + '较弱'); }
   // 湿度：60–90% 利于色彩
   const rh = c.rh;
-  if (rh >= 60 && rh <= 90) { score += 20; factors.push('湿度适宜，透光性好'); }
+  // 北海冬春清晨多雾（雾日较多），高湿且静风时易成雾，削弱朝霞（仅早晨）
+  const month = new Date().getMonth() + 1;
+  const fogSeason = (month <= 4 || month >= 11);
+  if (isMorning && fogSeason && rh >= 92 && c.wind < 3) { score -= 18; factors.push('冬春清晨高湿静风，易起雾削弱朝霞'); }
+  else if (rh >= 60 && rh <= 90) { score += 20; factors.push('湿度适宜，透光性好'); }
   else if (rh > 90) { score += 12; factors.push('湿度偏高'); }
   else { score += 10; factors.push('空气偏干'); }
   // 风力：静稳利于霞光
@@ -27,39 +34,12 @@ function sunsetGlow(station) {
   if (wd < 4) { score += 18; factors.push('风力静稳'); }
   else if (wd < 8) { score += 10; factors.push('微风'); }
   else { score += 4; factors.push('风力较大，云层易散'); }
-  score = Math.min(100, score);
-  const grade = score >= 70 ? '高' : score >= 40 ? '中' : '低';
-  return { score, grade, bestTime: daily.sunset || '', factors };
-}
-
-// 早晨霞光概率：与黄昏同模型，最佳观赏时段为日出；冬春清晨北海多雾会拉低评分
-function sunriseGlow(station) {
-  const w = station.weather; if (!w || !w.ok) return null;
-  const c = w.current;
-  const daily = w.daily[0] || {};
-  let score = 0; const factors = [];
-  if (c.precip > 0.2) { return { score: 0, grade: '低', bestTime: daily.sunrise || '', factors: ['当前有降水，朝霞概率低'] }; }
-  const cl = c.cloud;
-  if (cl >= 30 && cl <= 60) { score += 50; factors.push('云量适中(30–60%)，朝霞层次佳'); }
-  else if (cl >= 15 && cl < 30) { score += 35; factors.push('云量偏少，朝霞较淡'); }
-  else if (cl > 60 && cl <= 80) { score += 22; factors.push('云量偏多，天际线或可见'); }
-  else if (cl > 80) { score += 8; factors.push('云量过厚，概率低'); }
-  else { score += 12; factors.push('晴空少云，朝霞较弱'); }
-  // 北海冬春清晨多雾（雾日较多），高湿且静风时易成雾，削弱朝霞
-  const rh = c.rh, wd = c.wind;
-  const month = new Date().getMonth() + 1;
-  const fogSeason = (month <= 4 || month >= 11);
-  if (fogSeason && rh >= 92 && wd < 3) { score -= 18; factors.push('冬春清晨高湿静风，易起雾削弱朝霞'); }
-  else if (rh >= 60 && rh <= 90) { score += 20; factors.push('湿度适宜，透光性好'); }
-  else if (rh > 90) { score += 8; factors.push('湿度偏高'); }
-  else { score += 10; factors.push('空气偏干'); }
-  if (wd < 4) { score += 18; factors.push('风力静稳'); }
-  else if (wd < 8) { score += 10; factors.push('微风'); }
-  else { score += 4; factors.push('风力较大，云层易散'); }
   score = Math.max(0, Math.min(100, score));
   const grade = score >= 70 ? '高' : score >= 40 ? '中' : '低';
-  return { score, grade, bestTime: daily.sunrise || '', factors };
+  return { score, grade, bestTime: isMorning ? (daily.sunrise || '') : (daily.sunset || ''), factors };
 }
+function sunsetGlow(station) { return evaluateGlow(station, false); }
+function sunriseGlow(station) { return evaluateGlow(station, true); }
 
 // ===== 天文事件日历（2026 动态计算距今天数）=====
 function daysUntil(month, day) {

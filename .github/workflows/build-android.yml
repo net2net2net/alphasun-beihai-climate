@@ -60,7 +60,10 @@ jobs:
       - name: Patch Android version (与 web 版本一致)
         run: |
           VER=$(node -p "require('./package.json').version")
-          CODE=$(node -p "require('./package.json').version.split('.').reduce((a,b)=>a*100+(+b),0)")
+          # versionCode 必须随版本号单调递增（Android 会拒绝 versionCode 更低的覆盖安装）。
+          # 版本号先零填充到 3 段（主.次.修）再按 1000 进制累加：
+          #   8.2.1 -> 8002001（旧公式 80201）、8.3 -> 8003000（旧公式 803，属降级会导致装不上）
+          CODE=$(node -p "require('./package.json').version.split('.').concat(['0','0']).slice(0,3).reduce((a,b)=>a*1000+(+b),0)")
           f=android/app/build.gradle
           if [ -f "$f" ]; then
             sed -i -E "s/versionCode [0-9]+/versionCode $CODE/" "$f"

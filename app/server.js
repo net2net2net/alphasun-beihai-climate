@@ -14,10 +14,18 @@ const alert = require('./lib/alerts');
 const astro = require('./lib/astronomy');
 const intel = require('./lib/intel');
 const { BEIHAI_BOUNDARY } = require('./lib/config');
+// 运行形态路径解析（SEA 单文件 exe 与开发态的落盘位置不同，见 lib/paths.js）
+const { isSea, dataRoot, dataPath } = require('./lib/paths');
 
 const PORT = process.env.PORT || 8765;
 const PUBLIC = path.join(__dirname, 'public');
 const climateCache = new Map(); // id -> {expire, data}
+
+// 概览响应短期缓存：/api/overview 单次触发 40+ 外部请求（气象/空气/海洋/地震/台风/预警/7 源实况/区域/气候…），
+// 缓存 60s 显著降低上游负载与首屏延迟，并对上游瞬时抖动更具韧性。
+// 缓存对象构建后只读（仅 JSON 序列化），可安全复用同一引用。
+const overviewCache = { ts: 0, data: null };
+const OVERVIEW_TTL = 60 * 1000;
 
 // ===== 本地配置（gitignore 的 config.json / .env，不入库，避免泄露密钥）=====
 // 优先级：环境变量 QWEATHER_KEY / QWEATHER_HOST > 本地 config.json
@@ -26,20 +34,44 @@ function loadServerConfig() {
   const cfg = {};
   if (process.env.QWEATHER_KEY) cfg.qweatherKey = process.env.QWEATHER_KEY;
   if (process.env.QWEATHER_HOST) cfg.qweatherHost = process.env.QWEATHER_HOST;
-  const cfgPath = path.join(__dirname, 'config.json');
-  try {
-    const j = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    if (j && j.qweatherKey && !cfg.qweatherKey) cfg.qweatherKey = j.qweatherKey;
-    if (j && j.qweatherHost && !cfg.qweatherHost) cfg.qweatherHost = j.qweatherHost;
-  } catch (e) { /* 无 config.json 则忽略（和风天气回落未配置状态）*/ }
-  // 回写 process.env 供 lib/sources.js 懒读取
+  if (process.env.NMDIS_APPID) cfg.nmdisAppId = process.env.NMDIS_APPID;
+  if (process.env.NMDIS_APPSECRET) cfg.nmdisAppSecret = process.env.NMDIS_APPSECRET;
+  // config.json 可能位于 app/（node server.js 开发）或 .exe 同目录（双击 EXE）。
+  // SEA 单文件 exe 的 __dirname 指向 .exe 所在目录（与开发态不同），故显式按运行形态排序：
+  //   SEA → .exe 同目录优先；开发态 → app/ 优先；再退回 execPath 同目录兜底。
+  const cfgPaths = [];
+  if (isSea()) cfgPaths.push(path.join(dataRoot(), 'config.json'));
+  cfgPaths.push(path.join(__dirname, 'config.json'));
+  cfgPaths.push(path.join(path.dirname(process.execPath), 'config.json'));
+  let raw = null;
+  for (const p of cfgPaths) { try { raw = fs.readFileSync(p, 'utf8'); break; } catch (e) {} }
+  if (raw) {
+    try {
+      const j = JSON.parse(raw);
+      if (j && j.qweatherKey && !cfg.qweatherKey) cfg.qweatherKey = j.qweatherKey;
+      if (j && j.qweatherHost && !cfg.qweatherHost) cfg.qweatherHost = j.qweatherHost;
+      if (j && j.nmdisAppId && !cfg.nmdisAppId) cfg.nmdisAppId = j.nmdisAppId;
+      if (j && j.nmdisAppSecret && !cfg.nmdisAppSecret) cfg.nmdisAppSecret = j.nmdisAppSecret;
+      // 潮汐站点代码覆盖（NMDIS 各港代码需在 service-tide.nmdis.org.cn 注册后获取；config.js 默认留空→降级模型）
+      if (j && j.tideSiteCodes && typeof j.tideSiteCodes === 'object') {
+        for (const st of TIDE_STATIONS) {
+          if (j.tideSiteCodes[st.id]) st.siteCode = String(j.tideSiteCodes[st.id]);
+        }
+      }
+    } catch (e) { /* config.json 解析失败则忽略 */ }
+  }
+  // 回写 process.env 供 lib/sources.js / lib/tides.js 懒读取（EXE 双击无 shell 环境，靠此注入）
   if (cfg.qweatherKey) process.env.QWEATHER_KEY = cfg.qweatherKey;
   if (cfg.qweatherHost) process.env.QWEATHER_HOST = cfg.qweatherHost;
+  if (cfg.nmdisAppId) process.env.NMDIS_APPID = cfg.nmdisAppId;
+  if (cfg.nmdisAppSecret) process.env.NMDIS_APPSECRET = cfg.nmdisAppSecret;
   return cfg;
 }
 const SERVER_CFG = loadServerConfig();
 if (SERVER_CFG.qweatherKey) console.log('[cfg] 已加载和风天气 KEY（本地配置/环境变量），将作为 CMA 实况校核源参与多源数据校核。');
 else console.log('[cfg] 未配置和风天气 KEY（QWEATHER_KEY/config.json 缺失），CMA 实况源标记为「未配置·可选」。');
+if (SERVER_CFG.nmdisAppId && SERVER_CFG.nmdisAppSecret) console.log('[cfg] 已加载国家海洋信息中心(NMDIS) 潮汐凭证（本地配置/环境变量），潮汐模块优先使用官方预报。');
+else console.log('[cfg] 未配置 NMDIS 潮汐凭证（NMDIS_APPID/NMDIS_APPSECRET/config.json 缺失），潮汐模块降级为调和模型估算（演示）。');
 
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
@@ -171,7 +203,9 @@ function fetchClimateNormals(s) {
 }
 
 // 多源实况校核快照：节流写入 data/realtime-check.json，作为可审计的校核数据留存（本地缓存，不入库提交）
-const rtCheckCache = { last: 0, path: path.join(__dirname, '..', 'data', 'realtime-check.json') };
+// 路径经 lib/paths.js 收敛：SEA 单文件 exe 写入 .exe 同目录/data/，开发态写入项目根/data/
+// （若沿用 __dirname/../data，SEA 下会写到 exe 的上级目录，污染父目录）
+const rtCheckCache = { last: 0, path: dataPath('data', 'realtime-check.json') };
 function persistRealtimeCheck(rc) {
   const now = Date.now();
   if (now - rtCheckCache.last < 60000) return; // 最多每分钟落盘一次
@@ -201,6 +235,8 @@ function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes,
   const cmagovOk = !!(cmagov && cmagov.ok && cmagov.current);
   const weathercn = (weathercnRes && weathercnRes.status === 'fulfilled') ? weathercnRes.value : null;
   const weathercnOk = !!(weathercn && weathercn.ok && weathercn.current);
+  const caiyun = (caiyunRes && caiyunRes.status === 'fulfilled') ? caiyunRes.value : null;
+  const caiyunOk = !!(caiyun && caiyun.ok && caiyun.current);
   const items = (alertIntel && alertIntel.items) || [];
   const now = Date.now();
   const storm = items.find(a =>
@@ -212,11 +248,12 @@ function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes,
   for (const st of stations) {
     if (!st.weather || !st.weather.ok || !st.weather.current) continue;
     const cur = st.weather.current;
-    // 优先取可达国内实况源（中国气象局 > 中国天气网 > 和风天气 > wttr.in），将多源实况校验结果静默应用到实时天气（不改变展示样式）
+    // 优先取可达实况源（中国气象局 > 中国天气网 > 和风天气 > 彩云天气 > wttr.in），将多源实况校验结果静默应用到实时天气（不改变展示样式）
     let live = null, liveSrc = '', liveKey = '';
     if (cmagovOk) { live = cmagov.current; liveSrc = '中国气象局实况'; liveKey = 'cmagov'; }
     else if (weathercnOk) { live = weathercn.current; liveSrc = '中国天气网实况'; liveKey = 'weathercn'; }
     else if (cmaOk) { live = cma.current; liveSrc = '和风天气实况'; liveKey = 'cma'; }
+    else if (caiyunOk) { live = caiyun.current; liveSrc = '彩云天气实况'; liveKey = 'caiyun'; }
     else if (wttrOk) { live = wttr.current; liveSrc = 'wttr.in 实况'; liveKey = 'wttr'; }
     if (live) {
       Object.assign(cur, {
@@ -356,7 +393,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': r.ct, 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=300' });
       return res.end(r.buf);
     }
-    if (p === '/api/overview') return send(res, 200, await buildOverview());
+    if (p === '/api/overview') {
+      const now = Date.now();
+      if (overviewCache.data && now - overviewCache.ts < OVERVIEW_TTL) return send(res, 200, overviewCache.data);
+      const data = await buildOverview();
+      overviewCache.ts = now; overviewCache.data = data;
+      return send(res, 200, data);
+    }
     if (p === '/api/tides') return send(res, 200, await tides.getAllTides());
     if (p === '/api/quakes') { const r = await src.fetchEarthquakes().catch(() => ({ ok: false })); return send(res, 200, r); }
     if (p === '/api/fires') { const r = await src.fetchFires().catch(() => ({ ok: false })); return send(res, 200, r); }

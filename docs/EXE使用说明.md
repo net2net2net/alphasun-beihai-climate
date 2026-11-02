@@ -1,6 +1,6 @@
 # AlphaSun · 北海极端气候全景系统 — 单文件 exe 使用说明
 
-> 构建版本标注：**v8.2.0** ｜ 作者：阳光 net2net2net（Vx: net2net）｜ 许可：MIT
+> 构建版本标注：**v8.3** ｜ 作者：阳光 net2net2net（Vx: net2net）｜ 许可：MIT
 
 本说明对应仓库 **GitHub Release** 中发布的单文件可执行程序。该文件由本项目源码构建，内置 Node.js 运行时与全部前端资源，**无需安装 Node.js、无需任何外部文件**，一个 exe 即可运行整套系统。
 
@@ -11,7 +11,7 @@
 | 项目 | 内容 |
 |------|------|
 | 文件名 | `alphasun-beihai-climate.exe`（Windows）／`alphasun-beihai-climate-linux`（Linux）／`alphasun-beihai-climate-macos`（macOS） |
-| 构建版本 | v8.2.0（与 `version.json` 一致，页脚与 `/api/version` 可见） |
+| 构建版本 | v8.3（与 `version.json` 一致，页脚与 `/api/version` 可见） |
 | 大小 | Windows 约 84MB ／ Linux 约 120MB ／ macOS 约 108MB（内置 Node 运行时 + 全部前端资源） |
 | 格式 | 各平台 64 位单文件可执行（**Node.js SEA** 方案，esbuild 单文件 bundle + postject 注入官方 Node 二进制） |
 | 下载 | 见 GitHub Release（始终最新）：https://github.com/net2net2net/alphasun-beihai-climate/releases/latest/download/alphasun-beihai-climate.exe |

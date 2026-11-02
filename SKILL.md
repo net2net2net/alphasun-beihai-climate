@@ -4,7 +4,7 @@ target_agent: any
 description: "AlphaSun · 北海极端气候全景系统 — 以北海为中心的极端气候/海洋/卫星/天文/空气质量全景监测仪表盘。当用户需要运行、部署、打包、分发或二次开发该气候全景系统，或需要北海实时天气/台风/预警/潮汐/卫星云图/地震等综合监测能力时触发。纯 Node.js 零依赖，已内置便携运行时，支持一键独立运行与跨智能体安装。"
 tags: [alphasun, beihai, climate, weather, dashboard, panorama, standalone]
 required_commands: ['node（或下载单文件 exe）']
-version: 8.2.0
+version: 8.3
 author: 阳光 net2net2net（ Vx: net2net ）
 license: MIT
 metadata: tags: [alphasun, beihai-climate, panorama]
@@ -28,11 +28,12 @@ alphasun-beihai-climate/
 ├── SKILL.md              # 本文件（触发 + 运行流程）
 ├── README.md             # 软件总览
 ├── INSTALL.md            # 跨智能体 / 独立安装说明
-├── CHANGELOG.md          # 版本变更总览（v7.0.0 → v8.2.0）
+├── CHANGELOG.md          # 版本变更总览（v7.0.0 → v8.3）
 ├── LICENSE               # MIT 许可
 ├── app/                  # 可独立运行的完整系统
 │   ├── server.js         # 聚合服务入口（纯 Node，零第三方依赖）
 │   ├── lib/              # config / sources / tides / alerts / intel / astronomy
+│   │                     # + tideSites(NMDIS 站点代码匹配) / nmdisHttp(DoH DNS 兜底) / paths(SEA 路径)
 │   ├── public/           # 前端（index.html + css + js + data/beihai.geojson）
 │   ├── package.json      # 含 build:assets / build:exe 脚本
 │   ├── build-assets.js   # 将 public/ 内联为 embedded-assets.js（用于单文件 exe）
@@ -41,6 +42,10 @@ alphasun-beihai-climate/
 │   ├── build-exe.js      # Node SEA 单文件 exe 构建脚本（esbuild + postject）
 │   ├── start.bat         # Windows 一键启动（自动打开浏览器）
 │   └── start.sh          # Linux / macOS 启动
+├── tools/                # 工具脚本
+│   ├── smoke.js          # 回归门禁（102 项断言：语法/双端一致/render/历法/站点解析）
+│   ├── sync-frontend.js  # 双端前端字节级镜像（public → android/www）
+│   └── nmdis-portlist.js # NMDIS 三港站点代码查询与 config.json 回填
 └── knowledge-base/       # 完整文档（设计 / 使用 / API / 分发）
     ├── README.md
     ├── 设计文档.md
@@ -91,7 +96,11 @@ PORT=8765 node server.js
 FIRMS_MAP_KEY=xxxx node server.js
 
 # 激活权威潮汐（国家海洋信息中心，需 appid/appsecret）
+# 仅需凭证：站点代码由程序自动解析（站名别名 + 坐标消歧），无需手工填写
 NMDIS_APPID=xxxx NMDIS_APPSECRET=yyyy node server.js
+
+# 手工查询/回填三港真实 SiteCode 到 config.json（可选，自动解析失效时使用）
+node tools/nmdis-portlist.js --appid <ID> --secret <SECRET> --write
 
 # 重新生成内联资源（改了 public/ 后重建 exe 前执行）
 npm run build:assets
@@ -99,6 +108,10 @@ npm run build:assets
 # 重建单文件 exe（Node SEA：esbuild + postject，输出 app/dist/alphasun-beihai-climate.exe 等）
 npm install esbuild postject && npm run build:exe
 ```
+
+> **单文件 exe 部署要点**：① 密钥放 `.exe` 同目录 `config.json`（启动日志 `[cfg] 已加载…` 为确认标志）；
+> ② 双击无反应多为 Windows 防火墙为新路径自动生成了入站「阻止」规则，需管理员 `netsh advfirewall` 放行；
+> ③ exe 换目录后本机 DNS 可能解析不到 `service-tide.nmdis.org.cn`，系统已内置 DoH 兜底自动直连 IP。
 
 ## 关键能力
 
@@ -127,6 +140,6 @@ npm install esbuild postject && npm run build:exe
 | 应急推送 | 预留企微 / 邮件 / 短信接口（见设计方案，待接入） |
 
 ## 版本与许可
-- 版本：v8.2.0
+- 版本：v8.3
 - 作者：阳光 net2net2net（ Vx: net2net ）
 - 许可：MIT

@@ -835,6 +835,15 @@ function tideSmooth(p) {
 }
 function fmtHM(iso) { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function fmtMD(iso) { const d = new Date(iso); return (d.getMonth() + 1) + '/' + d.getDate(); }
+function fmtDayTag(iso) { // 极值/下次潮的日期：今日/明日本地化标签，跨日回退 M/D
+  const d = new Date(iso), now = new Date();
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = Math.round((b - a) / 86400000);
+  if (diff === 0) return '今日';
+  if (diff === 1) return '明日';
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
 function tideWaveSVG(t) {
   const series = t.series || [];
   if (series.length < 2) return '';
@@ -855,6 +864,9 @@ function tideWaveSVG(t) {
   const wy = yOf(t.warnLevel);
   const warnLine = `<line x1="${padX}" y1="${wy.toFixed(1)}" x2="${(W - padX).toFixed(1)}" y2="${wy.toFixed(1)}" stroke="#e5484d" stroke-width="1" stroke-dasharray="4 3" opacity=".7"/>` +
     `<text x="${(W - padX).toFixed(1)}" y="${(wy - 3).toFixed(1)}" font-size="8" fill="#e5484d" text-anchor="end">警戒 ${t.warnLevel}</text>`;
+  const my = yOf(t.meanLevel);
+  const meanLine = `<line x1="${padX}" y1="${my.toFixed(1)}" x2="${(W - padX).toFixed(1)}" y2="${my.toFixed(1)}" stroke="#8b949e" stroke-width="1" stroke-dasharray="2 3" opacity=".5"/>` +
+    `<text x="${padX.toFixed(1)}" y="${(my - 2).toFixed(1)}" font-size="7" fill="#8b949e" text-anchor="start">均值 ${t.meanLevel}</text>`;
   const cx = xOf(0), cy = yOf(t.current);
   const cur = `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5" fill="#fb8500"/>` +
     `<text x="${(cx + 4).toFixed(1)}" y="${(cy - 5).toFixed(1)}" font-size="8" fill="#fb8500">现 ${t.current.toFixed(2)}</text>`;
@@ -869,7 +881,7 @@ function tideWaveSVG(t) {
   return `<svg class="tide-svg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:6px">
     <path d="${area}" fill="rgba(88,166,255,.12)" stroke="none"/>
     <path d="${line}" fill="none" stroke="#58a6ff" stroke-width="1.8"/>
-    ${warnLine}${marks}${cur}${yl}${ticks}
+    ${warnLine}${meanLine}${marks}${cur}${yl}${ticks}
   </svg>`;
 }
 
@@ -965,7 +977,7 @@ function renderTides() {
     const extRows = (t.extremes || []).map(e => `
       <tr class="${e.next ? 'tide-next' : ''}">
         <td>${e.type === 'high' ? '▲ 高潮' : '▼ 低潮'}</td>
-        <td>${fmtMD(e.time)}</td>
+        <td>${fmtDayTag(e.time)}</td>
         <td>${fmtHM(e.time)}</td>
         <td>${e.h.toFixed(2)}</td>
         <td>${e.inHours >= 0 ? '+' + e.inHours + 'h' : e.inHours + 'h'}</td>
@@ -975,7 +987,7 @@ function renderTides() {
       return `<span class="tide-hcell ${hi ? 'hi' : ''}">${fmtHM(s.t)}<br><b>${s.h.toFixed(2)}</b></span>`;
     }).join('');
     const nextTxt = t.next
-      ? `下次${t.next.type === 'high' ? '高潮' : '低潮'} ${fmtMD(t.next.time)} ${fmtHM(t.next.time)}（${t.next.inHours >= 0 ? '+' + t.next.inHours : t.next.inHours}h）`
+      ? `下次${t.next.type === 'high' ? '高潮' : '低潮'} ${fmtDayTag(t.next.time)} ${fmtHM(t.next.time)}（${t.next.inHours >= 0 ? '+' + t.next.inHours : t.next.inHours}h）`
       : '近期无极值';
     return `<div class="tide-st">
       <div class="tide-st-h"><span class="nm">${t.name}</span>${badge}
@@ -986,6 +998,7 @@ function renderTides() {
           <div>${trendTxt} <span class="muted">${t.rate > 0 ? '+' : ''}${t.rate.toFixed(2)} m/h</span></div>
           <div>${marginTxt}</div>
           <div class="muted">均值 ${t.meanLevel} · 变幅 ${t.range} · 预警 ${t.warnLevel} m</div>
+          <div class="muted">潮型 <b>${t.tidalType}</b> · <b>${t.springNeap}</b></div>
           <div class="tide-next-line">${nextTxt}</div>
         </div>
       </div>
