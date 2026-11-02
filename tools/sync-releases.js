@@ -1039,6 +1039,9 @@ function buildMarkdown(releases, assessments, latest) {
   lines.push('# 清理本地非最新版本的归档目录（先列清单，再交互确认）');
   lines.push('node tools/sync-releases.js --prune-older');
   lines.push('');
+  lines.push('# 清理归档目录里的 *.corrupt 隔离件（先列清单，再交互确认）');
+  lines.push('node tools/sync-releases.js --purge-corrupt');
+  lines.push('');
   lines.push('# 只读校验（GitHub digest / 本地实算 / manifest 三方比对）');
   lines.push('node tools/sync-releases.js --verify');
   lines.push('```');
@@ -1050,6 +1053,19 @@ function buildMarkdown(releases, assessments, latest) {
   lines.push('**清理旧版本**：`--prune-older` 会先打印待删目录清单与体积，再要求确认（交互式终端');
   lines.push('询问 y/N；非交互环境需显式加 `--yes`），默认不会删除任何东西。最新发布版本的目录');
   lines.push('与 `_index.json` 永远不会被删。');
+  lines.push('');
+  lines.push('**清理隔离件**：每次「同一个 tag 被重新构建并重传」都会留下一份等体积的 `*.corrupt`');
+  lines.push('废弃副本（下载时 sha256 校验不符 → 改名隔离，**绝不直接删除**）。`--purge-corrupt`');
+  lines.push('负责回收它们：先打印待删清单（文件名 + 体积 + 隔离原因）与合计，再要求确认');
+  lines.push('（交互式终端询问 y/N；非交互环境需显式加 `--yes`）。删除范围受**路径守卫**限制 ——');
+  lines.push('只删归档根内、文件名带 `.corrupt` 标记的**普通文件**；目录、符号链接、归档根之外的');
+  lines.push('路径一律**报错拒绝**（不静默跳过）。已校验通过的有效资产不会被触碰。');
+  lines.push('清理后会自动重新生成 `_index.json` 与各 tag 的 `_manifest.json`，使索引反映真实状态。');
+  lines.push('`--prune-older` 与 `--purge-corrupt` 可组合使用：前者只删旧版本**目录**，');
+  lines.push('后者只删隔离件**文件**，两者删除范围互不越界。');
+  lines.push('');
+  lines.push('> ⚠️ 两个清理动作都是破坏性操作，`--dry-run` 对它们**同样生效**：');
+  lines.push('> 带 `--dry-run` 时只打印待删清单，**不删除任何文件/目录、也不刷新索引**。');
   lines.push('');
 
   return lines.join('\n');
@@ -1597,6 +1613,13 @@ async function runPruneOlder(opts) {
   }
   console.log('');
 
+  // --dry-run 是破坏性操作的安全网：只打印计划，**一个目录都不删**，也不刷新索引。
+  if (opts.dryRun) {
+    console.log('--dry-run：仅打印计划，**不删除任何目录**，也不刷新索引。');
+    console.log('（要真正执行请去掉 --dry-run）');
+    return { removed: [], victims: victims, skipped: skipped, dryRun: true };
+  }
+
   if (!opts.yes) {
     if (!process.stdin.isTTY) {
       console.error('非交互环境：默认不执行删除。请核对上面的清单后加 --yes 重跑，或改用交互终端。');
@@ -1859,7 +1882,7 @@ async function runPurgeCorrupt(opts) {
 
   if (!candidates.length) {
     console.log('归档目录里没有 *.corrupt 隔离件，无需清理。');
-    if (ctx) await refreshArchiveIndex(ctx, outRoot, '（无改动，仅刷新索引）');
+    if (ctx && !opts.dryRun) await refreshArchiveIndex(ctx, outRoot, '（无改动，仅刷新索引）');
     return { removed: [], candidates: [], refusals: refusals, outside: outside };
   }
 
@@ -1872,6 +1895,14 @@ async function runPurgeCorrupt(opts) {
   console.log('合计：' + candidates.length + ' 个文件 / ' + fmtBytes(totalBytes));
   console.log('（只删 *.corrupt 隔离件；已通过校验的有效资产不会被动）');
   console.log('');
+
+  // --dry-run 是破坏性操作的安全网：只打印计划，**一个字节都不删**，也不刷新索引。
+  // （漏掉这一步会给人虚假的安全感 —— 以为没删、其实删了。）
+  if (opts.dryRun) {
+    console.log('--dry-run：仅打印计划，**不删除任何文件**，也不刷新索引。');
+    console.log('（要真正执行请去掉 --dry-run）');
+    return { removed: [], candidates: candidates, refusals: refusals, outside: outside, dryRun: true };
+  }
 
   if (!opts.yes) {
     if (!process.stdin.isTTY) {
@@ -1985,6 +2016,10 @@ function parseBoolFlag(raw) {
 function parseArgs(argv) {
   const opts = {
     mode: null,
+    // 本次请求执行的动作（按命令行出现顺序）。单一动作时长度为 1；
+    // 允许组合（如 --prune-older --purge-corrupt）—— 两者删除范围互不越界：
+    // prune-older 只删「非最新版本」的**目录**，purge-corrupt 只删**隔离件文件**。
+    actions: [],
     only: [],
     out: null,
     concurrency: DEFAULT_CONCURRENCY,
@@ -2003,13 +2038,17 @@ function parseArgs(argv) {
     }
     return v;
   };
+  const setMode = (mode) => {
+    opts.mode = mode;
+    if (!opts.actions.includes(mode)) opts.actions.push(mode);
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--list') opts.mode = 'list';
-    else if (a === '--download') opts.mode = 'download';
-    else if (a === '--verify') opts.mode = 'verify';
-    else if (a === '--prune-older') opts.mode = 'prune-older';
-    else if (a === '--purge-corrupt') opts.mode = 'purge-corrupt';
+    if (a === '--list') setMode('list');
+    else if (a === '--download') setMode('download');
+    else if (a === '--verify') setMode('verify');
+    else if (a === '--prune-older') setMode('prune-older');
+    else if (a === '--purge-corrupt') setMode('purge-corrupt');
     else if (a === '--all') opts.all = true;
     else if (a.startsWith('--all=')) opts.all = parseBoolFlag(a.slice('--all='.length));
     else if (a === '--dry-run') opts.dryRun = true;
@@ -2059,12 +2098,16 @@ function printUsage() {
     '  --prune-older          清理本地非最新版本的归档目录（默认不删，先列清单再确认）',
     '  --purge-corrupt        清理归档目录里的 *.corrupt 隔离件（默认不删，先列清单再确认）',
     '                         只删文件名带 .corrupt 标记的普通文件；有效资产不动',
+    '                         可与 --prune-older 组合使用：前者只删旧版本目录，',
+    '                         后者只删隔离件文件，两者删除范围互不越界',
     '',
     '选项：',
     '  --only <tag>           只处理指定 tag（可重复：--only v8.3 --only v8.2.0）',
     '                         临时补某一个历史版本用；可与 --all 同用',
     '  --all                  显式归档**全部** release（默认关闭）',
-    '  --dry-run              只打印下载计划，不下载、不写任何文件',
+    '  --dry-run              只打印计划，不下载、不写任何文件',
+    '                         （对 --download / --prune-older / --purge-corrupt 均生效：',
+    '                          破坏性动作在 --dry-run 下只列清单，绝不删任何东西）',
     '  --yes, -y              --prune-older / --purge-corrupt 跳过交互确认直接执行（非交互环境必需）',
     '  --out <dir>            归档根目录（默认 <仓库根>/' + ARCHIVE_DIR_NAME + '）',
     '  --concurrency <n>      并发下载数（默认 ' + DEFAULT_CONCURRENCY + '，上限 16）',
@@ -2110,17 +2153,22 @@ async function main() {
     return;
   }
   if (!opts.mode) {
-    console.error('必须指定一个动作：--list / --download / --verify / --prune-older / --purge-corrupt');
+    console.error('必须指定一个动作：--list / --download / --verify / --prune-older / --purge-corrupt（可组合）');
     printUsage();
     process.exitCode = 2;
     return;
   }
   try {
-    if (opts.mode === 'list') await runList(opts);
-    else if (opts.mode === 'download') await runDownload(opts);
-    else if (opts.mode === 'verify') await runVerify(opts);
-    else if (opts.mode === 'prune-older') await runPruneOlder(opts);
-    else if (opts.mode === 'purge-corrupt') await runPurgeCorrupt(opts);
+    // 动作可组合：按命令行出现顺序依次执行（--prune-older 只删旧版本目录，
+    // --purge-corrupt 只删隔离件文件，两者范围互不越界）。
+    const actions = (opts.actions && opts.actions.length) ? opts.actions : [opts.mode];
+    for (const action of actions) {
+      if (action === 'list') await runList(opts);
+      else if (action === 'download') await runDownload(opts);
+      else if (action === 'verify') await runVerify(opts);
+      else if (action === 'prune-older') await runPruneOlder(opts);
+      else if (action === 'purge-corrupt') await runPurgeCorrupt(opts);
+    }
   } catch (e) {
     console.error('\n执行失败：' + ((e && e.message) || e));
     if (process.env.SYNC_RELEASES_DEBUG) console.error(e && e.stack);
