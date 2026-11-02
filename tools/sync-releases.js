@@ -37,6 +37,7 @@
  *   node tools/sync-releases.js --download --dry-run    # 只打印下载计划，不下载不写盘
  *   node tools/sync-releases.js --verify                # 只读校验（GitHub digest / 本地实算 / manifest 三方比对）
  *   node tools/sync-releases.js --prune-older           # 清理本地非最新版本的归档目录（默认先列清单再确认）
+ *   node tools/sync-releases.js --purge-corrupt          # 清理归档目录里的 *.corrupt 隔离件（默认先列清单再确认）
  *   node tools/sync-releases.js --out D:\backup         # 覆盖归档根目录（默认 <仓库根>/_releases）
  *   node tools/sync-releases.js --concurrency 6         # 并发下载数（默认 4）
  *
@@ -922,6 +923,22 @@ function buildMarkdown(releases, assessments, latest) {
   lines.push('> | 逐 tag 资产清单（含实算 sha256） | `_releases/<tag>/_manifest.json` |');
   lines.push('> | 本文档的生成命令 | `node tools/sync-releases.js --list --export-md` |');
   lines.push('> | 数据来源 | GitHub Releases API（`net2net2net/alphasun-beihai-climate`） |');
+  // 快照时间取「所有资产中最新的一条 updated_at」—— 它由远端数据决定，只在远端产物
+  // 真的变动时才会变，因此既能告诉读者「本文档对应哪一批产物」，又不会因为每次
+  // 重新生成都产生无意义的 git 抖动。
+  // 必要性：CI 用 `gh release upload --clobber` 覆盖同名资产，且 SEA/APK/IPA 的
+  // 构建字节不可复现 —— 每次重新发布都会换掉远端 digest。本文档是**快照**，
+  // 不是实时视图；读者若拿它与 Release 页面比对 sha256 不一致，先看这一行。
+  let snapshotAt = null;
+  for (const r of releases) {
+    for (const a of r.assets) {
+      if (!a.updated_at) continue;
+      if (!snapshotAt || Date.parse(a.updated_at) > Date.parse(snapshotAt)) snapshotAt = a.updated_at;
+    }
+  }
+  if (snapshotAt) {
+    lines.push('> | 产物元数据快照 | `' + fmtDate(snapshotAt) + ' UTC`（对应这一批远端产物；CI 重新发布会使 digest 变化，届时需重新生成） |');
+  }
   lines.push('');
   lines.push('> ⚠️ 本页的「下载」链接指向 `github.com` 官方 Release 页面。本机若无法直连 `github.com`');
   lines.push('> （已知 `github.com:443` 长时间不可达，但 `api.github.com` 可用），请改用归档工具经');
@@ -1629,6 +1646,320 @@ async function runPruneOlder(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// 清理隔离件（*.corrupt）
+// ---------------------------------------------------------------------------
+
+/**
+ * 隔离件的文件名形态。
+ *
+ * quarantineFile() 产出两种文件名：
+ *   1) `<原名>.corrupt`            —— 首次隔离；
+ *   2) `<原名>.corrupt.<时间戳>`   —— `.corrupt` 已存在时（同一 tag 第二次及以后的隔离），
+ *      时间戳由 nowIso().replace(/[:.]/g,'-') 生成，形如 `2026-11-02T08-24-00-000Z`。
+ *
+ * 只认这两种形态 —— 否则名字里偶然含 ".corrupt" 的正常文件会被误删。
+ */
+const CORRUPT_NAME_RE = /\.corrupt(\.\d{4}-\d{2}-\d{2}T[\d-]+Z)?$/;
+
+/**
+ * 判断文件名是否是本工具产出的「隔离件」标记。
+ * @param {string} name 文件名（不含路径）
+ * @returns {boolean}
+ */
+function isCorruptName(name) {
+  return CORRUPT_NAME_RE.test(String(name == null ? '' : name));
+}
+
+/**
+ * 取路径的真实路径（realpath）；失败时返回 null（路径可能已被删除）。
+ * @param {string} p
+ * @returns {string|null}
+ */
+function safeRealpath(p) {
+  try { return fs.realpathSync(p); } catch (e) { return null; }
+}
+
+/**
+ * 隔离件删除的**路径守卫**（纵深防御：扫描时判一次，删除前再判一次）。
+ *
+ * 允许删除的条件（全部满足才放行）：
+ *   1. 目标解析后位于归档根目录**之内**（词法检查）；
+ *   2. 目标的**真实路径**（父目录 realpath）也在归档根之内（防符号链接目录越界）；
+ *   3. 目标是**普通文件** —— 目录不递归删除、符号链接一律拒绝；
+ *   4. 文件名带 `.corrupt` 标记（见 isCorruptName）。
+ *
+ * 任一条不满足即拒绝，并给出可读原因 —— **报错而非静默跳过**。
+ *
+ * @param {string} candidate 待删文件路径
+ * @param {string} outRoot 归档根目录
+ * @returns {{ok: boolean, reason?: string, bytes?: number}}
+ */
+function guardPurgeTarget(candidate, outRoot) {
+  const root = path.resolve(outRoot);
+  const resolved = path.resolve(candidate);
+
+  // 1) 词法边界
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    return { ok: false, reason: '目标不在归档根目录内（路径守卫）→ ' + resolved };
+  }
+  // 3) 必须是普通文件（用 lstat：不跟随符号链接）
+  let st;
+  try {
+    st = fs.lstatSync(resolved);
+  } catch (e) {
+    return { ok: false, reason: '无法 lstat（可能已被并发删除）→ ' + resolved + '：' + e.message };
+  }
+  if (st.isSymbolicLink()) {
+    return { ok: false, reason: '目标是符号链接（拒绝删除，避免指向归档外的目标被删）→ ' + resolved };
+  }
+  if (st.isDirectory()) {
+    return { ok: false, reason: '目标是目录（只删普通文件，不递归）→ ' + resolved };
+  }
+  if (!st.isFile()) {
+    return { ok: false, reason: '目标不是普通文件（拒绝删除）→ ' + resolved };
+  }
+  // 4) 文件名标记
+  if (!isCorruptName(path.basename(resolved))) {
+    return { ok: false, reason: '文件名不带 .corrupt 标记（非隔离件，拒绝删除）→ ' + resolved };
+  }
+  // 2) 真实路径边界
+  const realRoot = safeRealpath(root);
+  const realParent = safeRealpath(path.dirname(resolved));
+  if (realRoot && realParent && realParent !== realRoot && !realParent.startsWith(realRoot + path.sep)) {
+    return { ok: false, reason: '目标的真实路径越出归档根目录（路径守卫）→ ' + realParent };
+  }
+  return { ok: true, bytes: st.size };
+}
+
+/**
+ * 在归档根目录内收集 `*.corrupt` 隔离件候选（深度 ≤ 2：根目录 + 各 tag 目录）。
+ *
+ * 只收集**名字带 `.corrupt` 标记**的条目；名字不带标记的一律不看（哪怕它是符号链接）。
+ * 收集到的候选一律再过 {@link guardPurgeTarget}，不合规的进「拒绝」清单并报错。
+ *
+ * @param {string} outRoot 归档根目录
+ * @returns {{candidates: Array<Object>, refusals: Array<Object>}}
+ */
+function collectCorruptFiles(outRoot) {
+  const candidates = [];
+  const refusals = [];
+  let rootEntries = [];
+  try { rootEntries = fs.readdirSync(outRoot, { withFileTypes: true }); } catch (e) { rootEntries = []; }
+
+  const consider = (absPath, name, tagName) => {
+    if (!isCorruptName(name)) return; // 不是隔离件 → 不看
+    const guard = guardPurgeTarget(absPath, outRoot);
+    if (!guard.ok) {
+      refusals.push({ path: absPath, name: name, reason: guard.reason });
+      return;
+    }
+    candidates.push({
+      path: absPath,
+      name: name,
+      tag: tagName || '',
+      bytes: guard.bytes,
+      reason: '',
+    });
+  };
+
+  for (const ent of rootEntries) {
+    const abs = path.join(outRoot, ent.name);
+    // 深度 1：归档根目录的直接子级
+    consider(abs, ent.name, '');
+    // 深度 2：各 tag 目录的直接子级（隔离件实际所在处：<root>/<tag>/<asset>.corrupt）
+    let isDir = ent.isDirectory();
+    if (ent.isSymbolicLink()) {
+      // 符号链接目录不进入（避免越界遍历）；但若它本身带 .corrupt 标记，
+      // 上面的 consider() 已按「符号链接」拒绝并报错。
+      isDir = false;
+    }
+    if (!isDir) continue;
+    let tagEntries = [];
+    try { tagEntries = fs.readdirSync(abs, { withFileTypes: true }); } catch (e) { tagEntries = []; }
+    for (const te of tagEntries) {
+      consider(path.join(abs, te.name), te.name, ent.name);
+    }
+  }
+  return { candidates: candidates, refusals: refusals };
+}
+
+/**
+ * `--purge-corrupt`：清理归档目录里的 `*.corrupt` 隔离件。
+ *
+ * 背景：每次「同一个 tag 被重新构建并重传」都会留下一份等体积的废弃副本
+ * （下载时 sha256 校验不符 → 改名 `*.corrupt` 隔离，**绝不直接删除**）。
+ * 没有清理入口时，这些副本会永久堆积、让归档目录无声膨胀 ——
+ * 而「只保留最新」正是本工具要解决的问题本身。
+ *
+ * 安全约束（不可放宽）：
+ *   1. 默认**不执行删除** —— 必须先把完整待删清单与体积打印出来；
+ *   2. 必须显式确认 —— 交互式终端下询问 y/N；非交互环境必须加 `--yes` 才动手；
+ *   3. **只删隔离件**（文件名带 `.corrupt` 标记的普通文件），有效资产毫发无损；
+ *   4. **路径守卫**（见 guardPurgeTarget）：归档根内、深度 ≤ 2、普通文件、
+ *      非符号链接、文件名带标记 —— 任一条不满足即**报错拒绝**；
+ *   5. **不触碰归档根之外的任何路径**（归档根外发现的同名文件只提示、不处理）；
+ *   6. 删除后重新生成 `_index.json` 与各 tag 的 `_manifest.json`，
+ *      使索引反映清理后的真实状态（`downloaded_at` 等既有信息原样保留）。
+ *
+ * 索引刷新需要访问 GitHub API；**API 不可达时删除本身照常完成**，仅跳过刷新并提示。
+ */
+async function runPurgeCorrupt(opts) {
+  const outRoot = path.resolve(opts.out || path.join(ROOT, ARCHIVE_DIR_NAME));
+
+  console.log('=== 清理归档目录中的 *.corrupt 隔离件（--purge-corrupt）===');
+  console.log('归档目录  ： ' + outRoot);
+  console.log('路径守卫  ： 仅限归档根内（深度 ≤ 2：根目录 + 各 tag 目录）、普通文件（非目录 / 非符号链接）、文件名带 .corrupt 标记');
+  console.log('');
+
+  // 远端清单用于说明「隔离原因」并用于刷新索引；取不到不影响清理本身。
+  let ctx = null;
+  try {
+    ctx = await prepare(opts);
+  } catch (e) {
+    console.log('（未能取得远端 release 清单：' + ((e && e.message) || e) + ' —— 清理仍可继续，仅跳过索引刷新）');
+    console.log('');
+  }
+
+  const { candidates, refusals } = collectCorruptFiles(outRoot);
+
+  // 归档根之外的同名文件：只提示、绝不处理（路径守卫的边界声明）
+  const parentDir = path.dirname(outRoot);
+  const outside = [];
+  try {
+    for (const ent of fs.readdirSync(parentDir, { withFileTypes: true })) {
+      if (!isCorruptName(ent.name)) continue;
+      outside.push(path.join(parentDir, ent.name));
+    }
+  } catch (e) { /* 父目录不可读则忽略 */ }
+
+  // 隔离原因：能对上远端资产时给出 digest 比对结论
+  const reasonOf = (c) => {
+    if (!ctx) return '下载时 sha256 校验不符被隔离（未取得远端清单，无法进一步比对）';
+    const tagRelease = ctx.releases.find((r) => r.tag_name === c.tag);
+    if (!tagRelease) return '下载时 sha256 校验不符被隔离（该 tag 已不在远端 release 列表中）';
+    const base = c.name.replace(CORRUPT_NAME_RE, '');
+    const asset = tagRelease.assets.find((a) => safeFileName(a.name) === base);
+    if (!asset) return '下载时 sha256 校验不符被隔离（远端已无同名资产）';
+    const remote = asset.sha256 ? asset.sha256.slice(0, 12) + '…' : '（远端无 digest）';
+    return '下载时 sha256 校验不符被隔离（远端 ' + base + ' 的 digest = ' + remote + '）';
+  };
+  for (const c of candidates) c.reason = reasonOf(c);
+
+  if (refusals.length) {
+    console.log('--- 以下条目命中了「隔离件」命名，但未通过路径守卫，已拒绝且不会删除 ---');
+    for (const r of refusals) console.log('  ✗ ' + r.path + '\n      → ' + r.reason);
+    console.log('');
+  }
+
+  if (outside.length) {
+    console.log('--- 归档根之外的 *.corrupt 文件（本工具**不会**处理归档根之外的任何路径）---');
+    for (const p of outside) console.log('  · ' + p + '　→ 拒绝删除（不在归档根 ' + outRoot + ' 内）');
+    console.log('');
+  }
+
+  if (!candidates.length) {
+    console.log('归档目录里没有 *.corrupt 隔离件，无需清理。');
+    if (ctx) await refreshArchiveIndex(ctx, outRoot, '（无改动，仅刷新索引）');
+    return { removed: [], candidates: [], refusals: refusals, outside: outside };
+  }
+
+  console.log('--- 将要删除以下 ' + candidates.length + ' 个隔离件 ---');
+  for (const c of candidates) {
+    console.log('  · ' + padText(c.tag ? c.tag + '/' + c.name : c.name, 46) + padText(fmtBytes(c.bytes), 12) + c.reason);
+    console.log('    ' + c.path);
+  }
+  const totalBytes = candidates.reduce((n, c) => n + c.bytes, 0);
+  console.log('合计：' + candidates.length + ' 个文件 / ' + fmtBytes(totalBytes));
+  console.log('（只删 *.corrupt 隔离件；已通过校验的有效资产不会被动）');
+  console.log('');
+
+  if (!opts.yes) {
+    if (!process.stdin.isTTY) {
+      console.error('非交互环境：默认不执行删除。请核对上面的清单后加 --yes 重跑，或改用交互终端。');
+      process.exitCode = 2;
+      return { removed: [], candidates: candidates, refusals: refusals, outside: outside };
+    }
+    const confirmed = await askYesNo('确认删除以上 ' + candidates.length + ' 个隔离件？（y/N）');
+    if (!confirmed) {
+      console.log('已取消，未删除任何文件。');
+      return { removed: [], candidates: candidates, refusals: refusals, outside: outside, cancelled: true };
+    }
+  }
+
+  const removed = [];
+  const failed = [];
+  for (const c of candidates) {
+    // 删除前再过一次路径守卫（纵深防御）
+    const guard = guardPurgeTarget(c.path, outRoot);
+    if (!guard.ok) {
+      failed.push({ file: c.path, error: guard.reason });
+      console.log('  ✗ ' + c.path + '　' + guard.reason);
+      continue;
+    }
+    try {
+      fs.unlinkSync(c.path);
+      removed.push(c);
+      console.log('  ✓ 已删除 ' + c.path);
+    } catch (e) {
+      failed.push({ file: c.path, error: e.message });
+      console.log('  ✗ ' + c.path + '　删除失败：' + e.message);
+    }
+  }
+  console.log('\n已删除 ' + removed.length + ' 个隔离件，释放 ' + fmtBytes(removed.reduce((n, c) => n + c.bytes, 0)));
+  if (failed.length) {
+    console.log('失败 ' + failed.length + ' 个：');
+    for (const f of failed) console.log('  ✗ ' + f.file + '　' + f.error);
+    process.exitCode = 1;
+  }
+
+  if (ctx) {
+    await refreshArchiveIndex(ctx, outRoot);
+  } else {
+    console.log('（未刷新索引：远端清单不可用）');
+  }
+  return { removed: removed, candidates: candidates, refusals: refusals, outside: outside, failed: failed };
+}
+
+/**
+ * 重新生成 `_index.json` 与各 tag 的 `_manifest.json`，使索引反映清理后的真实状态。
+ *
+ * `downloaded_at` 等既有信息从旧 manifest 中原样读回再写回，避免刷新导致信息丢失。
+ *
+ * @param {Object} ctx prepare() 的返回值
+ * @param {string} outRoot 归档根目录
+ * @param {string} note 附加说明（可选）
+ */
+async function refreshArchiveIndex(ctx, outRoot, note) {
+  try {
+    const assessments = [];
+    for (const release of ctx.releases) {
+      assessments.push(await assessRelease(release, outRoot, { quick: false }));
+    }
+    for (let i = 0; i < ctx.releases.length; i++) {
+      const release = ctx.releases[i];
+      const tagDir = path.join(outRoot, release.tag_name);
+      if (!fs.existsSync(tagDir)) continue; // 未归档的历史版本没有本地目录
+      const existing = readJsonSafe(path.join(tagDir, MANIFEST_FILE));
+      const downloadedAt = new Map();
+      if (existing && Array.isArray(existing.assets)) {
+        for (const a of existing.assets) {
+          if (a && a.asset_id && a.downloaded_at) downloadedAt.set(a.asset_id, a.downloaded_at);
+        }
+      }
+      writeManifest(release, assessments[i].assets, outRoot, { downloadedAt: downloadedAt });
+    }
+    writeIndex(ctx.releases, assessments, outRoot, ctx.repo, ctx.token, {
+      retentionOf: ctx.retentionOf,
+      latest: ctx.latest,
+    });
+    console.log('索引已刷新：' + path.join(outRoot, INDEX_FILE));
+    if (note) console.log(note);
+  } catch (e) {
+    console.log('（索引刷新失败：' + ((e && e.message) || e) + ' —— 不影响已完成的清理）');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 命令行参数
 // ---------------------------------------------------------------------------
 
@@ -1678,6 +2009,7 @@ function parseArgs(argv) {
     else if (a === '--download') opts.mode = 'download';
     else if (a === '--verify') opts.mode = 'verify';
     else if (a === '--prune-older') opts.mode = 'prune-older';
+    else if (a === '--purge-corrupt') opts.mode = 'purge-corrupt';
     else if (a === '--all') opts.all = true;
     else if (a.startsWith('--all=')) opts.all = parseBoolFlag(a.slice('--all='.length));
     else if (a === '--dry-run') opts.dryRun = true;
@@ -1725,13 +2057,15 @@ function printUsage() {
     '  --download             下载缺失资产（默认只归档最新发布版本）',
     '  --verify               只读校验：GitHub digest / 本地实算 / manifest 三方比对',
     '  --prune-older          清理本地非最新版本的归档目录（默认不删，先列清单再确认）',
+    '  --purge-corrupt        清理归档目录里的 *.corrupt 隔离件（默认不删，先列清单再确认）',
+    '                         只删文件名带 .corrupt 标记的普通文件；有效资产不动',
     '',
     '选项：',
     '  --only <tag>           只处理指定 tag（可重复：--only v8.3 --only v8.2.0）',
     '                         临时补某一个历史版本用；可与 --all 同用',
     '  --all                  显式归档**全部** release（默认关闭）',
     '  --dry-run              只打印下载计划，不下载、不写任何文件',
-    '  --yes, -y              --prune-older 跳过交互确认直接执行（非交互环境必需）',
+    '  --yes, -y              --prune-older / --purge-corrupt 跳过交互确认直接执行（非交互环境必需）',
     '  --out <dir>            归档根目录（默认 <仓库根>/' + ARCHIVE_DIR_NAME + '）',
     '  --concurrency <n>      并发下载数（默认 ' + DEFAULT_CONCURRENCY + '，上限 16）',
     '  --repo <owner/name>    指定仓库（默认从 git remote origin 推断）',
@@ -1747,6 +2081,8 @@ function printUsage() {
     '  node tools/sync-releases.js --download --dry-run       # 只看计划不下载',
     '  node tools/sync-releases.js --prune-older              # 清理旧版本（交互确认）',
     '  node tools/sync-releases.js --prune-older --yes        # 清理旧版本（跳过确认）',
+    '  node tools/sync-releases.js --purge-corrupt             # 清理 *.corrupt 隔离件（交互确认）',
+    '  node tools/sync-releases.js --purge-corrupt --yes       # 清理 *.corrupt 隔离件（跳过确认）',
     '',
     '环境变量：',
     '  GITHUB_TOKEN           GitHub token（缺省时回退到 `gh auth token`）',
@@ -1774,7 +2110,7 @@ async function main() {
     return;
   }
   if (!opts.mode) {
-    console.error('必须指定一个动作：--list / --download / --verify / --prune-older');
+    console.error('必须指定一个动作：--list / --download / --verify / --prune-older / --purge-corrupt');
     printUsage();
     process.exitCode = 2;
     return;
@@ -1784,6 +2120,7 @@ async function main() {
     else if (opts.mode === 'download') await runDownload(opts);
     else if (opts.mode === 'verify') await runVerify(opts);
     else if (opts.mode === 'prune-older') await runPruneOlder(opts);
+    else if (opts.mode === 'purge-corrupt') await runPurgeCorrupt(opts);
   } catch (e) {
     console.error('\n执行失败：' + ((e && e.message) || e));
     if (process.env.SYNC_RELEASES_DEBUG) console.error(e && e.stack);
@@ -1819,6 +2156,10 @@ module.exports = {
   runDownload,
   runVerify,
   runPruneOlder,
+  runPurgeCorrupt,
+  guardPurgeTarget,
+  isCorruptName,
+  collectCorruptFiles,
   ARCHIVE_DIR_NAME,
   INDEX_FILE,
   MANIFEST_FILE,

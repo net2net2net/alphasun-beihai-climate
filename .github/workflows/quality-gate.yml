@@ -54,7 +54,10 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 20.15 是下限：二进制门禁的 PNG chunk CRC32 校验用到 zlib.crc32()
+          # （该 API 自 Node v20.15.0 / v22.2.0 才引入）。setup-node 解析 '20' 会取
+          # 20.x 的最新补丁版，满足该下限（门禁脚本本身零第三方依赖，无需 npm install）。
+          node-version: '20'
 
       # ------------------------------------------------------------------------
       # 门禁 1：回归门禁（122 项断言）

@@ -48,6 +48,12 @@ alphasun-beihai-climate/
 │   ├── check-binary-assets.js # 二进制资产完整性门禁（magic bytes + PNG chunk CRC/IDAT）
 │   ├── sync-releases.js  # GitHub Release 产物本地归档（--list/--download/--verify，落 _releases/）
 │   └── nmdis-portlist.js # NMDIS 三港站点代码查询与 config.json 回填
+├── .github/workflows/    # CI 工作流
+│   ├── quality-gate.yml  # 回归门禁（push / PR 自动跑 smoke + 二进制资产门禁，失败即挡住合入）
+│   ├── build-exe.yml     # 三平台单文件 exe 构建与发布
+│   ├── build-android.yml # Android APK 构建与发布
+│   ├── build-ios.yml     # iOS IPA 构建（手动触发）
+│   └── deploy-pages.yml  # PWA 部署到 GitHub Pages
 └── knowledge-base/       # 完整文档（设计 / 使用 / API / 分发）
     ├── README.md
     ├── 设计文档.md
