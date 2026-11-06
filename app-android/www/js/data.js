@@ -1082,14 +1082,13 @@
       fetchRiverReservoir().catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchRegionalBeihai().catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchClimate(STATIONS[0]).catch(e => ({ ok: false, error: String(e.message || e) })),
-      fetchCmaLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchWttrLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchCaiyunLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchMetNoLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchWeatherCnLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
       fetchCmaGovLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     ]);
-    const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, regionalRes, climateRes, cmaRes, wttrRes, caiyunRes, metnoRes, weathercnRes, cmagovRes] = results;
+    const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, regionalRes, climateRes, wttrRes, caiyunRes, metnoRes, weathercnRes, cmagovRes] = results;
     const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
     const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
       const ev = evaluateStation(st);
@@ -1128,7 +1127,6 @@
     });
     // ===== 对齐 server.js：多源实况交叉校核 + 静默应用覆盖 + 江河水库 / 区域天气 / 气候常年值 =====
     const primaryAgg = (stationsAgg.status === 'fulfilled') ? stationsAgg.value[0] : null;
-    const cmaVal = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : cmaRes;
     const wttrVal = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : wttrRes;
     const caiyunVal = (caiyunRes && caiyunRes.status === 'fulfilled') ? caiyunRes.value : caiyunRes;
     const metnoVal = (metnoRes && metnoRes.status === 'fulfilled') ? metnoRes.value : metnoRes;
@@ -1140,12 +1138,12 @@
     ];
     const realtimeCheck = verifyRealtime({
       openMeteo: primaryAgg ? primaryAgg.weather : null,
-      weathercn: weathercnVal, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal, cmagov: cmagovVal, metno: metnoVal,
+      weathercn: weathercnVal, wttr: wttrVal, caiyun: caiyunVal, cmagov: cmagovVal, metno: metnoVal,
     }, warnCtx, primaryAgg ? primaryAgg.air : null);
     const regionalWeather = (regionalRes && regionalRes.status === 'fulfilled') ? regionalRes.value : { ok: false, error: (regionalRes && regionalRes.reason) ? String(regionalRes.reason) : '区域天气采集失败' };
     const primaryClimate = (climateRes && climateRes.status === 'fulfilled') ? climateRes.value : null;
     const riverReservoir = (rrRes && rrRes.status === 'fulfilled') ? rrRes.value : { ok: false, error: 'unavailable' };
-    applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes);
+    applyRealtimeOverride(stations, alertIntel, wttrRes, caiyunRes, cmagovRes, weathercnRes);
     // ===================== 数据自检（diagnostics）=====================
     // 供屏上「数据自检」面板展示每个数据源的成功/失败，便于在 iOS 设备上确认
     // CapacitorHttp 原生 HTTP 修复是否生效，以及快速定位残留问题。
@@ -1284,62 +1282,9 @@
     };
   }
 
-  // 和风天气 QWeather 实况（CMA 官方分发，需 QWEATHER_KEY；浏览器端取自 window.ALPHASUN_CONFIG）
-  async function qweatherNow(s) {
-    const key = RAW.QWEATHER_KEY || '';
-    if (!key) return null;
-    const host = RAW.QWEATHER_HOST || 'devapi.qweather.com';
-    const loc = `${s.lon.toFixed(3)},${s.lat.toFixed(3)}`;
-    const url = `https://${host}/v7/weather/now?location=${loc}&key=${encodeURIComponent(key)}`;
-    const d = await httpGetParsed(url, 12000);
-    if (!d || String(d.code) !== '200' || !d.now) throw new Error('qweather: ' + (d && d.code) + ' ' + (d && d.message || ''));
-    const n = d.now;
-    let uvIdx = null;
-    try {
-      const uj = await httpGetParsed(`https://${host}/v7/indices/uv?location=${loc}&key=${encodeURIComponent(key)}`, 12000);
-      if (uj && String(uj.code) === '200' && uj.now) uvIdx = parseFloat(uj.now.index);
-    } catch (e) { /* uv 可选 */ }
-    const zh = String(n.text || '').trim();
-    const code = zhWeatherToWmo(zh);
-    const wind = (parseFloat(n.windSpeed) || 0) / 3.6; // km/h -> m/s
-    return {
-      ok: true, source: 'cma', label: '和风天气(QWeather)', time: n.obsTime || null,
-      current: buildCurrent({
-        time: new Date().toISOString().slice(0, 16),
-        temp: parseFloat(n.temp), feels: parseFloat(n.feelsLike),
-        rh: parseInt(n.humidity, 10), precip: parseFloat(n.precip),
-        code, text: zh || wmo(code)[0], icon: wmo(code)[1],
-        wind, gust: 0, windDir: dirToDeg(n.windDir),
-        pressure: parseFloat(n.pressure), cloud: parseInt(n.cloud, 10), isDay: 1, uv: uvIdx,
-        vis: (n.vis != null ? parseFloat(n.vis) : null),
-      }),
-    };
-  }
-
-  // ===== 多源实况（国内权威源，参与交叉校核；免 key 源失败则优雅跳过）=====
-  async function fetchCmaLive(s) {
-    const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
-    const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
-    const qw = await qweatherNow({ lat, lon }).catch(() => null);
-    if (qw) return qw;
-    const CITY = '101301301';
-    try {
-      const text = await httpGetText(`http://d1.weather.com.cn/sk_${CITY}.html`, 12000);
-      const m = text.match(/var\s+dataSK\s*=\s*(\{[\s\S]*?\})\s*;?/);
-      if (!m) return { ok: false, error: 'cma: 公开接口已停用(需配置 QWEATHER_KEY)', skipped: !RAW.QWEATHER_KEY };
-      const j = JSON.parse(m[1]);
-      const zh = String(j.weather || '').trim();
-      const code = zhWeatherToWmo(zh);
-      const wmoPair = wmo(code);
-      const rh = parseInt(j.SD, 10);
-      const precip = parseFloat(j.rain);
-      const wind = parseFloat(String(j.WS || '0').replace(/[^0-9.]/g, ''));
-      return {
-        ok: true, source: 'cma', city: CITY, time: j.time,
-        current: buildCurrent({ time: new Date().toISOString().slice(0, 16), temp: parseFloat(j.temp), feels: parseFloat(j.temp), rh, precip, code, text: zh || wmoPair[0], icon: wmoPair[1], wind, gust: 0, windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1 }),
-      };
-    } catch (e) { return { ok: false, error: 'cma fetch failed: ' + (e.message || e), skipped: !RAW.QWEATHER_KEY }; }
-  }
+  // 和风天气(QWeather) 实况源已移除（2026-11-06）：其 API Host 受订阅/授权白名单限制，
+  // 且系统已有 fetchCmaGovLive(中国气象局) / fetchWeatherCnLive(中国天气网) / fetchCaiyunLive 等国内权威源覆盖，
+  // 故不再内置该源。zhWeatherToWmo / dirToDeg 保留供 fetchCmaGovLive / fetchWeatherCnLive 使用。
   async function fetchWeatherCnLive(s) {
     const CITY = '101301301';
     try {
@@ -1492,7 +1437,6 @@
     const srcs = [
       snapOf(results.openMeteo, 'Open-Meteo', 'openmeteo'),
       snapOf(results.weathercn, '中国天气网(国家气象中心)', 'weathercn'),
-      snapOf(results.cma, '和风天气(QWeather)', 'cma'),
       snapOf(results.wttr, 'wttr.in', 'wttr'),
       snapOf(results.caiyun, '彩云天气(Caiyun)', 'caiyun'),
       snapOf(results.cmagov, '中国气象局(CMA)', 'cmagov'),
@@ -1584,9 +1528,8 @@
     return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
   }
   // 将多源实况校验结果静默应用到实时天气（不改变展示样式）；与 server.js applyRealtimeOverride 一致
-  function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes) {
-    const cma = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : null;
-    const cmaOk = !!(cma && cma.ok && cma.current);
+  // 注：和风天气(QWeather) 源已于 2026-11-06 移除，故不再接收 cmaRes 参数。
+  function applyRealtimeOverride(stations, alertIntel, wttrRes, caiyunRes, cmagovRes, weathercnRes) {
     const wttr = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : null;
     const wttrOk = !!(wttr && wttr.ok && wttr.current);
     const cmagov = (cmagovRes && cmagovRes.status === 'fulfilled') ? cmagovRes.value : null;
@@ -1607,7 +1550,6 @@
       let live = null, liveSrc = '', liveKey = '';
       if (cmagovOk) { live = cmagov.current; liveSrc = '中国气象局实况'; liveKey = 'cmagov'; }
       else if (weathercnOk) { live = weathercn.current; liveSrc = '中国天气网实况'; liveKey = 'weathercn'; }
-      else if (cmaOk) { live = cma.current; liveSrc = '和风天气实况'; liveKey = 'cma'; }
       else if (wttrOk) { live = wttr.current; liveSrc = 'wttr.in 实况'; liveKey = 'wttr'; }
       if (live) {
         Object.assign(cur, {

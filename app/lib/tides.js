@@ -282,6 +282,137 @@ function modelFallback(st, degraded) {
   });
 }
 
+// ===================== 免费源：Open-Meteo 海洋模式 =====================
+// 免费、无需密钥、全球覆盖；返回 sea_level_height_msl（含潮信号 + 倒压效应），数值模式产品，
+// 近岸受 ~8km 网格限制；基准为平均海平面(MSL)，与官方验潮站潮高基准面不同（UI 以 datumLabel 标注）。
+const OPEN_METEO_MARINE = 'https://marine-api.open-meteo.com/v1/marine';
+const OPEN_METEO_TIMEOUT_MS = 9000;
+async function fetchOpenMeteoTide(st) {
+  const lat = st && st.lat, lon = st && st.lon;
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  const url = `${OPEN_METEO_MARINE}?latitude=${lat}&longitude=${lon}&hourly=sea_level_height_msl&forecast_days=3&timezone=Asia%2FShanghai`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), OPEN_METEO_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'AlphaSun-Beihai/1.0' } });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const times = j.hourly && j.hourly.time, vals = j.hourly && j.hourly.sea_level_height_msl;
+    if (!Array.isArray(times) || !Array.isArray(vals) || !times.length) return null;
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const startMs = start.getTime();
+    let idx = times.findIndex(t => new Date(t).getTime() >= startMs);
+    if (idx < 0) idx = 0;
+    const base = vals.slice(idx, idx + 72).map(v => (typeof v === 'number' ? +v.toFixed(2) : 0));
+    if (base.length < 48) return null;
+    const series = buildSeries(base, startMs, Date.now());
+    const rawExtremes = modelExtremes(series);
+    return finalizeTide(st, series, rawExtremes, {
+      source: 'Open-Meteo 海洋模式(免费·无需密钥)',
+      configured: false, model: false, real: true, degraded: false,
+      datumLabel: '平均海平面 (MSL) 基准',
+    });
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ===================== 免费 Token 增强源：星图地球数据云 =====================
+// 全国港口潮汐预报（未来 15 天，免费额度需注册开发者认证）。endpoint 返回 result.datas[]，
+// 每日起 tides(高低潮) 与 details(10min 逐时潮高 cm)；下采样到整点作为基底线。
+const GEOVIS_TIDE_URL = 'https://tiles.geovisearth.com/meteorology/v1/weather/tide/cn/detail/local';
+const GEOVIS_TIMEOUT_MS = 9000;
+async function fetchGeovisTide(st, token) {
+  if (!token) return null;
+  const url = `${GEOVIS_TIDE_URL}?location=${st.lon},${st.lat}&token=${encodeURIComponent(token)}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), GEOVIS_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'AlphaSun-Beihai/1.0' } });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const result = j.result || (j.data && j.data.result);
+    const datas = result && result.datas;
+    if (!Array.isArray(datas) || !datas.length) return null;
+    const today = new Date();
+    const startMs = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0).getTime();
+    const base = [];
+    for (let d = 0; d < 2 && d < datas.length; d++) {
+      const hs = datas[d] && datas[d].details && datas[d].details.heights;
+      if (!Array.isArray(hs) || hs.length < 60) continue;
+      for (let k = 0; k < hs.length; k += 6) base.push(+(hs[k] / 100).toFixed(2)); // 10min→1h
+    }
+    if (base.length < 48) return null;
+    const series = buildSeries(base, startMs, Date.now());
+    const rawExtremes = modelExtremes(series);
+    const datumCm = (result && typeof result.datum === 'number') ? result.datum : null;
+    return finalizeTide(st, series, rawExtremes, {
+      source: '星图地球(免费Token)',
+      configured: true, model: false, real: true, degraded: false,
+      datumLabel: datumCm != null ? (`星图基准(约 ${datumCm}cm)`) : '星图地球基准',
+    });
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ===================== 免费 Token 增强源：预海天气 =====================
+// 中国沿海 AI 融合潮汐（免费版覆盖 213 近岸区县）。hourly/72h 返回 combinedWater(预测水位 cm) / harmonicTide(天文潮 cm)。
+const FOREOCEAN_TIDE_URL = 'https://api.foreocean.com/environment/tide/hourly/72h';
+const FOREOCEAN_TIMEOUT_MS = 9000;
+async function fetchForeoceanTide(st, token) {
+  if (!token) return null;
+  const url = `${FOREOCEAN_TIDE_URL}?space=${st.lon},${st.lat}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FOREOCEAN_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { Token: token, 'User-Agent': 'AlphaSun-Beihai/1.0' } });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const arr = j.data && (j.data.combinedWater || j.data.harmonicTide);
+    if (!Array.isArray(arr) || !arr.length) return null;
+    const today = new Date();
+    const startMs = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0).getTime();
+    const idx = arr.findIndex(p => new Date(String(p.datatime).replace(/-/g, '/')).getTime() >= startMs);
+    const from = idx < 0 ? 0 : idx;
+    const base = arr.slice(from, from + 48).map(p => +(p.value / 100).toFixed(2)); // cm → m
+    if (base.length < 48) return null;
+    const series = buildSeries(base, startMs, Date.now());
+    const rawExtremes = modelExtremes(series);
+    return finalizeTide(st, series, rawExtremes, {
+      source: '预海天气(免费Token)',
+      configured: true, model: false, real: true, degraded: false,
+      datumLabel: '预海天气(融合预报)',
+    });
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 免费源链：可选 Token 增强源(更高中国精度) → Open-Meteo 免费默认 → 模型兜底
+async function freeTideChain(st) {
+  const foreToken = process.env.FOREOCEAN_TOKEN || '';
+  if (foreToken) {
+    const r = await fetchForeoceanTide(st, foreToken).catch(() => null);
+    if (r) return r;
+  }
+  const geovisToken = process.env.GEOVIS_TOKEN || '';
+  if (geovisToken) {
+    const r = await fetchGeovisTide(st, geovisToken).catch(() => null);
+    if (r) return r;
+  }
+  const om = await fetchOpenMeteoTide(st).catch(() => null);
+  if (om) return om;
+  return modelFallback(st, false);
+}
+
 // 单站潮汐（NMDIS 官方预报优先；缺凭据/站点代码或请求超时/失败 → 降级模型并标记 degraded）
 async function getTide(st) {
   const NMDIS_APPID = process.env.NMDIS_APPID || '';
@@ -318,7 +449,8 @@ async function getTide(st) {
     }
     return modelFallback(st, false); // 已配置凭证但未能解析到该站代码 → 仍走演示模型
   }
-  return modelFallback(st, false); // 未配置凭证
+  // 未配置 NMDIS 付费凭证：走免费源链（可选 Token 增强源 → Open-Meteo 免费默认 → 模型兜底）
+  return await freeTideChain(st);
 }
 
 async function getAllTides() {
@@ -328,4 +460,5 @@ async function getAllTides() {
 module.exports = {
   tideAt, modelBase, buildSeries, parseNmdisDay, classifyExtremes,
   sampleBase, sampleSeries, finalizeTide, getTide, getAllTides,
+  fetchOpenMeteoTide, fetchGeovisTide, fetchForeoceanTide, freeTideChain,
 };

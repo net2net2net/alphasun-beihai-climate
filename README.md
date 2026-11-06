@@ -1,6 +1,6 @@
 # AlphaSun · 北海极端气候全景系统
 
-**版本 v8.3 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
+**版本 v8.4 ｜ 作者：阳光 net2net2net（ Vx: net2net ）｜ 许可：MIT**
 
 一套以**北海为中心**的极端气候全景监测仪表盘：聚合互联网权威多个气候数据源，实现实时天气、周期预报、多灾种极端告警、全景地图、世界时钟与可叠加卫星 / 雷达图层。纯 Node.js、零第三方依赖、内置便携运行时，**开箱即运行**。
 
@@ -76,26 +76,52 @@
 - 陆地 / 海洋 / 空气质量 / 洪涝：**Open-Meteo** 全系（免费、免密钥）
 - 地震：**USGS** GeoJSON
 - 台风与气象预警：**中央气象台（nmc）**
-- 中国气象局实况校核（多源交叉验证）：**和风天气 QWeather**（CMA 官方商业分发方；配置 KEY 后作为 `cma` 源参与「多源气候数据校核」，提供温度/湿度/风/气压/紫外线等）
+- 多源实况交叉校核（国内权威源，免 key）：**中国气象局(CMA) / 中国天气网 / 彩云天气**（温度/湿度/风/气压/紫外线一致性比对）
 - 天文与晚霞概率：**服务端本地计算**（免额外数据源）
 - 卫星云图 / 雷达：经中央气象台代理叠加（绕开防盗链 / CORS）
 
-### 配置和风天气 KEY（可选，启用 CMA 实况校核源）
-和风天气需 KEY。本系统**不硬编码密钥**，按以下任一方式提供即可（环境变量优先级高于本地文件）：
+## 潮汐数据源（免费默认 + 可选增强）
+
+潮汐按「免费优先、按需增强」的顺序自动选择（源码见 `app/lib/tides.js` 的 `freeTideChain`）：
+
+1. **默认 · 免费无需密钥：Open-Meteo 海洋模式**（`marine-api.open-meteo.com`）。
+   开箱即用、全球覆盖、无需注册。返回 `sea_level_height_msl`（含潮信号 + 倒压效应），
+   数值模式产品，近岸受 ~8km 网格限制；基准为**平均海平面(MSL)**，与官方验潮站潮高基准面不同（UI 以 `datumLabel` 标注）。
+   未配置任何 Token 时，`/api/tides` 即返回 `source: Open-Meteo 海洋模式(免费·无需密钥), real: true`。
+2. **可选 · 免费 Token 增强：星图地球 / 预海天气**（更高中国近岸精度，免费额度需注册开发者）。
+   配置其一即可让该源优先于 Open-Meteo；详见下方「获取免费 Token」。
+3. **兜底：调和模型估算**（`real: false`，仅在联网源全部失败/超时时启用；UI 标注「演示」）。
+4. **可选 · 付费：国家海洋信息中心(NMDIS) 权威预报**（已搁置，暂不接入收费服务）。
+   代码保留在 `nmdisFetch`/`postNmdis`，待后续评估；如需启用再配置 `nmdisAppId`/`nmdisAppSecret` 即可。
+
+### 获取免费 Token（可选增强，不开通也能用）
+
+> 不填 Token 也完全可用（默认走 Open-Meteo）。仅当你希望潮汐改用「中国港口/近岸精度更高」的源时，才需要下面任意一项。
+
+**① 星图地球数据云（GEOVIS）**
+1. 访问 `https://datacloud.geovisearth.com` 注册账号；
+2. 完成「开发者认证」；
+3. 进入「我的应用」→ 新建应用 → 获取 `token`；
+4. 将 token 写入 `app/config.json` 的 `geovisToken`（或环境变量 `GEOVIS_TOKEN`）。
+
+**② 预海天气（FOREOCEAN）**
+1. 访问 `https://doc.foreocean.com` 注册并进入控制台；
+2. 申请「免费版」应用，获取 `Token`；
+3. 将 Token 写入 `app/config.json` 的 `foreoceanToken`（或环境变量 `FOREOCEAN_TOKEN`）。
 
 ```bash
-# 方式一：本地配置文件（推荐，已被 .gitignore 忽略，绝不入库）
+# 本地配置文件（推荐，已被 .gitignore 忽略，绝不入库）
 cp app/config.example.json app/config.json
-# 编辑 app/config.json，填入你的 KEY 与 Host
-#   { "qweatherKey": "你的KEY", "qweatherHost": "devapi.qweather.com" }
-#   - 免费版/开发版订阅用 devapi.qweather.com；标准版/商业版订阅用 api.qweather.com
+# 编辑 app/config.json，按需填入（二选一或都填）：
+#   { "geovisToken": "你的星图Token", "foreoceanToken": "你的预海Token" }
 
-# 方式二：环境变量
-export QWEATHER_KEY="你的KEY"
-export QWEATHER_HOST="devapi.qweather.com"   # 或 api.qweather.com
+# 或环境变量方式（优先级高于 config.json）
+export GEOVIS_TOKEN="你的星图Token"
+export FOREOCEAN_TOKEN="你的预海Token"
 node app/server.js
 ```
-> 若调用和风返回 `403 Invalid Host`，说明该 KEY 的订阅计划未授权所填 Host（或 KEY 未激活/已过期），请到和风天气控制台核对订阅类型与授权 Host；修复后无需改代码即自动生效。未配置 KEY 时，CMA 实况校核源标记为「未配置·可选」，系统照常运行（回落公开接口兜底）。
+> 启动日志会打印 `[cfg] 已加载星图地球潮汐 Token…` / `[cfg] 已加载预海天气潮汐 Token…` 以确认生效；
+> 两者均未配置则打印 `[cfg] 未配置免费潮汐 Token…潮汐默认使用 Open-Meteo 海洋模式（免费·无需密钥）。`。
 
 ## 重建单文件 exe（可选）
 exe 因体积（约 84–120MB 各平台）未纳入 git，需要时可自行构建（采用 **Node.js 单文件应用 SEA** 方案，无需 `pkg`）：

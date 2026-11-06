@@ -2,9 +2,18 @@
 
 > 本地运行地址：**http://localhost:8765**（改完刷新即生效）
 > 启动方式：`node server.js`（位于 `app/` 目录，纯 Node 零依赖，端口 8765）
-> 版本：v7.0.0 → v8.3
+> 版本：v7.0.0 → v8.4
 
 ---
+
+## v8.4 — 潮汐免费数据源重构 · 和风天气移除 · NMDIS 收费方案搁置（2026-11-06）
+- **潮汐默认源重构为 Open-Meteo 海洋模式（免费·无需密钥）**：`app/lib/tides.js` 新增 `fetchOpenMeteoTide`，调用 `marine-api.open-meteo.com` 的 `sea_level_height_msl`（含潮信号+倒压效应）。开箱即用、全球覆盖、无需注册，实测北海三港均返回 `real:true`、基准标注平均海平面(MSL)；未配置任何密钥即生效，`/api/tides` 返回 `source:'Open-Meteo 海洋模式(免费·无需密钥)'`。
+- **新增可选免费 Token 增强源（中国近岸精度更高）**：`fetchGeovisTide`（星图地球 GEOVIS 数据云，datacloud.geovisearth.com 注册开发者认证获取 token）+ `fetchForeoceanTide`（预海天气 FOREOCEAN，doc.foreocean.com 申请免费版获取 Token）。配置 `geovisToken`/`foreoceanToken`（经 `config.json` 或环境变量 `GEOVIS_TOKEN`/`FOREOCEAN_TOKEN`）即作为优先源；`app/server.js` 的 `loadServerConfig()` 两路加载并注入 `process.env`，启动日志区分「已加载星图/预海 Token」与「未配置免费 Token → 默认 Open-Meteo」。
+- **免费源链 `freeTideChain`**：`getTide` 路由改为「有 NMDIS 付费凭证→NMDIS；否则→freeTideChain（预海 Token→星图 Token→Open-Meteo 免费默认→模型兜底）」。
+- **彻底移除和风天气(QWeather)**：此前因 QWeather 403 Invalid Host（订阅/授权白名单限制，沙箱与本机均不可达）已删除代码，本次同步清理残留——`lib/sources.js` 多源校核降为 6 源（移除 qweatherNow/fetchCmaLive 及 QWEATHER_KEY），前端数据-source 清单、页脚署名、配置模板与文档同步移除；回归门禁新增反向断言固化「qweatherNow()/QWEATHER_KEY 已彻底移除」。
+- **国家海洋信息中心(NMDIS) 付费潮汐方案按决策全取消**：用户决策「暂不接入收费服务」，代码（`nmdisFetch`/`postNmdis`/DoH DNS 兜底/`tools/nmdis-portlist.js`）保留为休眠状态，无需改动即可在将来填 `nmdisAppId`/`nmdisAppSecret` 激活；`config.example.json` 中 NMDIS 字段标注「已搁置·暂不接入收费」。
+- **回归门禁修复（第 4 组断言收窄）**：原断言「lib/tides.js 不再直接依赖裸 fetch」过宽，误伤新增的 Open-Meteo/星图/预海合法裸 fetch（NMDIS 仍须走 `nmdisHttp.postNmdis` 启用 DNS 兜底）。已收窄为「NMDIS 域名不通过裸 fetch 访问」，既守住 DNS 兜底安全意图，又允许合法免费源。重跑 → **通过 122 / 失败 0**。
+- **文档与配置**：`README.md` 重写潮汐段（免费默认+可选增强+付费搁置说明+免费 Token 获取逐步指引）；`config.example.json` 增 `geovisToken`/`foreoceanToken` 字段并更新 `_comment`；双端 `version.json`/`index.html` 版本徽标同步升至 v8.4。
 
 ## v8.3 — 版本号统一与发布链路单源化（首个两段式版本号）（2026-11-02）
 > 本条为**首个正式发布的两段式版本号**（`8.3`）。此前 `v8.2.2` / `v8.2.3` 为内部迭代、尚未对外发布，其成果整体并入本条发布记录，下文保留各自技术细节备查。

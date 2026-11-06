@@ -28,14 +28,15 @@ const overviewCache = { ts: 0, data: null };
 const OVERVIEW_TTL = 60 * 1000;
 
 // ===== 本地配置（gitignore 的 config.json / .env，不入库，避免泄露密钥）=====
-// 优先级：环境变量 QWEATHER_KEY / QWEATHER_HOST > 本地 config.json
-// 这样非技术用户只需把 key 填进 app/config.json 即可启用和风天气，无需设置环境变量。
+// 优先级：环境变量 CAIYUN_TOKEN / NMDIS_* > 本地 config.json
+// 这样非技术用户只需把 key 填进 app/config.json 即可启用对应数据源，无需设置环境变量。
 function loadServerConfig() {
   const cfg = {};
-  if (process.env.QWEATHER_KEY) cfg.qweatherKey = process.env.QWEATHER_KEY;
-  if (process.env.QWEATHER_HOST) cfg.qweatherHost = process.env.QWEATHER_HOST;
+  if (process.env.CAIYUN_TOKEN) cfg.caiyunToken = process.env.CAIYUN_TOKEN;
   if (process.env.NMDIS_APPID) cfg.nmdisAppId = process.env.NMDIS_APPID;
   if (process.env.NMDIS_APPSECRET) cfg.nmdisAppSecret = process.env.NMDIS_APPSECRET;
+  if (process.env.GEOVIS_TOKEN) cfg.geovisToken = process.env.GEOVIS_TOKEN;
+  if (process.env.FOREOCEAN_TOKEN) cfg.foreoceanToken = process.env.FOREOCEAN_TOKEN;
   // config.json 可能位于 app/（node server.js 开发）或 .exe 同目录（双击 EXE）。
   // SEA 单文件 exe 的 __dirname 指向 .exe 所在目录（与开发态不同），故显式按运行形态排序：
   //   SEA → .exe 同目录优先；开发态 → app/ 优先；再退回 execPath 同目录兜底。
@@ -48,10 +49,11 @@ function loadServerConfig() {
   if (raw) {
     try {
       const j = JSON.parse(raw);
-      if (j && j.qweatherKey && !cfg.qweatherKey) cfg.qweatherKey = j.qweatherKey;
-      if (j && j.qweatherHost && !cfg.qweatherHost) cfg.qweatherHost = j.qweatherHost;
+      if (j && j.caiyunToken && !cfg.caiyunToken) cfg.caiyunToken = j.caiyunToken;
       if (j && j.nmdisAppId && !cfg.nmdisAppId) cfg.nmdisAppId = j.nmdisAppId;
       if (j && j.nmdisAppSecret && !cfg.nmdisAppSecret) cfg.nmdisAppSecret = j.nmdisAppSecret;
+      if (j && j.geovisToken && !cfg.geovisToken) cfg.geovisToken = j.geovisToken;
+      if (j && j.foreoceanToken && !cfg.foreoceanToken) cfg.foreoceanToken = j.foreoceanToken;
       // 潮汐站点代码覆盖（NMDIS 各港代码需在 service-tide.nmdis.org.cn 注册后获取；config.js 默认留空→降级模型）
       if (j && j.tideSiteCodes && typeof j.tideSiteCodes === 'object') {
         for (const st of TIDE_STATIONS) {
@@ -61,17 +63,21 @@ function loadServerConfig() {
     } catch (e) { /* config.json 解析失败则忽略 */ }
   }
   // 回写 process.env 供 lib/sources.js / lib/tides.js 懒读取（EXE 双击无 shell 环境，靠此注入）
-  if (cfg.qweatherKey) process.env.QWEATHER_KEY = cfg.qweatherKey;
-  if (cfg.qweatherHost) process.env.QWEATHER_HOST = cfg.qweatherHost;
+  if (cfg.caiyunToken) process.env.CAIYUN_TOKEN = cfg.caiyunToken;
   if (cfg.nmdisAppId) process.env.NMDIS_APPID = cfg.nmdisAppId;
   if (cfg.nmdisAppSecret) process.env.NMDIS_APPSECRET = cfg.nmdisAppSecret;
+  if (cfg.geovisToken) process.env.GEOVIS_TOKEN = cfg.geovisToken;
+  if (cfg.foreoceanToken) process.env.FOREOCEAN_TOKEN = cfg.foreoceanToken;
   return cfg;
 }
 const SERVER_CFG = loadServerConfig();
-if (SERVER_CFG.qweatherKey) console.log('[cfg] 已加载和风天气 KEY（本地配置/环境变量），将作为 CMA 实况校核源参与多源数据校核。');
-else console.log('[cfg] 未配置和风天气 KEY（QWEATHER_KEY/config.json 缺失），CMA 实况源标记为「未配置·可选」。');
+if (SERVER_CFG.caiyunToken) console.log('[cfg] 已加载彩云天气 Token（本地配置/环境变量），将作为独立中国实况源参与多源数据校核。');
+else console.log('[cfg] 未配置彩云天气 Token（CAIYUN_TOKEN/config.json 缺失），彩云实况源标记为「未配置·可选」。');
 if (SERVER_CFG.nmdisAppId && SERVER_CFG.nmdisAppSecret) console.log('[cfg] 已加载国家海洋信息中心(NMDIS) 潮汐凭证（本地配置/环境变量），潮汐模块优先使用官方预报。');
-else console.log('[cfg] 未配置 NMDIS 潮汐凭证（NMDIS_APPID/NMDIS_APPSECRET/config.json 缺失），潮汐模块降级为调和模型估算（演示）。');
+else console.log('[cfg] 未配置 NMDIS 潮汐凭证（NMDIS_APPID/NMDIS_APPSECRET/config.json 缺失），潮汐模块走免费源链（Open-Meteo 海洋模式默认，可经 星图/预海 免费 Token 增强；填 NMDIS 凭证后切换官方预报）。');
+if (SERVER_CFG.geovisToken) console.log('[cfg] 已加载星图地球潮汐 Token，潮汐模块将作为免费增强源（中国港口精度更高）。');
+if (SERVER_CFG.foreoceanToken) console.log('[cfg] 已加载预海天气潮汐 Token，潮汐模块将作为免费增强源（中国近岸 AI 融合）。');
+if (!SERVER_CFG.geovisToken && !SERVER_CFG.foreoceanToken) console.log('[cfg] 未配置免费潮汐 Token（geovisToken/foreoceanToken），潮汐默认使用 Open-Meteo 海洋模式（免费·无需密钥）。');
 
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
@@ -223,12 +229,10 @@ function parseAlertTime(t) {
   if (!m) return 0;
   return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
 }
-// 实况修正：优先采用可达的权威实况源（CMA 官方 > wttr.in 独立第三方），如实反映当前强度
+// 实况修正：优先采用可达的权威实况源（中国气象局 > 中国天气网 > 彩云 > wttr.in 独立第三方），如实反映当前强度
 // （如暴雨减弱为零星小雨）；预警仍生效时在「实时天气」顶部以淡红标注，但不强行覆盖实况强度。
 // 仅当所有实况源均不可达、且北海暴雨/强对流预警生效时，才以预警类别预估实况（标注「预估」）。
-function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes) {
-  const cma = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : null;
-  const cmaOk = !!(cma && cma.ok && cma.current);
+function applyRealtimeOverride(stations, alertIntel, wttrRes, caiyunRes, cmagovRes, weathercnRes) {
   const wttr = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : null;
   const wttrOk = !!(wttr && wttr.ok && wttr.current);
   const cmagov = (cmagovRes && cmagovRes.status === 'fulfilled') ? cmagovRes.value : null;
@@ -248,11 +252,10 @@ function applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes,
   for (const st of stations) {
     if (!st.weather || !st.weather.ok || !st.weather.current) continue;
     const cur = st.weather.current;
-    // 优先取可达实况源（中国气象局 > 中国天气网 > 和风天气 > 彩云天气 > wttr.in），将多源实况校验结果静默应用到实时天气（不改变展示样式）
+    // 优先取可达实况源（中国气象局 > 中国天气网 > 彩云天气 > wttr.in），将多源实况校验结果静默应用到实时天气（不改变展示样式）
     let live = null, liveSrc = '', liveKey = '';
     if (cmagovOk) { live = cmagov.current; liveSrc = '中国气象局实况'; liveKey = 'cmagov'; }
     else if (weathercnOk) { live = weathercn.current; liveSrc = '中国天气网实况'; liveKey = 'weathercn'; }
-    else if (cmaOk) { live = cma.current; liveSrc = '和风天气实况'; liveKey = 'cma'; }
     else if (caiyunOk) { live = caiyun.current; liveSrc = '彩云天气实况'; liveKey = 'caiyun'; }
     else if (wttrOk) { live = wttr.current; liveSrc = 'wttr.in 实况'; liveKey = 'wttr'; }
     if (live) {
@@ -288,7 +291,6 @@ async function buildOverview() {
     src.fetchTyphoon().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchWarnings().catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchRiverReservoir().catch(e => ({ ok: false, error: String(e.message || e) })),
-    src.fetchCmaLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchWttrLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchCaiyunLive({ lat: 21.48, lon: 109.11 }).catch(e => ({ ok: false, error: String(e.message || e) })),
     src.fetchRegionalBeihai().catch(e => ({ ok: false, error: String(e.message || e) })),
@@ -297,7 +299,7 @@ async function buildOverview() {
     src.fetchCmaGovLive({}).catch(e => ({ ok: false, error: String(e.message || e) })),
     fetchClimateNormals(STATIONS[0]).catch(e => ({ ok: false, error: String(e.message || e) })),
   ]);
-  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, cmaRes, wttrRes, caiyunRes, regionalRes, metnoRes, weathercnRes, cmagovRes, climateRes] = results;
+  const [stationsAgg, tideRes, quakeRes, fireRes, tyRes, warnRes, rrRes, wttrRes, caiyunRes, regionalRes, metnoRes, weathercnRes, cmagovRes, climateRes] = results;
   const tideList = tideRes.status === 'fulfilled' ? tideRes.value : [];
   const stations = (stationsAgg.status === 'fulfilled' ? stationsAgg.value : []).map(st => {
     const ev = alert.evaluateStation(st);
@@ -305,9 +307,8 @@ async function buildOverview() {
     const morningGlow = astro.sunriseGlow(st);
     return { ...st, alert: ev, glow, morningGlow };
   });
-  // 多源实况交叉校核：使用尚未被覆盖的原始 Open-Meteo current + CMA + wttr.in（独立第三方源）
+  // 多源实况交叉校核：使用尚未被覆盖的原始 Open-Meteo current + 中国天气网 + wttr.in（独立第三方源）
   const primaryAgg = (stationsAgg.status === 'fulfilled') ? stationsAgg.value[0] : null;
-  const cmaVal = (cmaRes && cmaRes.status === 'fulfilled') ? cmaRes.value : cmaRes;
   const wttrVal = (wttrRes && wttrRes.status === 'fulfilled') ? wttrRes.value : wttrRes;
   const caiyunVal = (caiyunRes && caiyunRes.status === 'fulfilled') ? caiyunRes.value : caiyunRes;
   const weathercnVal = (weathercnRes && weathercnRes.status === 'fulfilled') ? weathercnRes.value : weathercnRes;
@@ -317,7 +318,7 @@ async function buildOverview() {
     ...((warnRes.status === 'fulfilled' && warnRes.value.ok && warnRes.value.convective) ? warnRes.value.convective : []).map(a => ({ category: a.catLabel || a.cat, level: a.levelNum || 0, levelName: a.level })),
   ];
   const metnoVal = (metnoRes && metnoRes.status === 'fulfilled') ? metnoRes.value : metnoRes;
-  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, weathercn: weathercnVal, cma: cmaVal, wttr: wttrVal, caiyun: caiyunVal, cmagov: cmagovVal, metno: metnoVal }, warnCtx, primaryAgg ? primaryAgg.air : null);
+  const realtimeCheck = src.verifyRealtime({ openMeteo: primaryAgg ? primaryAgg.weather : null, weathercn: weathercnVal, wttr: wttrVal, caiyun: caiyunVal, cmagov: cmagovVal, metno: metnoVal }, warnCtx, primaryAgg ? primaryAgg.air : null);
   const regionalWeather = (regionalRes && regionalRes.status === 'fulfilled') ? regionalRes.value : { ok: false, error: (regionalRes && regionalRes.reason) ? String(regionalRes.reason) : '区域天气采集失败' };
   const primaryClimate = (climateRes && climateRes.status === 'fulfilled') ? climateRes.value : null;
   persistRealtimeCheck(realtimeCheck);
@@ -354,7 +355,7 @@ async function buildOverview() {
   });
   const maxLevel = globalAlerts.reduce((m, x) => Math.max(m, x.level), 0);
   const alertIntel = intel.buildAlertIntel({ typhoons, warnings: warnRes.status === 'fulfilled' && warnRes.value.ok ? warnRes.value : { all: [] }, quakes });
-  applyRealtimeOverride(stations, alertIntel, cmaRes, wttrRes, caiyunRes, cmagovRes, weathercnRes);
+  applyRealtimeOverride(stations, alertIntel, wttrRes, caiyunRes, cmagovRes, weathercnRes);
   return {
     updated: new Date().toISOString(),
     center: { name: '北海', lat: 21.48, lon: 109.11 },

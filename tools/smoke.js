@@ -130,18 +130,17 @@ function buildMock() {
     sources: [
       { label: 'Open-Meteo', ok: true, skipped: false, temp: 30, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4, pressure: 1008 },
       { label: '中国天气网(国家气象中心)', ok: true, skipped: false, temp: 30.2, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 76, wind: 4.2, pressure: 1009 },
-      { label: '和风天气(QWeather)', ok: true, skipped: false, temp: 30.1, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4.1, pressure: 1009 },
       { label: 'wttr.in', ok: true, skipped: false, temp: 29.8, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 74, wind: 3.8, pressure: 0 },
       { label: '彩云天气', ok: true, skipped: false, temp: 30.1, text: '晴', precip: 0, uv: 8, category: 'clear', rh: 75, wind: 4.1, pressure: 0 },
       { label: '中国气象局(CMA)', ok: true, skipped: false, temp: 30.3, text: '晴', precip: 0, uv: null, category: 'clear', rh: 73, wind: 4.3, pressure: 1007 },
       { label: '挪威气象局(yr.no)', ok: true, skipped: false, temp: 30.3, text: '晴', precip: 0, uv: null, category: 'clear', rh: 73, wind: 4.4, pressure: 1007 },
     ],
     fields: [
-      { key: 'temp', label: '气温', unit: '℃', vals: [{ label: 'Open-Meteo', v: 30 }, { label: '中国天气网(国家气象中心)', v: 30.2 }, { label: '和风天气(QWeather)', v: 30.1 }, { label: 'wttr.in', v: 29.8 }, { label: '彩云天气', v: 30.1 }, { label: '中国气象局(CMA)', v: 30.3 }, { label: '挪威气象局(yr.no)', v: 30.3 }], spread: 0.5, consistent: true },
-      { key: 'rh', label: '湿度', unit: '%', vals: [{ label: 'Open-Meteo', v: 75 }, { label: '中国天气网(国家气象中心)', v: 76 }, { label: '和风天气(QWeather)', v: 75 }, { label: 'wttr.in', v: 74 }, { label: '彩云天气', v: 75 }, { label: '中国气象局(CMA)', v: 73 }, { label: '挪威气象局(yr.no)', v: 73 }], spread: 3, consistent: true },
-      { key: 'wind', label: '风速', unit: 'm/s', vals: [{ label: 'Open-Meteo', v: 4 }, { label: '中国天气网(国家气象中心)', v: 4.2 }, { label: '和风天气(QWeather)', v: 4.1 }, { label: 'wttr.in', v: 3.8 }, { label: '彩云天气', v: 4.1 }, { label: '中国气象局(CMA)', v: 4.3 }, { label: '挪威气象局(yr.no)', v: 4.4 }], spread: 0.6, consistent: true },
-      { key: 'pressure', label: '气压', unit: 'hPa', vals: [{ label: 'Open-Meteo', v: 1008 }, { label: '中国天气网(国家气象中心)', v: 1009 }, { label: '和风天气(QWeather)', v: 1009 }, { label: 'wttr.in', v: null }, { label: '彩云天气', v: null }, { label: '中国气象局(CMA)', v: 1007 }, { label: '挪威气象局(yr.no)', v: 1007 }], spread: 1, consistent: true },
-      { key: 'precip', label: '降水', unit: 'mm', vals: [{ label: 'Open-Meteo', v: 0 }, { label: '中国天气网(国家气象中心)', v: 0 }, { label: '和风天气(QWeather)', v: 0 }, { label: 'wttr.in', v: 0 }, { label: '彩云天气', v: 0 }, { label: '中国气象局(CMA)', v: 0 }, { label: '挪威气象局(yr.no)', v: 0 }], spread: 0, consistent: true },
+      { key: 'temp', label: '气温', unit: '℃', vals: [{ label: 'Open-Meteo', v: 30 }, { label: '中国天气网(国家气象中心)', v: 30.2 }, { label: 'wttr.in', v: 29.8 }, { label: '彩云天气', v: 30.1 }, { label: '中国气象局(CMA)', v: 30.3 }, { label: '挪威气象局(yr.no)', v: 30.3 }], spread: 0.5, consistent: true },
+      { key: 'rh', label: '湿度', unit: '%', vals: [{ label: 'Open-Meteo', v: 75 }, { label: '中国天气网(国家气象中心)', v: 76 }, { label: 'wttr.in', v: 74 }, { label: '彩云天气', v: 75 }, { label: '中国气象局(CMA)', v: 73 }, { label: '挪威气象局(yr.no)', v: 73 }], spread: 3, consistent: true },
+      { key: 'wind', label: '风速', unit: 'm/s', vals: [{ label: 'Open-Meteo', v: 4 }, { label: '中国天气网(国家气象中心)', v: 4.2 }, { label: 'wttr.in', v: 3.8 }, { label: '彩云天气', v: 4.1 }, { label: '中国气象局(CMA)', v: 4.3 }, { label: '挪威气象局(yr.no)', v: 4.4 }], spread: 0.6, consistent: true },
+      { key: 'pressure', label: '气压', unit: 'hPa', vals: [{ label: 'Open-Meteo', v: 1008 }, { label: '中国天气网(国家气象中心)', v: 1009 }, { label: 'wttr.in', v: null }, { label: '彩云天气', v: null }, { label: '中国气象局(CMA)', v: 1007 }, { label: '挪威气象局(yr.no)', v: 1007 }], spread: 1, consistent: true },
+      { key: 'precip', label: '降水', unit: 'mm', vals: [{ label: 'Open-Meteo', v: 0 }, { label: '中国天气网(国家气象中心)', v: 0 }, { label: 'wttr.in', v: 0 }, { label: '彩云天气', v: 0 }, { label: '中国气象局(CMA)', v: 0 }, { label: '挪威气象局(yr.no)', v: 0 }], spread: 0, consistent: true },
     ],
     consensus: { category: 'clear', tempMin: 29.8, tempMax: 30.3, tempMean: 30, rhMean: 75, uvMean: 8, uvMin: 8, uvMax: 8, air: { aqi: 45 } },
     discrepancies: [],
@@ -439,13 +438,14 @@ function runAssertions() {
   const srvSrc = fs.readFileSync(path.join(ROOT, 'app/server.js'), 'utf8');
   ok(srvSrc.indexOf('/api/version') >= 0, '服务端暴露 /api/version（返回当前运行版本清单）');
   ok(srvSrc.indexOf('/api/latest') >= 0, '服务端暴露 /api/latest（代理上游最新版本检测，绕开浏览器 CORS）');
-  // 需求⑤：多源气候数据校核 — 增加和风天气(QWeather) 作为 CMA 实况校核源
-  ok(idxHtml.indexOf('和风天气(QWeather)') >= 0, '页脚数据源署名含和风天气(QWeather)（需求⑤）');
+  // 需求⑤：多源气候数据校核 — 已移除和风天气(QWeather)（其 API Host 受订阅/授权白名单限制，
+  // 且系统已有 中国气象局/中国天气网/彩云天气 等国内权威源覆盖），改为断言 QWeather 已彻底清理。
+  ok(idxHtml.indexOf('和风天气(QWeather)') < 0, '页脚数据源署名已移除和风天气(QWeather)');
   const appSrcQ = fs.readFileSync(path.join(ROOT, 'app/public/js/app.js'), 'utf8');
-  ok(appSrcQ.indexOf('和风天气 QWeather') >= 0, '数据源网站清单含和风天气 QWeather 条目（需求⑤）');
-  ok(srvSrc.indexOf('loadServerConfig') >= 0 && srvSrc.indexOf('config.json') >= 0, '服务端支持本地 config.json 读取和风天气 KEY（无需硬编码/环境变量）');
+  ok(appSrcQ.indexOf('和风天气 QWeather') < 0, '数据源网站清单已移除和风天气 QWeather 条目');
+  ok(srvSrc.indexOf('loadServerConfig') >= 0 && srvSrc.indexOf('config.json') >= 0, '服务端仍支持本地 config.json 读取（用于彩云/NMDIS 等可选 KEY）');
   const srcLib = fs.readFileSync(path.join(ROOT, 'app/lib/sources.js'), 'utf8');
-  ok(srcLib.indexOf('qweatherNow') >= 0 && srcLib.indexOf('QWEATHER_KEY') >= 0, 'lib/sources.js: qweatherNow() 接入和风天气实况并参与多源校核');
+  ok(srcLib.indexOf('qweatherNow') < 0 && srcLib.indexOf('QWEATHER_KEY') < 0, 'lib/sources.js: qweatherNow()/QWEATHER_KEY 已彻底移除（和风天气清理完成）');
   // 黄历库（vendor/lunar.js）独立校验：2026-08-28 应为 丙午年 丙申月 甲戌日
   try {
     const LL = require(path.join(ROOT, 'app/public/vendor/lunar.js'));
@@ -573,7 +573,7 @@ function runAssertions() {
     'nmdisHttp.js 内置国内可达 DoH 解析器（阿里 / 腾讯）');
   ok(/Host/.test(nhSrc), 'nmdisHttp.js 直连 IP 时显式带 Host 头（保持原域名）');
   ok(/postNmdis/.test(tidesSrc), 'lib/tides.js 已改走 nmdisHttp.postNmdis（DNS 失败自动兜底）');
-  ok(!/await fetch\(url,/.test(tidesSrc), 'lib/tides.js 不再直接依赖裸 fetch（绕过 DNS 兜底）');
+  ok(!/await fetch\([^)]*nmdis/i.test(tidesSrc), 'lib/tides.js 的 NMDIS 访问不通过裸 fetch（必须走 nmdisHttp.postNmdis 启用 DNS 兜底）');
 
   // 命令行查询/回填工具
   ok(fs.existsSync(path.join(ROOT, 'tools', 'nmdis-portlist.js')), 'tools/nmdis-portlist.js 存在（站点代码查询与回填工具）');

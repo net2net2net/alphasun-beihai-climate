@@ -22,19 +22,17 @@ alphasun-beihai-climate/
 > 无需安装 Node.js、无需任何外部文件；可直接拷贝到任意 Windows 机器运行。
 > 可选环境变量：`PORT=9000` 修改端口；`OPEN=0` 禁止自动打开浏览器。
 
-#### A-1. exe 同目录放 config.json（启用和风天气 / NMDIS 权威潮汐）
+#### A-1. exe 同目录放 config.json（启用 NMDIS 权威潮汐）
 把 `app/config.example.json` 复制一份为 **`config.json`**，与 `.exe` **放在同一目录**，填入密钥后重启 exe 即可生效：
 
 ```jsonc
 {
-  "qweatherKey": "和风天气 KEY",          // 可选：CMA 实况校核源
   "nmdisAppId": "NMDIS AppID",            // 启用权威潮汐预报（见 A-2）
   "nmdisAppSecret": "NMDIS AppSecret",
   "tideSiteCodes": { "bhg": "", "tsg": "", "wzd": "" }  // 可选：显式指定各港站点代码
 }
 ```
 启动日志会打印确认行：
-- `[cfg] 已加载和风天气 KEY…` → 生效
 - `[cfg] 已加载国家海洋信息中心(NMDIS) 潮汐凭证…` → 生效
 - `[cfg] 未配置…` → 未读到，请确认 `config.json` 与 exe **同目录**（不是 `app/` 子目录）
 

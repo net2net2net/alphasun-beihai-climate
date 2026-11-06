@@ -1,17 +1,17 @@
 {
-  "version": "8.3",
-  "released": "2026-11-02",
-  "notes": "潮汐调和模型升级为六分潮（M2/S2/N2/K1/O1/P1）并按站点差异化，新增潮型与大中小潮自动判别；EXE 单文件环境实测加固（.exe 同目录 config.json 生效、修复 SEA 下审计快照污染上级目录、Windows 防火墙拦截排障）；新增 NMDIS 三港站点代码查询回填工具 tools/nmdis-portlist.js；站点匹配升级为别名+坐标消歧（避免命中外省同名港）；新增 DoH DNS 兜底直连（应对国内 DNS 对 nmdis 域名的 NXDOMAIN）；修复 9 个 PNG 二进制资源损坏（PWA 图标 / Leaflet 标记，签名曾被文本模式破坏）并以 .gitattributes 钉死 EOL 与 binary 规则，解决构建产物跨平台不可复现；回归门禁扩至 122 项（新增二进制资产完整性、内联资源新鲜度与发布归档目录 `_releases/` 的 git 隔离断言）；版本号统一为 8.3（exe/apk/ipa 发布 TAG 单源一致）。",
+  "version": "8.4",
+  "released": "2026-11-06",
+  "notes": "潮汐数据源重构（免费优先·按需增强）：默认免费源升级为 Open-Meteo 海洋模式（marine-api 的 sea_level_height_msl，无需密钥、全球覆盖、real=true，基准标注平均海平面 MSL）；新增可选免费 Token 增强源 星图地球(GEOVIS)/预海天气(FOREOCEAN)，提升中国近岸精度（配置 geovisToken/foreoceanToken 经 config.json 或环境变量 GEOVIS_TOKEN/FOREOCEAN_TOKEN）；彻底移除和风天气(QWeather) 依赖与署名（server/lib 多源校核降为 6 源、前端数据-source 清单、配置模板与文档同步清理）；国家海洋信息中心(NMDIS) 付费潮汐方案按决策暂不接入，代码保留休眠，填 nmdisAppId/AppSecret 即可激活。回归门禁保持 122/0（第 4 组断言由『禁一切裸 fetch』收窄为『NMDIS 域名不得裸 fetch』，避免误伤合法免费源）。",
   "minAndroid": "8.0.0",
   "github": "https://github.com/net2net2net/alphasun-beihai-climate",
   "gitee": "https://gitee.com/net2net2net/alphasun-beihai-climate",
   "releases": "https://github.com/net2net2net/alphasun-beihai-climate/releases",
   "downloads": {
-    "windows": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.3/alphasun-beihai-climate.exe",
-    "linux": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.3/alphasun-beihai-climate-linux",
-    "macos": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.3/alphasun-beihai-climate-macos",
-    "android": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.3/alphasun-beihai-climate.apk",
-    "ios": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.3/alphasun-beihai-climate-ios.ipa",
+    "windows": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.4/alphasun-beihai-climate.exe",
+    "linux": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.4/alphasun-beihai-climate-linux",
+    "macos": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.4/alphasun-beihai-climate-macos",
+    "android": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.4/alphasun-beihai-climate.apk",
+    "ios": "https://github.com/net2net2net/alphasun-beihai-climate/releases/download/v8.4/alphasun-beihai-climate-ios.ipa",
     "agent": "https://github.com/net2net2net/alphasun-beihai-climate"
   }
 }

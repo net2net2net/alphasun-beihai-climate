@@ -26,6 +26,28 @@ function fetchJSONP(url, timeout = 15000) {
     .finally(() => clearTimeout(t));
 }
 
+// 带超时 + 指数退避重试的 fetch（上游偶发抖动时自动重试，提升实况可用性）
+// retries 为额外重试次数（默认 2，即最多 3 次）；仅对网络异常重试，HTTP 状态码错误交由调用方判定
+async function fetchWithRetry(url, opts = {}, { timeout = 12000, retries = 2, backoff = 400, headers } = {}) {
+  const finalOpts = Object.assign({}, opts);
+  if (headers) finalOpts.headers = Object.assign({}, finalOpts.headers, headers);
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const r = await fetch(url, Object.assign({}, finalOpts, { signal: ctrl.signal }));
+      clearTimeout(t);
+      return r;
+    } catch (e) {
+      clearTimeout(t);
+      lastErr = e;
+      if (attempt < retries) await new Promise(r => setTimeout(r, backoff * (attempt + 1)));
+    }
+  }
+  throw lastErr || new Error('fetchWithRetry: 未知错误');
+}
+
 // 从预警标题中解析发布城市坐标（先匹配市/县，未命中再兜底到省级）
 function geoFromTitle(title) {
   if (!title) return null;
@@ -100,7 +122,7 @@ async function fetchForecast(s) {
   };
 }
 
-// ===== 1.5 和风天气(QWeather) 实况（CMA 官方商业分发方，专业机构；配置 QWEATHER_KEY 启用；未配置回落中国天气网·北海）=====
+// 中文天气现象文本 → WMO 天气代码（把国内源的中文描述归一化为系统统一 code）
 function zhWeatherToWmo(text) {
   if (!text) return 3;
   if (/雷阵雨|雷雨|雷电|暴雨|大暴雨|特大暴雨/.test(text)) return 95;
@@ -115,15 +137,13 @@ function zhWeatherToWmo(text) {
   if (/多云|阴/.test(text)) return 3;
   return 3;
 }
+// 中文方位（东北/南…）→ 风向角度（度，气象惯例：风的来向）
 function dirToDeg(d) {
   const M = { 北: 0, 东北: 45, 东: 90, 东南: 135, 南: 180, 西南: 225, 西: 270, 西北: 315 };
   if (!d) return 0;
   for (const k of Object.keys(M)) if (String(d).includes(k)) return M[k];
   return 0;
 }
-// 中国天气网(CMA) 公开接口 d1.weather.com.cn/sk_ 已于近年全局下线（301 跳转商用引导页），
-// 故改用「和风天气 QWeather」——CMA 数据的官方商业分发方——作为权威中国实况源。
-// 配置环境变量 QWEATHER_KEY（免费 dev key）后启用；未配置时回退原 d1 接口（通常不可达，标记 skipped）。
 
 // 统一实况 current 归一化：各源 fetcher 在调用前已按自身单位/字段完成换算
 // （如风速 km/h→m/s、风力级→m/s、气压≤0 归零、云量缺失归 100），此处仅做类型规整与 WMO 兜底，
@@ -151,82 +171,9 @@ function buildCurrent(spec) {
   };
 }
 
-async function qweatherNow(s) {
-  const key = process.env.QWEATHER_KEY;
-  if (!key) return null;
-  const host = process.env.QWEATHER_HOST || 'devapi.qweather.com';
-  const url = `https://${host}/v7/weather/now?location=${s.lon.toFixed(3)},${s.lat.toFixed(3)}&key=${encodeURIComponent(key)}`;
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 12000);
-  let d;
-  try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0', 'X-Qweather-Token': key } });
-    if (!r.ok) throw new Error('qweather HTTP ' + r.status);
-    d = await r.json();
-  } finally { clearTimeout(t); }
-  if (!d || String(d.code) !== '200' || !d.now) throw new Error('qweather: ' + (d && d.code) + ' ' + (d && d.message || ''));
-  const n = d.now;
-  // 并行获取紫外线指数（和风 /v7/indices/uv；失败不影响主流程）
-  let uvIdx = null;
-  try {
-    const r2 = await fetch(`https://${host}/v7/indices/uv?location=${s.lon.toFixed(3)},${s.lat.toFixed(3)}&key=${encodeURIComponent(key)}`, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0', 'X-Qweather-Token': key } });
-    if (r2.ok) { const uj = await r2.json(); if (uj && String(uj.code) === '200' && uj.now) uvIdx = parseFloat(uj.now.index); }
-  } catch (e) { /* uv 可选 */ }
-  const zh = String(n.text || '').trim();
-  const code = zhWeatherToWmo(zh);
-  const wind = (parseFloat(n.windSpeed) || 0) / 3.6; // km/h -> m/s
-  return {
-    ok: true, source: 'cma', label: '和风天气(QWeather)', time: n.obsTime || null,
-    current: buildCurrent({
-      time: new Date().toISOString().slice(0, 16),
-      temp: parseFloat(n.temp), feels: parseFloat(n.feelsLike),
-      rh: parseInt(n.humidity, 10), precip: parseFloat(n.precip),
-      code, text: zh || wmo(code)[0], icon: wmo(code)[1],
-      wind, gust: 0, windDir: dirToDeg(n.windDir),
-      pressure: parseFloat(n.pressure), cloud: parseInt(n.cloud, 10), isDay: 1, uv: uvIdx, vis: (n.vis != null ? parseFloat(n.vis) : null),
-    }),
-  };
-}
-async function fetchCmaLive(s) {
-  const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
-  const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
-  // 1) 优先和风天气（CMA 官方分发，需免费 key）；无 key 或拉取失败则回落原接口
-  const qw = await qweatherNow({ lat, lon }).catch(() => null);
-  if (qw) { return qw; }
-  // 2) 原公开接口（多数网络已停用，保留兼容）
-  const CITY = '101301301'; // 北海市（中国天气网城市代码；原 101300501 实为桂林，已修正）
-  const url = `http://d1.weather.com.cn/sk_${CITY}.html`;
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 12000);
-  let text;
-  try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'http://www.weather.com.cn/' } });
-    text = await r.text();
-  } catch (e) { return { ok: false, error: 'cma fetch failed: ' + (e.message || e), skipped: !process.env.QWEATHER_KEY }; }
-  finally { clearTimeout(t); }
-  try {
-    const m = text.match(/var\s+dataSK\s*=\s*(\{[\s\S]*?\})\s*;?/);
-    if (!m) return { ok: false, error: 'cma: 公开接口已停用(需配置 QWEATHER_KEY)', skipped: !process.env.QWEATHER_KEY };
-    const j = JSON.parse(m[1]);
-    const zh = String(j.weather || '').trim();
-    const code = zhWeatherToWmo(zh);
-    const wmoPair = wmo(code);
-    const rh = parseInt(j.SD, 10);
-    const precip = parseFloat(j.rain);
-    const wind = parseFloat(String(j.WS || '0').replace(/[^0-9.]/g, ''));
-    return {
-      ok: true, source: 'cma', city: CITY, time: j.time,
-      current: buildCurrent({
-        time: new Date().toISOString().slice(0, 16),
-        temp: parseFloat(j.temp), feels: parseFloat(j.temp),
-        rh, precip,
-        code, text: zh || wmoPair[0], icon: wmoPair[1],
-        wind, gust: 0,
-        windDir: dirToDeg(j.WD), pressure: 0, cloud: 100, isDay: 1,
-      }),
-    };
-  } catch (e) { return { ok: false, error: 'cma parse: ' + (e.message || e) }; }
-}
+// 和风天气(QWeather) 实况源已移除（2026-11-06）：其 API Host 受订阅/授权白名单限制，
+// 且系统已有 中国气象局(CMA) / 中国天气网 / 彩云天气 等国内权威源覆盖，故不再内置该源。
+// 若未来需恢复，可在本段位置按原多源校核调用链重新接入该实况源。
 
 // 风力等级(级)→风速(m/s) 近似中值（用于把中国天气网的“级”换算为国际单位，便于交叉校核）
 function windScaleToMs(scale) {
@@ -353,7 +300,7 @@ async function fetchWttrLive(s) {
   } catch (e) { return { ok: false, error: 'wttr parse: ' + (e.message || e) }; }
 }
 
-// ===== 1.6b 彩云天气实况（独立中国源，用于与 CMA/和风、Open-Meteo、wttr.in 交叉校核；
+// ===== 1.6b 彩云天气实况（独立中国源，用于与 CMA/中国天气网、Open-Meteo、wttr.in 交叉校核；
 //        环境变量 CAIYUN_TOKEN 配置后启用；未配置标记 skipped。不同模型/提供商，增强分歧识别）=====
 function caiyunSkyconToWmo(sky) {
   const t = String(sky || '').toUpperCase();
@@ -371,15 +318,12 @@ async function fetchCaiyunLive(s) {
   const lat = (s && typeof s.lat === 'number') ? s.lat : 21.48;
   const lon = (s && typeof s.lon === 'number') ? s.lon : 109.11;
   const url = `https://api.caiyunapp.com/v2.6/${token}/${lon.toFixed(4)},${lat.toFixed(4)}/realtime.json`;
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 12000);
   let d;
   try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const r = await fetchWithRetry(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, { timeout: 12000, retries: 2, backoff: 400 });
     if (!r.ok) throw new Error('caiyun HTTP ' + r.status);
     d = await r.json();
   } catch (e) { return { ok: false, error: 'caiyun fetch: ' + (e.message || e) }; }
-  finally { clearTimeout(t); }
   try {
     const rt = (d && d.result && d.result.realtime) || {};
     const sky = caiyunSkyconToWmo(rt.skycon);
@@ -450,7 +394,7 @@ async function fetchMetNoLive(s) {
   } catch (e) { return { ok: false, error: 'metno parse: ' + (e.message || e) }; }
 }
 
-// ===== 1.7 多数据源实况交叉校核（CMA / Open-Meteo / wttr.in / 彩云天气 / yr.no）=====
+// ===== 1.7 多数据源实况交叉校核（Open-Meteo / 中国天气网 / wttr.in / 彩云天气 / 中国气象局 / yr.no）=====
 // 归一化天气大类，用于源间一致性判定
 function wxCategory(code, zh) {
   const t = String(zh || '');
@@ -478,12 +422,11 @@ function snapOf(result, label, key) {
     fetchedAt: v.time || null, category: wxCategory(c.code, c.text),
   };
 }
-// results: { openMeteo, cma, wttr }（Promise.allSettled 条目或归一化对象）；warnings: 北海相关预警数组 [{category, level, levelName}]
+// results: { openMeteo, weathercn, wttr, caiyun, cmagov, metno }（Promise.allSettled 条目或归一化对象）；warnings: 北海相关预警数组 [{category, level, levelName}]
 function verifyRealtime(results, warnings, air) {
   const srcs = [
     snapOf(results.openMeteo, 'Open-Meteo', 'openmeteo'),
     snapOf(results.weathercn, '中国天气网(国家气象中心)', 'weathercn'),
-    snapOf(results.cma, '和风天气(QWeather)', 'cma'),
     snapOf(results.wttr, 'wttr.in', 'wttr'),
     snapOf(results.caiyun, '彩云天气(Caiyun)', 'caiyun'),
     snapOf(results.cmagov, '中国气象局(CMA)', 'cmagov'),
@@ -561,7 +504,7 @@ function verifyRealtime(results, warnings, air) {
     { key: 'pressure', label: '气压', unit: 'hPa', vals: valid.map(s => ({ label: s.label, v: (s.pressure > 0 ? s.pressure : null) })), spread: +presSpread.toFixed(0), consistent: presSpread <= 4 },
     { key: 'precip', label: '降水', unit: 'mm', vals: valid.map(s => ({ label: s.label, v: (s.precip != null ? +s.precip.toFixed(1) : null) })), spread: 0, consistent: true },
   ];
-  const rec = valid.find(s => s.source === 'cma') || valid.find(s => s.category === consensusCat) || valid[0];
+  const rec = valid.find(s => s.category === consensusCat) || valid[0];
   const recommended = { temp: +tmean.toFixed(1), rh: rhMean, precip: +precipMax.toFixed(1), code: rec.code, text: rec.text, icon: rec.icon, source: rec.label };
   return {
     ok: true, checkedAt, city: '北海', sources: srcs, fields,
@@ -863,6 +806,6 @@ async function fetchRegionalBeihai() {
 
 module.exports = {
   fetchForecast, fetchAir, fetchMarine, fetchFlood, fetchClimate,
-  fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir, fetchCmaLive,
+  fetchEarthquakes, fetchFires, fetchTyphoon, fetchWarnings, aggregateStation, fetchRiverReservoir,
   fetchWttrLive, fetchCaiyunLive, fetchMetNoLive, verifyRealtime, fetchRegionalBeihai, fetchWeatherCnLive, fetchCmaGovLive,
 };
