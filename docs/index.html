@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AlphaSun · 北海极端气候全景系统</title>
+  <meta name="description" content="北海极端气候全景系统 · 纯前端静态版 · 气象/空气/海洋/潮汐/地震/天文 实时聚合">
+  <!-- Leaflet 样式：unpkg 主源，jsdelivr 兜底 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="./assets/css/styles.css">
+</head>
+<body class="theme-dark">
+
+<!-- ============ 顶栏 ============ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">☀</span>
+    <div class="brand-text">
+      <h1>AlphaSun · 北海极端气候全景系统 <span class="ver">v8.4</span></h1>
+      <div class="sub">陆 · 海 · 空 · 天 · 水文 五位一体实时全景 ｜ 纯前端静态版（无后端）</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="topClock" title="亚洲/上海时区">
+      <span id="clkDate" class="clk-date">—</span>
+      <span id="clkTime" class="clk-time">—</span>
+    </div>
+    <div class="status">
+      <span id="lastUpdate" class="muted">更新中…</span>
+      <button id="autoToggle" class="btn" title="暂停/开启 10 分钟自动刷新">⏱ 自动</button>
+      <button id="btnTheme" class="btn" title="切换深色 / 浅色">🌙 浅色</button>
+      <button id="btnRefresh" class="btn btn-primary" title="手动刷新全部数据">⟳ 刷新</button>
+    </div>
+  </div>
+</header>
+
+<!-- ============ 三列主体 ============ -->
+<main class="grid">
+
+  <!-- ===== 左列 ===== -->
+  <section class="col col-left">
+    <div class="panel" id="stationPanel">
+      <div class="panel-h">地理区域 <span class="muted small">（点击切换监测站点）</span></div>
+      <div class="station-chips" id="stationChips"></div>
+      <div class="station-desc muted small" id="stationDesc"></div>
+    </div>
+
+    <div class="panel" id="realtimePanel">
+      <div class="panel-h">实时天气 <span class="muted small" id="rtStation"></span></div>
+      <div class="realtime-body" id="realtimeBody">
+        <div class="loading">加载中…</div>
+      </div>
+    </div>
+
+    <div class="panel" id="hourlyPanel">
+      <div class="panel-h">24h 逐时曲线 <span class="muted small">（点击图例增删维度）</span></div>
+      <canvas id="hourlyChart" height="180"></canvas>
+    </div>
+
+    <div class="panel" id="airPanel">
+      <div class="panel-h">空气质量 AQI</div>
+      <div class="air-body" id="airBody"><div class="loading">加载中…</div></div>
+    </div>
+
+    <div class="panel" id="marinePanel">
+      <div class="panel-h">海洋 · 浪高 / 海温</div>
+      <div class="marine-body" id="marineBody"><div class="loading">加载中…</div></div>
+    </div>
+
+    <div class="panel" id="tidePanel">
+      <div class="panel-h">潮汐 / 水位 <span class="muted small">（数值模式潮位）</span></div>
+      <div class="tide-body" id="tideBody"><div class="loading">加载中…</div></div>
+      <canvas id="tideChart" height="150"></canvas>
+    </div>
+
+    <div class="panel" id="checkPanel">
+      <div class="panel-h">🛰 多源数据校核</div>
+      <div class="check-body" id="checkBody"><div class="loading">加载中…</div></div>
+    </div>
+  </section>
+
+  <!-- ===== 中列 ===== -->
+  <section class="col col-map">
+    <div class="panel map-panel" id="mapPanel">
+      <div class="panel-h">全景地图
+        <span class="layers">
+          <label title="监测站点"><input type="checkbox" id="lyrStation" checked> 站点</label>
+          <label title="USGS 地震"><input type="checkbox" id="lyrQuake" checked> 地震</label>
+          <label title="北海边界"><input type="checkbox" id="lyrBoundary" checked> 边界</label>
+        </span>
+      </div>
+      <div id="map"></div>
+      <div class="map-legend" id="mapLegend"></div>
+    </div>
+
+    <div class="panel" id="riverPanel">
+      <div class="panel-h">江河水文 <span class="muted small">（权威档案 · 非实时）</span></div>
+      <div class="river-body" id="riverBody"></div>
+    </div>
+
+    <div class="panel" id="reservoirPanel">
+      <div class="panel-h">水库水情 <span class="muted small">（权威档案 · 非实时）</span></div>
+      <div class="reservoir-body" id="reservoirBody"></div>
+    </div>
+
+    <div class="panel" id="climatePanel">
+      <div class="panel-h">北海气候解说</div>
+      <div class="climate-body" id="climateBody"></div>
+    </div>
+
+    <div class="panel" id="worldClockPanel">
+      <div class="panel-h">🌐 世界时钟 <span class="muted small">（毫秒精度 · Asia/Shanghai）</span></div>
+      <div class="worldclock-body" id="worldClockBody"></div>
+    </div>
+  </section>
+
+  <!-- ===== 右列 ===== -->
+  <section class="col col-right">
+    <div class="panel" id="forecast7Panel">
+      <div class="panel-h">7 日周期预报</div>
+      <div class="forecast-body" id="forecast7Body"><div class="loading">加载中…</div></div>
+    </div>
+
+    <div class="panel" id="forecast15Panel">
+      <details open>
+        <summary class="panel-h clickable">15 日周期预报（可折叠）</summary>
+        <div class="forecast-body" id="forecast15Body"><div class="loading">加载中…</div></div>
+      </details>
+    </div>
+
+    <div class="panel" id="astroPanel">
+      <div class="panel-h">天文 · 日出月落 / 月相</div>
+      <div class="astro-body" id="astroBody"><div class="loading">加载中…</div></div>
+    </div>
+
+    <div class="panel" id="morningGlowPanel">
+      <div class="panel-h">🌅 早晨霞光概率</div>
+      <div class="glow-body" id="morningGlowBody"><div class="loading">加载中…</div></div>
+    </div>
+
+    <div class="panel" id="glowPanel">
+      <div class="panel-h">🌇 黄昏霞光概率</div>
+      <div class="glow-body" id="glowBody"><div class="loading">加载中…</div></div>
+    </div>
+
+    <div class="panel" id="calendarPanel">
+      <div class="panel-h">📅 天文景观日历
+        <span class="cal-nav">
+          <button id="calPrev" class="btn-mini" title="上一月">◀</button>
+          <span id="calTitle" class="muted small">—</span>
+          <button id="calNext" class="btn-mini" title="下一月">▶</button>
+        </span>
+      </div>
+      <div class="calendar-body" id="calendarBody"><div class="loading">加载中…</div></div>
+    </div>
+
+    <div class="panel" id="linksPanel">
+      <div class="panel-h">推荐天气 / 数据源网站</div>
+      <div class="links-body" id="linksBody"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ 页脚 ============ -->
+<footer class="foot">
+  <span class="foot-meta">版本 <b>v8.4</b></span>
+  <span class="foot-sep">·</span>
+  <span class="foot-links">开源：
+    <a href="https://github.com/net2net2net/alphasun-beihai-climate" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://gitee.com/net2net2net/alphasun-beihai-climate" target="_blank" rel="noopener">Gitee</a>
+  </span>
+  <span class="foot-sep">·</span>
+  <span>数据源：Open-Meteo · USGS ｜ 底图 OpenStreetMap（© OpenStreetMap contributors）</span>
+</footer>
+
+<!-- ============ 日历详情模态 ============ -->
+<div id="dayModal" class="modal hidden">
+  <div class="modal-card">
+    <button id="dayModalClose" class="modal-close" aria-label="关闭">×</button>
+    <div id="dayModalBody"></div>
+  </div>
+</div>
+
+<!-- ============ 第三方库（CDN + 兜底）============ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>window.L||document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>window.Chart||document.write('<script src="https://unpkg.com/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>');</script>
+
+<!-- 农历 / 节气 / 干支（原仓库 vendor/lunar.js，原样复制，勿改）-->
+<script src="./assets/vendor/lunar.js"></script>
+
+<!-- 全部前端逻辑 -->
+<script src="./assets/js/app.js"></script>
+</body>
+</html>
