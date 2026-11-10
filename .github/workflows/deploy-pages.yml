@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'app-android/www/**'
+      - 'docs/**'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
@@ -32,8 +32,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # AlphaSun PWA 前端打包目录
-          path: app-android/www
+          # AlphaSun 在线 Web 版（纯前端静态站点，docs/ 目录）
+          path: docs
 
   deploy:
     needs: build
