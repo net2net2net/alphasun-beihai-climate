@@ -1,0 +1,84 @@
+name: Sync Release to Gitee
+
+# 将 GitHub Release 的构建产物（Windows/Linux/macOS exe、Android APK、iOS IPA）同步发布到 Gitee Release。
+# 触发：手动 Run workflow（推荐，待 GitHub 三端构建完成后执行，确保 5 个资产齐全）；
+#       也可在 GitHub Release 发布后自动触发（release: published）。
+# 前置：仓库 Settings → Secrets and variables → Actions 中新增 GITEE_TOKEN（Gitee 私人令牌，需 projects 权限）。
+#       token 不会写入仓库，仅经由 Secret 注入本工作流。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要同步的 Release tag（例如 v8.5）。留空则同步最新 Release。'
+        required: false
+        default: ''
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  sync-to-gitee:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      OWNER: net2net2net
+      REPO: alphasun-beihai-climate
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Syncing tag: $TAG"
+
+      - name: Download GitHub Release assets
+        run: |
+          mkdir -p _gh_assets
+          gh release download "${{ steps.tag.outputs.tag }}" --dir _gh_assets --clobber
+          echo "Downloaded assets:"
+          ls -la _gh_assets/
+
+      - name: Create or reuse Gitee Release
+        id: rel
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          API="https://gitee.com/api/v5/repos/$OWNER/$REPO"
+          # 查询该 tag 是否已有 Gitee Release
+          EXISTING=$(curl -s -G "$API/releases" \
+            --data-urlencode "access_token=$GITEE_TOKEN" \
+            --data-urlencode "tag_name=$TAG" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          if [ -n "$EXISTING" ]; then
+            echo "Reusing existing Gitee release id=$EXISTING"
+            echo "id=$EXISTING" >> "$GITHUB_OUTPUT"
+          else
+            echo "Creating Gitee release $TAG"
+            RESP=$(curl -s -X POST "$API/releases" \
+              -F "access_token=$GITEE_TOKEN" \
+              -F "tag_name=$TAG" \
+              -F "name=AlphaSun $TAG" \
+              -F "body=由 GitHub Actions 自动从 GitHub Release 同步的构建产物（Windows/Linux/macOS exe、Android APK、iOS IPA）。" \
+              -F "prerelease=false")
+            REL_ID=$(echo "$RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+            echo "Created Gitee release id=$REL_ID"
+            echo "id=$REL_ID" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload assets to Gitee Release
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          REL_ID="${{ steps.rel.outputs.id }}"
+          API="https://gitee.com/api/v5/repos/$OWNER/$REPO"
+          shopt -s nullglob
+          for f in _gh_assets/*; do
+            echo "Uploading $(basename "$f")"
+            curl -s -X POST "$API/releases/$REL_ID/attach_files?access_token=$GITEE_TOKEN" \
+              -F "file=@$f"
+            echo
+          done
+          echo "Gitee Release sync done: https://gitee.com/$OWNER/$REPO/releases"

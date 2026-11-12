@@ -2,9 +2,16 @@
 
 > 本地运行地址：**http://localhost:8765**（改完刷新即生效）
 > 启动方式：`node server.js`（位于 `app/` 目录，纯 Node 零依赖，端口 8765）
-> 版本：v7.0.0 → v8.4
+> 版本：v7.0.0 → v8.5
 
 ---
+
+## v8.5 — 在线 Web 版 · 多源校核修正 · 彩云接入 · 全平台 CI 发布（2026-11-12）
+- **静态 Web 版（docs/，GitHub/Gitee Pages 直接在线打开）**：新增零依赖静态站点，直连 Open-Meteo/USGS 等免密钥源，实时天气/海洋/潮汐/AQI/天文/地震地图开箱即用；服务端聚合的「多元气候数据校核」六源交叉验证仍由 exe / `node app/server.js` / 安卓 APP 承载（服务端聚合，规避浏览器跨域）。
+- **多源实况校核源数显示修正**：「X/Y 源」分母改为仅统计在役（非跳过）数据源，消除「5 源可达却显示 6 源」的误导；彩云天气未配置时显示「5/5 源」，配置后显示「6/6 源」。
+- **彩云天气(Caiyun) 接入六源校核**：Token 写入 `app/config.json`（gitignore，不入库），`fetchCaiyunLive` 现返回 `ok`，作为独立中国实况源参与交叉校核（Open-Meteo / 中国天气网 / wttr.in / 彩云天气 / 中国气象局 / 挪威 yr.no）。AppKey/AppSecret 仅付费签名预测接口需要，实况无需。
+- **全平台 CI 自动发布**：`build-exe.yml` / `build-android.yml` / `build-ios.yml` 在推送后自动构建 Windows/Linux/macOS 单文件 exe、Android APK、iOS IPA，并发布至 GitHub Release（同 TAG `v8.5`）；新增 `.github/workflows/gitee-release.yml` 将同一批资产同步发布到 Gitee Release（需 GitHub Secret `GITEE_TOKEN`）。
+- 回归门禁维持 122/0 全绿，双端 `version.json` / `index.html` / `package.json` 版本徽标统一升至 v8.5。
 
 ## v8.4 — 潮汐免费数据源重构 · 和风天气移除 · NMDIS 收费方案搁置（2026-11-06）
 - **潮汐默认源重构为 Open-Meteo 海洋模式（免费·无需密钥）**：`app/lib/tides.js` 新增 `fetchOpenMeteoTide`，调用 `marine-api.open-meteo.com` 的 `sea_level_height_msl`（含潮信号+倒压效应）。开箱即用、全球覆盖、无需注册，实测北海三港均返回 `real:true`、基准标注平均海平面(MSL)；未配置任何密钥即生效，`/api/tides` 返回 `source:'Open-Meteo 海洋模式(免费·无需密钥)'`。
