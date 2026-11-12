@@ -36,6 +36,14 @@
 - **独立运行（完整目录）**：双击 `app/start.bat`（Windows）或 `bash app/start.sh`（Linux / macOS）→ 打开 http://localhost:8765
 - **由智能体运行**：见 `INSTALL.md`；技能加载后执行 `node app/server.js`
 
+## 在线 Web 版（浏览器直接打开，无需安装）
+系统同时包含静态 Web 版 `docs/`，可由 GitHub Pages / Gitee Pages 直接在线访问，无需下载 exe 或安装 Node.js：
+
+- **GitHub Pages（已上线 / 部署中）**：https://net2net2net.github.io/alphasun-beihai-climate/
+- **Gitee Pages（待在 Gitee 仓库「服务 → Gitee Pages」手动启用，分支 `main`、目录 `/docs`）**：https://net2net2net.gitee.io/alphasun-beihai-climate/
+
+> 架构说明：静态 Web 版为轻量单源前端（直连 Open-Meteo / USGS 等免密钥源），实时天气、24h/7+15d 预报、海洋、潮汐、空气质量、天文、农历、地震地图等模块均可打开即用；**「多元气候数据校核」（六源交叉验证：Open-Meteo / 中国天气网 / wttr.in / 彩云天气 / 中国气象局 / 挪威气象局 yr.no）与多灾种告警引擎**由本地 exe / `node app/server.js` / 安卓 APP 承载——服务端聚合多源、规避浏览器跨域，故该模块仅在上述运行时出现。
+
 ## 包内容
 - **单文件 exe（CI 自动发布）**：Windows / Linux / macOS 三平台单文件可执行程序（内置 Node 运行时 + 全部前端资源），见「下载 / 安装」段落（GitHub Release）。
 - `app/`：完整可运行系统源码（server.js + lib + public + 内置 node），用于二次开发或 `node app/server.js` 直接运行。
