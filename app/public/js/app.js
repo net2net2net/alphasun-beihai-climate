@@ -603,7 +603,7 @@ function renderRealtime() {
     <div class="rt-trend">${trend}</div>`;
 }
 
-// 多源实况校核面板：展示 Open-Meteo / 中国天气网(CMA) / wttr.in / 彩云天气 多源读数与综合判定（inline 样式自包含）
+// 多源实况校核面板：展示 Open-Meteo / 中国天气网(CMA) / wttr.in / 彩云天气 / 中国气象局(CMA) / 挪威气象局(yr.no) 六源读数与综合判定（inline 样式自包含）
 function catLabelZh(cat) {
   return ({ rain: '降雨', storm: '雷暴', snow: '降雪', fog: '雾', clear: '晴', cloud: '多云', other: '其他' })[cat] || '其他';
 }
@@ -612,8 +612,11 @@ function rcBadgeHtml(rc) {
   if (!rc) return '';
   const agr = rc.agreement;
   const label = { high: '✓ 实况多源校验一致', medium: '⚠ 源间有分歧', low: '✗ 源间显著分歧', unknown: '？ 源不可达' }[agr] || '';
-  const reach = (rc.sources || []).filter(s => s.ok).length;
-  const total = (rc.sources || []).length;
+  // 分母只统计「在役（非跳过）」数据源：未配置的可选项（如彩云天气未填 Token）不计入总量，
+  // 避免「5 源可达却显示 6 源」的误导；彩云等可选源仍会在下方逐源列表中以「未配置·可选」呈现。
+  const active = (rc.sources || []).filter(s => !s.skipped);
+  const reach = active.filter(s => s.ok).length;
+  const total = active.length;
   const color = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[agr] || '#8b949e';
   return `<div class="rc-badge" style="border-color:${color};color:${color}">${label} · ${reach}/${total} 源</div>`;
 }
@@ -648,8 +651,10 @@ function renderRealtimeCheck() {
   const reg = state.data && state.data.regionalWeather;
   const regHtml = (reg && reg.ok) ? `<div style="margin-top:6px;font-size:12px;color:var(--muted)">北海区域（${reg.count}点）：气温 ${reg.tempMin}~${reg.tempMax}℃ ｜ 主导 <b style="color:var(--accent)">${catLabelZh(reg.dominantCat)}</b> ｜ 最大风 ${reg.windMax}m/s${reg.precipAny ? ' ｜ ⚠有降水' : ''}<div style="margin-top:3px;line-height:1.6">${reg.points.map(p => p.name + ' ' + p.temp.toFixed(1) + '℃·' + p.text).join('　｜　')}</div></div>` : '';
   const badgeColor = { high: '#3fb950', medium: '#d29922', low: '#e5484d', unknown: '#8b949e' }[rc.agreement] || '#8b949e';
-  const reach = (rc.sources || []).filter(s => s.ok).length;
-  const total = (rc.sources || []).length;
+  // 与 rcBadgeHtml 一致：分母仅统计在役（非跳过）数据源，确保「X/Y 源」与实际参与校核的源数一致
+  const activeSrcs = (rc.sources || []).filter(s => !s.skipped);
+  const reach = activeSrcs.filter(s => s.ok).length;
+  const total = activeSrcs.length;
   el.innerHTML = `<div style="font-size:13px">${srcRows}</div>
     ${tableHtml}
     <div class="rc-cons"><span class="rc-cons-tag">综合判定</span>${cons}</div>
