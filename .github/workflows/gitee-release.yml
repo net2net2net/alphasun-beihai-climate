@@ -47,14 +47,15 @@ jobs:
       - name: Create or reuse Gitee Release
         id: rel
         run: |
+          set -euo pipefail
           TAG="${{ steps.tag.outputs.tag }}"
           API="https://gitee.com/api/v5/repos/$OWNER/$REPO"
-          # 查询该 tag 是否已有 Gitee Release
+          # 注意：Gitee 列表接口会忽略 tag_name 过滤参数，必须本地用 jq 精确匹配
           EXISTING=$(curl -s -G "$API/releases" \
             --data-urlencode "access_token=$GITEE_TOKEN" \
-            --data-urlencode "tag_name=$TAG" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+            | jq -r --arg t "$TAG" '.[] | select(.tag_name==$t) | .id' | head -1)
           if [ -n "$EXISTING" ]; then
-            echo "Reusing existing Gitee release id=$EXISTING"
+            echo "Reusing existing Gitee release id=$EXISTING (tag=$TAG)"
             echo "id=$EXISTING" >> "$GITHUB_OUTPUT"
           else
             echo "Creating Gitee release $TAG"
@@ -62,9 +63,9 @@ jobs:
               -F "access_token=$GITEE_TOKEN" \
               -F "tag_name=$TAG" \
               -F "name=AlphaSun $TAG" \
-              -F "body=由 GitHub Actions 自动从 GitHub Release 同步的构建产物（Windows/Linux/macOS exe、Android APK、iOS IPA）。" \
+              -F "body=由 GitHub Actions 自动从 GitHub Release 同步的构建产物（Windows/Linux/macOS 单文件 exe、Android APK、iOS IPA）。源：GitHub Release $TAG。" \
               -F "prerelease=false")
-            REL_ID=$(echo "$RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+            REL_ID=$(echo "$RESP" | jq -r '.id' | head -1)
             echo "Created Gitee release id=$REL_ID"
             echo "id=$REL_ID" >> "$GITHUB_OUTPUT"
           fi
