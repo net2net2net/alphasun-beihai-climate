@@ -40,7 +40,7 @@ jobs:
       - name: Download GitHub Release assets
         run: |
           mkdir -p _gh_assets
-          gh release download "${{ steps.tag.outputs.tag }}" --dir _gh_assets --clobber
+          gh release download "${{ steps.tag.outputs.tag }}" -R "$OWNER/$REPO" --dir _gh_assets --clobber
           echo "Downloaded assets:"
           ls -la _gh_assets/
 
