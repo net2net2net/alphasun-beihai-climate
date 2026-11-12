@@ -1,0 +1,32 @@
+name: Deploy to Gitee Pages
+
+# 将 docs/ 自动发布到 Gitee Pages。
+# 注意：Gitee 不支持用 private token 通过 API 启用 Pages，必须登录密码触发。
+# 本工作流通过 yanglbme/gitee-pages-action 使用「Gitee 登录密码」在 GitHub Secret 中安全注入，
+# 密码不会写入仓库。请在 GitHub 仓库 Settings → Secrets and variables → Actions 中新增：
+#   GITEE_USERNAME  = 你的 Gitee 用户名（如 net2net2net）
+#   GITEE_PASSWORD  = 你的 Gitee 登录密码（非 private token）
+# 然后在本仓库 Actions 页面手动运行「Deploy to Gitee Pages」即可。
+on:
+  workflow_dispatch:
+  # 如需每次推送 docs/ 后自动同步到 Gitee Pages，取消下行注释：
+  # push:
+  #   branches: [main]
+  #   paths: ['docs/**']
+
+jobs:
+  deploy-to-gitee:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Gitee Pages
+        uses: yanglbme/gitee-pages-action@main
+        with:
+          gitee-username: ${{ secrets.GITEE_USERNAME }}
+          gitee-password: ${{ secrets.GITEE_PASSWORD }}
+          gitee-repo: net2net2net/alphasun-beihai-climate
+          branch: main
+          directory: docs
+          https: true
