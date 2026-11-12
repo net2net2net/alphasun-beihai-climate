@@ -59,27 +59,37 @@ jobs:
             echo "id=$EXISTING" >> "$GITHUB_OUTPUT"
           else
             echo "Creating Gitee release $TAG"
-            RESP=$(curl -s -X POST "$API/releases" \
-              -F "access_token=$GITEE_TOKEN" \
+            HTTP=$(curl -s -o /tmp/gitee_release.json -w '%{http_code}' -X POST \
+              "$API/releases?access_token=$GITEE_TOKEN" \
               -F "tag_name=$TAG" \
               -F "name=AlphaSun $TAG" \
               -F "body=由 GitHub Actions 自动从 GitHub Release 同步的构建产物（Windows/Linux/macOS 单文件 exe、Android APK、iOS IPA）。源：GitHub Release $TAG。" \
               -F "prerelease=false")
-            REL_ID=$(echo "$RESP" | jq -r '.id' | head -1)
+            REL_ID=$(jq -r '.id' /tmp/gitee_release.json | head -1)
+            if [ -z "$REL_ID" ] || { [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; }; then
+              echo "::error::Gitee 创建 Release 失败 http=$HTTP resp=$(head -c 400 /tmp/gitee_release.json)"
+              exit 1
+            fi
             echo "Created Gitee release id=$REL_ID"
             echo "id=$REL_ID" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload assets to Gitee Release
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+          set -euo pipefail
           REL_ID="${{ steps.rel.outputs.id }}"
           API="https://gitee.com/api/v5/repos/$OWNER/$REPO"
           shopt -s nullglob
           for f in _gh_assets/*; do
             echo "Uploading $(basename "$f")"
-            curl -s -X POST "$API/releases/$REL_ID/attach_files?access_token=$GITEE_TOKEN" \
-              -F "file=@$f"
-            echo
+            HTTP=$(curl -s -o /tmp/up.json -w '%{http_code}' -X POST \
+              "$API/releases/$REL_ID/attach_files?access_token=$GITEE_TOKEN" \
+              -F "file=@$f")
+            if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
+              echo "::error::Upload failed for $(basename "$f") http=$HTTP resp=$(head -c 300 /tmp/up.json)"
+              exit 1
+            fi
+            echo "  -> ok ($HTTP)"
           done
+          echo "Gitee Release sync done: https://gitee.com/$OWNER/$REPO/releases"
           echo "Gitee Release sync done: https://gitee.com/$OWNER/$REPO/releases"
