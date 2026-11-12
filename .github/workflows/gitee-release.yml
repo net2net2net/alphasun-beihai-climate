@@ -62,6 +62,7 @@ jobs:
             HTTP=$(curl -s -o /tmp/gitee_release.json -w '%{http_code}' -X POST \
               "$API/releases?access_token=$GITEE_TOKEN" \
               -F "tag_name=$TAG" \
+              -F "target_commitish=$TAG" \
               -F "name=AlphaSun $TAG" \
               -F "body=由 GitHub Actions 自动从 GitHub Release 同步的构建产物（Windows/Linux/macOS 单文件 exe、Android APK、iOS IPA）。源：GitHub Release $TAG。" \
               -F "prerelease=false")
